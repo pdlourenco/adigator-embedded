@@ -44,10 +44,34 @@ function options = adigatorOptions(varargin)
 %                  input/output for WHILE loops (default set to 10) -
 %                  increasing this will increase derivative file generation
 %                  times when using WHILE loops
-% COMPLEX:     0 - do not expect any variables to be complex, use 
+%    COMPLEX:  0 - do not expect any variables to be complex, use 
 %                  non-complex forms of abs, ctranspose, dot (default)
 %              1 - expect variables to be complex, use complex forms of
 %                  ctranspose, abs, dot.
+% EMBED_MODE: 'c'- Classic. The data on the generated derivatives is stored
+%                  in a .mat file that is loaded every time the generated
+%                  derivative function is called and stored in a global 
+%                  variable. Not suitable for embedded code generation!
+%                  DEFAULT OPTION
+%             'l'- CoderLoad. The data is still stored in a .mat file. If 
+%                  the derivative file is called as an interpreted MATLAB
+%                  function, the data is loaded at runtime. If, however,
+%                  the function is compiled into C-code through the code
+%                  generation utilities of embedded coder, the data is
+%                  loaded only at compile-time, and is placed in a persistent
+%                  variable as a constant. Suitable for code generation, but
+%                  still depends on a persistent variable and an external
+%                  binary data file.
+%             'i'- Inline. The data is stored in a function, which is 
+%                  called as a compile-time constant. In regular execution
+%                  the function is called everytime the resulting derivative
+%                  function is needed, but in embedded code it is stored as
+%                  a constant. Suitable for code generation, no usage of 
+%                  external binary files or persistent variables.
+%       PATH: [] - if empty the generate files with the derivative functions
+%                  are placed in the current calling directory. DEFAULT
+%             '' - the user can provide the directory for storing the 
+%                  generated functions in this field.
 % ------------------------------------------------------------------------
 %
 % NOTES:    The default value of the OVERWRITE option changes depending
@@ -61,16 +85,28 @@ function options = adigatorOptions(varargin)
 % Distributed under the GNU General Public License version 3.0
 %
 % See also adigator, adigatorGenFiles4gpops2
+%
+% Changelog:
+%   2025-10 Pedro Lourenço  v1.5    Add option to generate streamlined code
+%                                   that can be accepted for embedded code
+%                                   use, e.g., without runtime loading of 
+%                                   files/data/options.
+%                                   Add option for user to provide the path 
+%                                   to the directory where the generated 
+%                                   files should be stored
 
 % Set Defaults
-options.auxdata   = 0;
-options.echo      = 1;
-options.unroll    = 0;
-options.comments  = 1;
-options.overwrite = 0;
-options.optoutput = 0;
+options.embed_mode   = 'c'; % v1.5 - 'c(lassic)' | '(coder)l(oad)' | 'i(nline)'
+options.path         = []; % v1.5 - user provided path; default: calling dir
+options.auxdata      = 0;
+options.echo         = 1;
+options.unroll       = 0;
+options.comments     = 1;
+options.overwrite    = 0;
+options.optoutput    = 0;
 options.maxwhileiter = 10;
-options.complex   = 0;
+options.complex      = 0;
+
 if nargin/2 ~= floor(nargin/2)
   error('Inputs to adigatorOptions must come in field/value pairs')
 end
@@ -83,7 +119,7 @@ for i = 1:nargin/2
     case {'auxdata','echo','unroll','comments','overwrite','genpat',...
         'optoutput','complex'}
       options.(field) = logical(value);
-    case 'maxwhileiter'
+      case {'maxwhileiter','embed_mode','path'} % v1.5
       options.(field) = value;
     otherwise
       warning(['Invalid option field: ',field])
