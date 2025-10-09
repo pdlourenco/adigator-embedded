@@ -52,10 +52,16 @@ function [Outputs,varargout] = adigator(UserFunName,UserFunInputs,DerFileName,va
 %     You should have received a copy of the GNU General Public License
 %     along with ADiGator in adigator/COPYING.txt.  
 %     If not, see <http://www.gnu.org/licenses/>.
+%
+% Changelog:
+%   2025-10 Pedro Lourenço  v1.5    Store the list of files generated and 
+%                                   the corresponding path.
+%                                   Add new option to allow storage of the
+%                                   new files in a user-specified path
 
 global ADIGATOR ADIGATORFORDATA ADIGATORDATA ADIGATORVARIABLESTORAGE
 tstart = tic;
-version = '1.4';
+version = '1.5'; % v1.5
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ OPTIONS SETUP ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 opts = adigatorOptions();
 if nargin == 4
@@ -66,41 +72,54 @@ if nargin == 4
 elseif nargin ~= 3
   error('Invalid number of inputs')
 end
-ADIGATOR.OPTIONS.AUXDATA     = opts.auxdata;
-ADIGATOR.OPTIONS.ECHO        = opts.echo;
-ADIGATOR.OPTIONS.UNROLL      = opts.unroll;
-ADIGATOR.OPTIONS.COMMENTS    = opts.comments;
-ADIGATOR.OPTIONS.OVERWRITE   = opts.overwrite;
-ADIGATOR.OPTIONS.KEYBOARD    = 0;
-ADIGATOR.OPTIONS.PREALLOCATE = 0;
+ADIGATOR.OPTIONS.AUXDATA      = opts.auxdata;
+ADIGATOR.OPTIONS.ECHO         = opts.echo;
+ADIGATOR.OPTIONS.UNROLL       = opts.unroll;
+ADIGATOR.OPTIONS.COMMENTS     = opts.comments;
+ADIGATOR.OPTIONS.OVERWRITE    = opts.overwrite;
+ADIGATOR.OPTIONS.KEYBOARD     = 0;
+ADIGATOR.OPTIONS.PREALLOCATE  = 0;
 ADIGATOR.OPTIONS.MAXWHILEITER = opts.maxwhileiter;
-ADIGATOR.OPTIONS.COMPLEX     = opts.complex;
+ADIGATOR.OPTIONS.COMPLEX      = opts.complex;
+ADIGATOR.OPTIONS.EMBED_MODE   = opts.embed_mode; % v1.5
+ADIGATOR.OPTIONS.PATH         = opts.path; % v1.5
 
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~ FILE KEEPING ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
-CallingDir = cd;
-if exist([CallingDir,filesep,DerFileName,'.m'],'file');
-  if ADIGATOR.OPTIONS.OVERWRITE
-    delete([CallingDir,filesep,DerFileName,'.m']);
+if isempty(ADIGATOR.OPTIONS.PATH) % v1.5 - allow user to specify the path
+    CallingDir = cd;
+else
+    CallingDir = ADIGATOR.OPTIONS.PATH;
+end
+
+% Store the path to the generated files (v1.5)
+ADiGator_GeneratedFiles.m   = fullfile(CallingDir, [DerFileName, '.m']);
+ADiGator_GeneratedFiles.mat = fullfile(CallingDir, [DerFileName, '.mat']);
+
+if exist(ADiGator_GeneratedFiles.m,'file') %v1.5 - cleanup to refer to the file definition above
+    if ADIGATOR.OPTIONS.OVERWRITE
+        delete(ADiGator_GeneratedFiles.m);
+        rehash
+    else
+        error(['The file %s already exists, ',...
+            'quitting transformation. To set manual overwrite of file use ',...
+            '''''adigatorOptions(''OVERWRITE'',1);''''. Alternatively, delete the ',...
+            'existing files and any associated .mat file.'],ADiGator_GeneratedFiles.m);
+    end
+end
+if exist(ADiGator_GeneratedFiles.mat,'file') %v1.5 - cleanup to refer to the file definition above
+    if ADIGATOR.OPTIONS.OVERWRITE
+        delete(ADiGator_GeneratedFiles.mat);
+    else
+        error(['The file %s already exists, ',...
+            'quitting transformation. To set manual overwrite of file use ',...
+            '''''adigatorOptions(''OVERWRITE'',1);''''. Alternatively, delete the ',...
+            'existing file.'],ADiGator_GeneratedFiles.mat);
+    end
     rehash
-  else
-    error(['The file ',CallingDir,filesep,DerFileName,'.m already exists, ',...
-      'quitting transformation. To set manual overwrite of file use ',...
-      '''''adigatorOptions(''OVERWRITE'',1);''''. Alternatively, delete the ',...
-      'existing file and any associated .mat file.']);
-  end
 end
-if exist([CallingDir,filesep,DerFileName,'.mat'],'file')
-  if ADIGATOR.OPTIONS.OVERWRITE
-    delete([CallingDir,filesep,DerFileName,'.mat']);
-  else
-    error(['The file ',CallingDir,filesep,DerFileName,'.mat already exists, ',...
-      'quitting transformation. To set manual overwrite of file use ',...
-      '''''adigatorOptions(''OVERWRITE'',1);''''. Alternatively, delete the ',...
-      'existing file.']);
-  end
-  rehash
-end
+
+
 [~,adigatorTempDir] = filekeeping();
 %% ~~~~~~~~~~~~~~~~~~ PARSE USERFUNINPUTS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 if ~ischar(UserFunName)
@@ -482,8 +501,9 @@ ADIGATOR.CELLEVALFLAG  = 0;
 
 
 ADIGATORDATA.FILENAME   = DerFileName;
-Dfid = fopen([CallingDir,filesep,DerFileName,'.m'],'w+');
+Dfid = fopen(ADiGator_GeneratedFiles.m,'w+');
 ADIGATOR.PRINT.FILENAME = DerFileName;
+ADIGATOR.PRINT.FILEPATHS= ADiGator_GeneratedFiles;
 ADIGATOR.PRINT.FID      = Dfid;
 ADIGATOR.PRINT.FLAG     = 0;
 ADIGATOR.PRINT.INDENT   = [];
@@ -698,11 +718,11 @@ fprintf(Dfid,'return\nend');
 
 eval(['global ADiGator_',ADIGATOR.PRINT.FILENAME]);
 eval(['ADiGator_',ADIGATOR.PRINT.FILENAME,' = load(''',...
-  ADIGATOR.PRINT.FILENAME,'.mat'');']);
+  ADIGATOR.PRINT.FILEPATHS.mat,''');']); % v1.5 - the files can be in any path provided by the user
 
 fclose('all');
 if ADIGATOR.OPTIONS.ECHO
-  display(['Successfully transformed user function ''',UserFunName,...
+  disp(['Successfully transformed user function ''',UserFunName,...
     ''' to derivative function ''',DerFileName,'''']);
   gentime = toc(tstart);
   display(['Total file generation time: ',num2str(gentime)]);
