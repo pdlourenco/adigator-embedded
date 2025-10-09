@@ -19,6 +19,13 @@ function [FunctionInfo, Outputs] = adigatorFunctionEnd(FunID,FunctionInfo,Output
 %
 % Copyright 2011-214 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
+%
+% Changelog:
+%   2025-10 Pedro Lourenço  v1.5    Store the mat file with the static
+%                                   derivative data in the user provided
+%                                   folder and not necessarily in the 
+%                                   calling directory
+
 global ADIGATOR
 if ADIGATOR.OPTIONS.PREALLOCATE
   FunctionInfo(FunID).STRUCASGN = ADIGATOR.STRUCASGN;
@@ -403,7 +410,7 @@ end
 
 function SaveDataFile(FunID,FunctionInfo)
 global ADIGATOR ADIGATORDATA
-ADiGatorMatFileName = ADIGATOR.PRINT.FILENAME;
+ADiGator_genMatPath = ADIGATOR.PRINT.FILEPATHS.mat; %v1.5 - get full path
 if ADIGATOR.DERNUMBER > 1
   PrevDerivStruc = FunctionInfo(FunID).PreviousDerivData;
   ADiGatorstruc.Derivative = PrevDerivStruc.Derivative;
@@ -459,12 +466,12 @@ end
 %ADiGatorstruc.(sprintf('Gator%1.0dIndices',ADIGATOR.DERNUMBER)) = ADIGATORDATA.INDICES;
 ADiGatorstruc.(sprintf('Gator%1.0dData',ADIGATOR.DERNUMBER)) = ADIGATORDATA.DATA; %#ok<STRNU>
 
-ADiGatorCallingDir = cd;
+% ADiGatorCallingDir = cd; the path to the matfile is provided from the main adigator function
 eval([ADiGatorFunName,' = ADiGatorstruc;']);
-if ~exist([ADiGatorCallingDir,filesep,ADiGatorMatFileName,'.mat'],'file');
-  save([ADiGatorCallingDir,filesep,ADiGatorMatFileName,'.mat'],ADiGatorFunName);
+if ~exist(ADiGator_genMatPath,'file') % v1.5 - the mat file can be in a different folder than the calling dir
+  save(ADiGator_genMatPath,ADiGatorFunName);
 else
-  save([ADiGatorCallingDir,filesep,ADiGatorMatFileName,'.mat'],ADiGatorFunName,'-append');
+  save(ADiGator_genMatPath,ADiGatorFunName,'-append');
 end
 rehash
 end

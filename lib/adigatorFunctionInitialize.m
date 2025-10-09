@@ -24,6 +24,13 @@ function [flag, FunctionInfo, Outputs, prevDerivData] = ...
 %
 % Copyright 2011-214 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
+%
+% Changelog:
+%   2025-10 Pedro Lourenço  v1.5    Store the mat file with the static
+%                                   derivative data in the user provided
+%                                   folder and not necessarily in the 
+%                                   calling directory
+
 global ADIGATOR  ADIGATORDATA ADIGATORFORDATA ADIGATORVARIABLESTORAGE
 NUMinputs = length(Inputs);
 if any(ADIGATOR.FILE.PARENTID == FunID) && ~(ADIGATOR.RUNFLAG ==2 && ...
@@ -993,13 +1000,13 @@ for Icount = 1:NUMinputs
   InStr{Icount} = [InNames{Icount},','];
 end
 InStr = cell2mat(InStr);
-MatFileName = ['ADiGator_',ADIGATOR.PRINT.FILENAME];
+GlobalVarName = ['ADiGator_',ADIGATOR.PRINT.FILENAME]; % v1.5 - change name for clarity (it's not the matfile name)
 if FunID == 1
   % Main Function
   FileName    = ADIGATOR.PRINT.FILENAME;
   fprintf(fid,['function ',OutStr,' = ',FileName,'(',InStr(1:end-1),')\n']);
-  fprintf(fid,['global ',MatFileName,'\n']);
-  fprintf(fid,['if isempty(',MatFileName,'); ADiGator_LoadData(); end\n']);
+  fprintf(fid,['global ',GlobalVarName,'\n']);
+  fprintf(fid,['if isempty(',GlobalVarName,'); ADiGator_LoadData(); end\n']);
 else
   if FunctionInfo(FunID).DERNUMBER > 1
     FileName = FunctionInfo(FunID).File.Name;
@@ -1018,11 +1025,11 @@ else
   else
     fprintf(fid,['function ',OutStr,' = ',FileName,'(',InStr(1:end-1),')\n']);
   end
-  fprintf(fid,['global ',MatFileName,'\n']);
+  fprintf(fid,['global ',GlobalVarName,'\n']);
 end
 % Print Data References
 for Dcount = 1:ADIGATOR.DERNUMBER
-  fprintf(fid,['Gator%1.0dData = ',MatFileName,'.',FileName,...
+  fprintf(fid,['Gator%1.0dData = ',GlobalVarName,'.',FileName,...
     '.Gator%1.0dData;\n'],Dcount,Dcount);
 end
 
