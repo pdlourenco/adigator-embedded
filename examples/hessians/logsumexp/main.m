@@ -7,8 +7,14 @@ clc
 fprintf ('AdiGator example: %s\n', mfilename ('fullpath')) ;
 n = 2^5;
 
+opts = adigatorOptions();
+
+opts.path = 'test';
+opts.overwrite = 1;
+
+
 x_x = adigatorCreateDerivInput([n 1],'x');
-output = adigatorGenHesFile('logsumexp',{x_x});
+output = adigatorGenHesFile('logsumexp',{x_x},opts);
 
 x = rand(n,1);
 
