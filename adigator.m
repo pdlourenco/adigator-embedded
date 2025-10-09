@@ -244,7 +244,7 @@ for CFcount = 1:NUMcf
   end
   if PrevDerFlag
     % We don't want to read in all of the global stuff, will do this
-    % seperately. But, we do want to store information about the previous
+    % separately. But, we do want to store information about the previous
     % derivatives.
     PreviousDerivData   = load([FILENAME,'.mat']);
     ParentPrevDerivData = PreviousDerivData.(FILENAME);
@@ -510,9 +510,10 @@ ADIGATOR.PRINT.INDENT   = [];
 % Print the derivative function header
 fprintf(Dfid,['%% This code was generated using ADiGator version ',version,'\n']);
 fprintf(Dfid,['%% ',char(169),'2010-2014 Matthew J. Weinstein and Anil V. Rao\n']);
-fprintf(Dfid,'%% ADiGator may be obtained at https://sourceforge.net/projects/adigator/ \n');
+fprintf(Dfid,['%% ',char(169),'2025 Pedro Lourenço\n']);
+fprintf(Dfid,'%% This version of ADiGator may be obtained at https://github.com/pdlourenco/adigator-embedded \n');
 fprintf(Dfid,'%% Contact: mweinstein@ufl.edu\n');
-fprintf(Dfid,'%% Bugs/suggestions may be reported to the sourceforge forums\n');
+fprintf(Dfid,'%% Bugs/suggestions may be reported to the github issues.\n');
 fprintf(Dfid,'%%                    DISCLAIMER\n');
 fprintf(Dfid,'%% ADiGator is a general-purpose software distributed under the GNU General\n');
 fprintf(Dfid,'%% Public License version 3.0. While the software is distributed with the\n');
