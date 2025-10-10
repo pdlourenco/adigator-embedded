@@ -25,7 +25,10 @@ function [flag, FunctionInfo, Outputs, prevDerivData] = ...
 % Copyright 2011-214 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
 %
-% Changelog:
+%   Modifications as described below are Copyright GMV.
+%   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
+%
+%   Changelog:
 %   2025-10 Pedro Lourenço  v1.5    Store the mat file with the static
 %                                   derivative data in the user provided
 %                                   folder and not necessarily in the 

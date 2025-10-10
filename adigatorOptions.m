@@ -86,7 +86,10 @@ function options = adigatorOptions(varargin)
 %
 % See also adigator, adigatorGenFiles4gpops2
 %
-% Changelog:
+%   Modifications as described below are Copyright GMV.
+%   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
+%
+%   Changelog:
 %   2025-10 Pedro Lourenço  v1.5    Add option to generate streamlined code
 %                                   that can be accepted for embedded code
 %                                   use, e.g., without runtime loading of 
