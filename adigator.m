@@ -38,7 +38,7 @@ function [Outputs,varargout] = adigator(UserFunName,UserFunInputs,DerFileName,va
 % https://sourceforge.net/projects/adigator/
 %
 % See also adigatorCreateDerivInput, adigatorCreateAuxInput, adigatorOptions
- 
+% 
 %     ADiGator is free software: you can redistribute it and/or modify
 %     it under the terms of the GNU General Public License as published by
 %     the Free Software Foundation, either version 3 of the License, or
@@ -53,7 +53,10 @@ function [Outputs,varargout] = adigator(UserFunName,UserFunInputs,DerFileName,va
 %     along with ADiGator in adigator/COPYING.txt.  
 %     If not, see <http://www.gnu.org/licenses/>.
 %
-% Changelog:
+%   Modifications as described below are Copyright GMV.
+%   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
+%
+%   Changelog:
 %   2025-10 Pedro Lourenço  v1.5    Store the list of files generated and 
 %                                   the corresponding path.
 %                                   Add new option to allow storage of the
@@ -90,11 +93,15 @@ if isempty(ADIGATOR.OPTIONS.PATH) % v1.5 - allow user to specify the path
     CallingDir = cd;
 else
     CallingDir = ADIGATOR.OPTIONS.PATH;
+    if ~exist(CallingDir,'dir') % directory does not exist -> create it
+        mkdir(CallingDir);
+    end
 end
 
 % Store the path to the generated files (v1.5)
-ADiGator_GeneratedFiles.m   = fullfile(CallingDir, [DerFileName, '.m']);
-ADiGator_GeneratedFiles.mat = fullfile(CallingDir, [DerFileName, '.mat']);
+ADiGator_GeneratedFiles.m    = fullfile(CallingDir, [DerFileName, '.m']);
+ADiGator_GeneratedFiles.mat  = fullfile(CallingDir, [DerFileName, '.mat']);
+ADiGator_GeneratedFiles.path = CallingDir;
 
 if exist(ADiGator_GeneratedFiles.m,'file') %v1.5 - cleanup to refer to the file definition above
     if ADIGATOR.OPTIONS.OVERWRITE
@@ -510,7 +517,7 @@ ADIGATOR.PRINT.INDENT   = [];
 % Print the derivative function header
 fprintf(Dfid,['%% This code was generated using ADiGator version ',version,'\n']);
 fprintf(Dfid,['%% ',char(169),'2010-2014 Matthew J. Weinstein and Anil V. Rao\n']);
-fprintf(Dfid,['%% ',char(169),'2025 Pedro Lourenço\n']);
+fprintf(Dfid,['%% ',char(169),'2025 Pedro Lourenço @ GMV\n']);
 fprintf(Dfid,'%% This version of ADiGator may be obtained at https://github.com/pdlourenco/adigator-embedded \n');
 fprintf(Dfid,'%% Contact: mweinstein@ufl.edu\n');
 fprintf(Dfid,'%% Bugs/suggestions may be reported to the github issues.\n');
@@ -729,6 +736,10 @@ if ADIGATOR.OPTIONS.ECHO
   display(['Total file generation time: ',num2str(gentime)]);
 end
 ADIGATOR.OPTIONS.UNROLL = UserUnrollFlag;
+
+% v1.5 - save for future reference the path to the generated files
+FunctionInfo(1).DERIVFILES = ADiGator_GeneratedFiles;
+
 if nargout == 2
   varargout{1} = FunctionInfo(1);
 end
