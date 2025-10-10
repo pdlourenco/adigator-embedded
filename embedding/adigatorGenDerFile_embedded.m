@@ -71,6 +71,11 @@ for ii = 1:N_derivs
         % patch_adigator_derivative_inline(AdigatorGeneratedFiles(ii).m,AdigatorGeneratedFiles(ii).dername)
         % TODO - WIP
         fprintf('done.\n');
+
+        % cleanup (derivative file)
+        deletd(AdigatorGeneratedFiles(ii).m);
+        % cleanup (static data file)
+        delete(AdigatorGeneratedFiles(ii).mat);
     end
 
     %%% if user requests the coderload option, the data is loaded at compile time from a file
@@ -79,6 +84,9 @@ for ii = 1:N_derivs
         fprintf('\t Processing ADiGator derivative file... ');
         auxiliary_deriv_filecontents = patch_adigator_derivative_coderload(AdigatorGeneratedFiles(ii).m,AdigatorGeneratedFiles(ii).dername,0);
         fprintf('done.\n');
+
+        % cleanup (remove derivative file)
+        delete(AdigatorGeneratedFiles(ii).m);
     end
 
     %%% embed derivative and data function into the main wrapper
@@ -93,7 +101,6 @@ for ii = 1:N_derivs
     fwrite(wrapper,auxiliary_deriv_filecontents);
     % close file
     fclose(wrapper);
-
     
     fprintf('done.\n')
 end
