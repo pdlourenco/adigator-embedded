@@ -284,8 +284,12 @@ fprintf(fid,'end');
 fclose(fid);
 rehash
 
+%% --------------------- OUTPUT PROCESSING ------------------------------%%
 output.FunctionFile = UserFunName;
 output.JacobianFile = JacFileName;
+output.GenFiles(1) = FunctionInfo.DERIVFILES;
+output.GenFiles(1).main = ADiGator_GeneratedFiles.Jac;
+output.GenFiles(1).name = JacFileName;
 output.JacobianStructure = sparse(adiout.deriv.nzlocs(:,1),...
   adiout.deriv.nzlocs(:,2),ones(dydxnnz,1),dydxsize(1),dydxsize(2));
 

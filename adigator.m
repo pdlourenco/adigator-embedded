@@ -99,8 +99,9 @@ else
 end
 
 % Store the path to the generated files (v1.5)
-ADiGator_GeneratedFiles.m    = fullfile(CallingDir, [DerFileName, '.m']);
-ADiGator_GeneratedFiles.mat  = fullfile(CallingDir, [DerFileName, '.mat']);
+ADiGator_GeneratedFiles.dername = DerFileName;
+ADiGator_GeneratedFiles.m    = fullfile(CallingDir, [ADiGator_GeneratedFiles.dername, '.m']);
+ADiGator_GeneratedFiles.mat  = fullfile(CallingDir, [ADiGator_GeneratedFiles.dername, '.mat']);
 ADiGator_GeneratedFiles.path = CallingDir;
 
 if exist(ADiGator_GeneratedFiles.m,'file') %v1.5 - cleanup to refer to the file definition above
@@ -137,7 +138,7 @@ if ~iscell(UserFunInputs)
   error(['Second input to adigator must be cell array of inputs to ',...
     'the function described by first input string']);
 end
-if ~ischar(DerFileName)
+if ~ischar(ADiGator_GeneratedFiles.dername)
   error(['Third input to adigator must be string of desired name of ',...
     'generated derivative file']);
 end
@@ -507,9 +508,9 @@ ADIGATOR.SUBSINDEXFLAG = 0;
 ADIGATOR.CELLEVALFLAG  = 0;
 
 
-ADIGATORDATA.FILENAME   = DerFileName;
+ADIGATORDATA.FILENAME   = ADiGator_GeneratedFiles.dername;
 Dfid = fopen(ADiGator_GeneratedFiles.m,'w+');
-ADIGATOR.PRINT.FILENAME = DerFileName;
+ADIGATOR.PRINT.FILENAME = ADiGator_GeneratedFiles.dername;
 ADIGATOR.PRINT.FILEPATHS= ADiGator_GeneratedFiles;
 ADIGATOR.PRINT.FID      = Dfid;
 ADIGATOR.PRINT.FLAG     = 0;
@@ -661,7 +662,7 @@ else
 end
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ PRINTING RUN ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 if ADIGATOR.OPTIONS.ECHO
-  disp(['Printing derivatives to file ''',DerFileName,'''']);
+  disp(['Printing derivatives to file ''',ADiGator_GeneratedFiles.dername,'''']);
 end
 ADIGATOR.RUNFLAG         = 2;
 ADIGATOR.FILE.FUNID      = 0;
@@ -731,7 +732,7 @@ eval(['ADiGator_',ADIGATOR.PRINT.FILENAME,' = load(''',...
 fclose('all');
 if ADIGATOR.OPTIONS.ECHO
   disp(['Successfully transformed user function ''',UserFunName,...
-    ''' to derivative function ''',DerFileName,'''']);
+    ''' to derivative function ''',ADiGator_GeneratedFiles.dername,'''']);
   gentime = toc(tstart);
   display(['Total file generation time: ',num2str(gentime)]);
 end

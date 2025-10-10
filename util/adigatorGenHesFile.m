@@ -136,6 +136,9 @@ if isempty(opts.path) % v1.5 - allow user to specify the path
     CallingDir = cd;
 else
     CallingDir = opts.path;
+    if ~exist(CallingDir,'dir') % directory does not exist -> create it
+        mkdir(CallingDir);
+    end
 end
 % Store the path to the generated files (v1.5)
 ADiGator_GeneratedFiles.Grd = fullfile(CallingDir, [GrdFileName, '.m']);
@@ -374,7 +377,17 @@ for fid = [Gfid,Hfid]
 end
 fclose(fid);
 rehash
-
+%% --------------------- OUTPUT PROCESSING ------------------------------%%
+output.FunctionFile = UserFunName;
+% first derivative - Gradient
+output.GenFiles(1) = FunctionInfo.DERIVFILES;
+output.GenFiles(1).main = ADiGator_GeneratedFiles.Grd;
+output.GenFiles(1).name = GrdFileName;
+% second derivative - Hessian
+output.GenFiles(2) = updatestruct(output.GenFiles(1),FunctionInfo2.DERIVFILES);
+output.GenFiles(2).main = ADiGator_GeneratedFiles.Hes;
+output.GenFiles(2).name = HesFileName;
+% remainder info
 output.FunctionFile = UserFunName;
 output.GradientFile = GrdFileName;
 output.HessianFile  = HesFileName;
