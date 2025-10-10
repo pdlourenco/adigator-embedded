@@ -3,21 +3,29 @@
 % see the effects of increasing problem size.
 % Copyright 2011-2014 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
+clc; clear;
 fprintf ('AdiGator example: %s\n', mfilename ('fullpath')) ;
 N = 100;
 numeval = 20;
 x = rand(N,1);
 % ------------------------------ ADiGator ------------------------------- %
+
+opts = adigatorOptions();
+
+opts.path = 'test';
+opts.overwrite = 1;
+
 gx = adigatorCreateDerivInput([N, 1],'x'); % Create Deriv Input
-genout = adigatorGenJacFile('arrowhead',{gx});
+genout = adigatorGenJacFile('arrowhead',{gx},opts);
 S = genout.JacobianStructure;
 
+addpath(fullfile(pwd,opts.path));
 tic;
 for i = 1:numeval
   [Jac,y] = arrowhead_Jac(x);
 end
 adigatortime = toc/numeval;
-
+rmpath(fullfile(pwd,opts.path));
 
 % -------------------------- Finite Differences ------------------------- %
 TOL = 1e-8;% Can change this to make numjac more/less accurate
