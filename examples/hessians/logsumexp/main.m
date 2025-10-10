@@ -11,9 +11,11 @@ opts = adigatorOptions();
 
 opts.path = 'test';
 opts.overwrite = 1;
+opts.embed_mode = 'l';
 
 x_x = adigatorCreateDerivInput([n 1],'x');
-output = adigatorGenHesFile('logsumexp',{x_x},opts);
+% output = adigatorGenHesFile('logsumexp',{x_x},opts);
+output = adigatorGenDerFile_embedded('hessian','logsumexp',{x_x},opts);
 
 addpath(fullfile(pwd,opts.path));
 
