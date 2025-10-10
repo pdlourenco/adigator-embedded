@@ -1,4 +1,4 @@
-function structure_to_embed_mfile(funcName, dataStruct, outPath)
+function filepath = structure_to_embed_mfile(funcName, dataStruct, outPath)
 %structure_to_embed_mfile Write a MATLAB helper function that returns DATASTRUCT as literals.
 %   emit_data_helper_file(FUNCNAME, DATASTRUCT, OUTPATH)
 %     - FUNCNAME  : name of the function to generate (string/char)
@@ -26,9 +26,9 @@ arguments
   outPath    (1,1) string = pwd
 end
 
-fn = fullfile(outPath, funcName + ".m");
-[fid,msg] = fopen(fn, 'w');
-if fid < 0, error("emit_data_helper_file:io", "Cannot open file: %s (%s)", fn, msg); end
+filepath = fullfile(outPath, funcName + ".m");
+[fid,msg] = fopen(filepath, 'w');
+if fid < 0, error("structure_to_embed_mfile:io", "Cannot open file: %s (%s)", filepath, msg); end
 
 cleanupObj = onCleanup(@() fclose(fid));
 
