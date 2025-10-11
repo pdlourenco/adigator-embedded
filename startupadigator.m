@@ -6,6 +6,7 @@ addpath(currpath);
 addpath([currpath,filesep,'lib']);
 addpath([currpath,filesep,'lib',filesep,'cadaUtils']);
 addpath([currpath,filesep,'util']);
+addpath([currpath,filesep,'embedding']);
 
 fprintf('     ADiGator Successfully Installed\n\n')
 
