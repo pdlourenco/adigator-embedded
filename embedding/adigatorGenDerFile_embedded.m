@@ -1,4 +1,5 @@
 function info = adigatorGenDerFile_embedded(DerType,UserFunName,UserFunInputs,varargin)
+%TODO: Missing header
 
 %% -------------------------- ARGUMENTS PARSING -------------------------%%
 % parse options
@@ -68,7 +69,7 @@ for ii = 1:N_derivs
 
         % patch the adigator generated derivative file
         fprintf('\t Processing ADiGator derivative file... ');
-        % patch_adigator_derivative_inline(AdigatorGeneratedFiles(ii).m,AdigatorGeneratedFiles(ii).dername)
+        % adigator_patch_derivative(AdigatorGeneratedFiles(ii).m,AdigatorGeneratedFiles(ii).dername)
         % TODO - WIP
         fprintf('done.\n');
     end
@@ -77,14 +78,14 @@ for ii = 1:N_derivs
     if coderload
         % patch the adigator generated derivative file
         fprintf('\t Processing ADiGator derivative file... ');
-        auxiliary_deriv_filecontents = patch_adigator_derivative_coderload(AdigatorGeneratedFiles(ii).m,AdigatorGeneratedFiles(ii).dername,0);
+        auxiliary_deriv_filecontents = adigator_patch_derivative(AdigatorGeneratedFiles(ii).m,AdigatorGeneratedFiles(ii).dername,0);
         fprintf('done.\n');
     end
 
     %%% embed derivative and data function into the main wrapper
     fprintf('\t Embed data and derivative functions... ');
     % patch main wrapper with %#codegen
-    main_deriv_filecontents = patch_adigator_derivative_coderload(AdigatorGeneratedFiles(ii).main,AdigatorGeneratedFiles(ii).name,1);
+    main_deriv_filecontents = adigator_patch_derivative(AdigatorGeneratedFiles(ii).main,AdigatorGeneratedFiles(ii).name,1);
     % open file for writing the auxiliary adigator function
     wrapper = fopen(AdigatorGeneratedFiles(ii).main,'w');
     % write to file
