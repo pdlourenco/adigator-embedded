@@ -3,11 +3,14 @@ function info = adigatorGenDerFile_embedded(DerType,UserFunName,UserFunInputs,va
 
 %% -------------------------- ARGUMENTS PARSING -------------------------%%
 % parse options
+opts = adigatorOptions();
 if nargin>3
     optfields = fieldnames(varargin{1});
     for Fcount = 1:length(optfields)
         opts.(lower(optfields{Fcount})) = varargin{1}.(lower(optfields{Fcount}));
     end
+else
+    varargin = {opts};
 end
 
 %% --------------------- Call the ADiGator wrappers ---------------------%%
@@ -55,6 +58,9 @@ for ii = 1:N_derivs
 
     %%% process the data file to prune it of unnecessary data for derivative evaluation
     fprintf('\t Processing static data file (cleaning up unnecessary data)... ');
+    % TODO this matfile should have several different variables depending
+    % on the subfunctions. the current version considers only the main
+    % function
     tmp_adigator_struct = load(AdigatorGeneratedFiles(ii).mat,AdigatorGeneratedFiles(ii).dername); % load data
     tmp_adigator_struct = prune_adigator_mat(tmp_adigator_struct.(AdigatorGeneratedFiles(ii).dername)); % remove unnecessary fields
     save(AdigatorGeneratedFiles(ii).mat,'-struct','tmp_adigator_struct'); % replace existing mat file with the relevant fields only as individual vars

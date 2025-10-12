@@ -1,4 +1,4 @@
-function txt = patch_adigator_derivative_coderload(deriv_filepath, deriv_filename,codegen_only)
+function txt = adigator_patch_derivative(deriv_filepath, deriv_filename,codegen_only)
 %PATCH_ADIGATOR_FILE    Patch an ADiGator-generated function for Embedded Coder
 %                       assuming a coder.load option
 %
@@ -47,6 +47,9 @@ if codegen_only; return; end
 % ------------------------------------------------------------------------
 % 2) global -> persistent for ADiGator_<myfun>
 % ------------------------------------------------------------------------
+% TODO the replacement cannot consider only the main function
+% if the original function has subfunctions, there will be subfunctions in
+% adigator's auxiliary function as well (with different data too)
 globalName = "ADiGator_" + deriv_filename;
 % Build a pattern that matches ONLY the 'global' line that contains our variable
 globalPatrn = '^\s*global\s+'+globalName+'+\s*;\s*$';

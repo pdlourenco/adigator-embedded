@@ -471,6 +471,7 @@ ADiGatorstruc.(sprintf('Gator%1.0dData',ADIGATOR.DERNUMBER)) = ADIGATORDATA.DATA
 
 % ADiGatorCallingDir = cd; the path to the matfile is provided from the main adigator function
 eval([ADiGatorFunName,' = ADiGatorstruc;']);
+% TODO save the function name for post processing
 if ~exist(ADiGator_genMatPath,'file') % v1.5 - the mat file can be in a different folder than the calling dir
   save(ADiGator_genMatPath,ADiGatorFunName);
 else
