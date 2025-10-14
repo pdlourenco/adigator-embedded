@@ -1,7 +1,6 @@
 function y=gapfun(w,z)
 
-waux = setfun(w);
-
-y=waux'*conefun(z);
+zaux = setfun(z);
+y=w'*conefun(z) +z'*zaux;
 
 end
