@@ -1,4 +1,4 @@
-function txt = adigator_patch_derivative(deriv_filepath, deriv_filename,codegen_only)
+function txt = adigator_patch_derivative(deriv_filepath, deriv_filename, subfun_list)
 %PATCH_ADIGATOR_FILE    Patch an ADiGator-generated function for Embedded Coder
 %                       assuming a coder.load option
 %
@@ -21,17 +21,11 @@ function txt = adigator_patch_derivative(deriv_filepath, deriv_filename,codegen_
 %   Changelog:
 %
 
-arguments
-  deriv_filepath   (1,1) string
-  deriv_filename   (1,1) string
-  codegen_only     (1,1) double
-end
-
 txt  = fileread(deriv_filepath);
 orig = txt;
 
 % ------------------------------------------------------------------------
-% 1) Insert %#codegen on the *next* line after the function header
+% 1) Insert %#codegen on the *next* line after all function headers
 % ------------------------------------------------------------------------
 funcLineExpr = "(?m)^(?<hdr>\s*function[^\n\r]*)$";
 m = regexp(txt, funcLineExpr, 'names', 'once');
@@ -42,45 +36,61 @@ if ~isempty(m)
         txt = regexprep(txt, funcLineExpr, escapeReplacement(newHdr), 'once');
     end
 end
-if codegen_only; return; end
 
-% ------------------------------------------------------------------------
-% 2) global -> persistent for ADiGator_<myfun>
-% ------------------------------------------------------------------------
-% TODO the replacement cannot consider only the main function
-% if the original function has subfunctions, there will be subfunctions in
-% adigator's auxiliary function as well (with different data too)
-globalName = "ADiGator_" + deriv_filename;
-% Build a pattern that matches ONLY the 'global' line that contains our variable
-globalPatrn = '^\s*global\s+'+globalName+'+\s*;\s*$';
-% Create the output;
-globalStr = 'persistent '+globalName+';';
-% Reconstruct the line as "persistent <rest>" preserving indentation
-txt = regexprep(txt, globalPatrn, globalStr, 'lineanchors');
-% clean up again for cases without ""
-globalPatrn = '^\s*global\s+'+globalName+'+\s*\s*$';
-% Create the output;
-txt = regexprep(txt, globalPatrn, globalStr, 'lineanchors');
+% TODO: patch these through each function
+%       replace global AdiGator_deriv_filename with
+%       persistent AdiGator_deriv_filename and the initialization procedure
+%       such that we have load(matfile,'subfunname');
+%
+%       Currently the function already works almost correctly:
+%       the file is patched as follows
+%           all functions declare a persistent variable (same name, but ok)
+%           all functions attribute the correct Gator*Data =
+%           const(persistentvar.nameofthefun.Gator*Data) except for the
+%           main one which removes the .nameofthefun.
+%           missing the loading of the file in all places the persistent
+%           variable is declared and loading only the correct variable
+%           called nameofthefun
+% for ii = 1:numel(subfun_list) % run through the list of subfunctions
+    % ------------------------------------------------------------------------
+    % 2) global -> persistent for ADiGator_<myfun>
+    % ------------------------------------------------------------------------
+    % TODO the replacement cannot consider only the main function
+    % if the original function has subfunctions, there will be subfunctions in
+    % adigator's auxiliary function as well (with different data too)
+    globalName = "ADiGator_" + deriv_filename;
+    % Build a pattern that matches ONLY the 'global' line that contains our variable
+    globalPatrn = '^\s*global\s+'+globalName+'+\s*;\s*$';
+    % Create the output;
+    globalStr = 'persistent '+globalName+';';
+    % Reconstruct the line as "persistent <rest>" preserving indentation
+    txt = regexprep(txt, globalPatrn, globalStr, 'lineanchors');
+    % clean up again for cases without ""
+    globalPatrn = '^\s*global\s+'+globalName+'+\s*\s*$';
+    % Create the output;
+    txt = regexprep(txt, globalPatrn, globalStr, 'lineanchors');
 
-% ------------------------------------------------------------------------
-% 3) Replace the "if isempty(...); ADiGator_LoadData(); end" block
-%    with a coder.load that pulls only the needed Gator*Data vars
-% ------------------------------------------------------------------------
-% Accept both single-line and multi-line variants:
-% if isempty(ADiGator_<myfun>); ADiGator_LoadData(); end
-% if isempty(ADiGator_<myfun>)
-%     ADiGator_LoadData();
+    % ------------------------------------------------------------------------
+    % 3) Replace the "if isempty(...); ADiGator_LoadData(); end" block
+    %    with a coder.load that pulls only the needed Gator*Data vars
+    % ------------------------------------------------------------------------
+    % Accept both single-line and multi-line variants:
+    % if isempty(ADiGator_<myfun>); ADiGator_LoadData(); end
+    % if isempty(ADiGator_<myfun>)
+    %     ADiGator_LoadData();
+    % end
+    %  Discover which Gator*Data symbols are actually used in the file
+    %     and intersect with what's present in the MAT (optional but nice)
+    gatorList = unique(string(regexp(txt, '\<Gator[0-9A-Za-z_]*Data\>', 'match')));
+    % continue
+    patIfLoad = "(?ms)if\s+isempty\(\s*" + regexptranslate('escape', globalName) + "\s*\)\s*;?\s*ADiGator_LoadData\(\);\s*end";
+    if ~isempty(regexp(txt, patIfLoad, 'once'))
+        coderLoad = buildCoderLoad(globalName, deriv_filename, gatorList);
+        txt = regexprep(txt, patIfLoad, escapeReplacement(coderLoad), 'once');
+    end
+
+
 % end
-%  Discover which Gator*Data symbols are actually used in the file
-%     and intersect with what's present in the MAT (optional but nice)
-gatorList = unique(string(regexp(txt, '\<Gator[0-9A-Za-z_]*Data\>', 'match')));
-% continue
-patIfLoad = "(?ms)if\s+isempty\(\s*" + regexptranslate('escape', globalName) + "\s*\)\s*;?\s*ADiGator_LoadData\(\);\s*end";
-if ~isempty(regexp(txt, patIfLoad, 'once'))
-    coderLoad = buildCoderLoad(globalName, deriv_filename, gatorList);
-    txt = regexprep(txt, patIfLoad, escapeReplacement(coderLoad), 'once');
-end
-
 % ------------------------------------------------------------------------
 % 4) Rewrite every assignment of the form:
 %      GatorXData = ADiGator_<myfun>(.optionalMyfun).GatorXData;
