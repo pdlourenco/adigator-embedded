@@ -28,6 +28,7 @@ function [FunctionInfo, Outputs] = adigatorFunctionEnd(FunID,FunctionInfo,Output
 %                                   derivative data in the user provided
 %                                   folder and not necessarily in the 
 %                                   calling directory
+%                                   Save the list of generated functions
 
 global ADIGATOR
 if ADIGATOR.OPTIONS.PREALLOCATE
@@ -471,7 +472,7 @@ ADiGatorstruc.(sprintf('Gator%1.0dData',ADIGATOR.DERNUMBER)) = ADIGATORDATA.DATA
 
 % ADiGatorCallingDir = cd; the path to the matfile is provided from the main adigator function
 eval([ADiGatorFunName,' = ADiGatorstruc;']);
-% TODO save the function name for post processing
+ADIGATOR.GENFUNNAMES{1,end+1} = ADiGatorFunName; % save all the functions generated
 if ~exist(ADiGator_genMatPath,'file') % v1.5 - the mat file can be in a different folder than the calling dir
   save(ADiGator_genMatPath,ADiGatorFunName);
 else

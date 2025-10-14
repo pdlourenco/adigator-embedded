@@ -166,7 +166,7 @@ end
 addpath(CallingDir);
 
 % Call adigator
-[adiout,FunctionInfo] = adigator(UserFunName,UserFunInputs,AdiJacFileName,opts);
+[adiout,FunctionInfo,ADi_DerivFiles(1),ADi_DerivFuns] = adigator(UserFunName,UserFunInputs,AdiJacFileName,opts); % v1.5 - add new output with list of files/functions
 adiout = adiout{1};
 
 % v1.5 - remove chosen directory to the path to allow storage
@@ -287,9 +287,13 @@ rehash
 %% --------------------- OUTPUT PROCESSING ------------------------------%%
 output.FunctionFile = UserFunName;
 output.JacobianFile = JacFileName;
-output.GenFiles(1) = FunctionInfo.DERIVFILES;
+
+% first derivative - Jacobian (v1.5)
+output.GenFiles(1) = ADi_DerivFiles(1);
 output.GenFiles(1).main = ADiGator_GeneratedFiles.Jac;
 output.GenFiles(1).name = JacFileName;
+output.GenFiles(1).func = ADi_DerivFuns;
+
 output.JacobianStructure = sparse(adiout.deriv.nzlocs(:,1),...
   adiout.deriv.nzlocs(:,2),ones(dydxnnz,1),dydxsize(1),dydxsize(2));
 

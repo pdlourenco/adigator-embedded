@@ -57,10 +57,15 @@ function [Outputs,varargout] = adigator(UserFunName,UserFunInputs,DerFileName,va
 %   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %
 %   Changelog:
-%   2025-10 Pedro Lourenço  v1.5    Store the list of files generated and 
-%                                   the corresponding path.
+%   2025-10 Pedro Lourenço  v1.5    Store the list of files and functions 
+%                                   generated and the corresponding path.
 %                                   Add new option to allow storage of the
 %                                   new files in a user-specified path
+%                                   Add new outputs to allow external
+%                                   access to:
+%                                       1) the list of generated files and
+%                                       their path
+%                                       2) the list of generated functions
 
 global ADIGATOR ADIGATORFORDATA ADIGATORDATA ADIGATORVARIABLESTORAGE
 tstart = tic;
@@ -103,6 +108,9 @@ ADiGator_GeneratedFiles.dername = DerFileName;
 ADiGator_GeneratedFiles.m    = fullfile(CallingDir, [ADiGator_GeneratedFiles.dername, '.m']);
 ADiGator_GeneratedFiles.mat  = fullfile(CallingDir, [ADiGator_GeneratedFiles.dername, '.mat']);
 ADiGator_GeneratedFiles.path = CallingDir;
+
+% v1.5 - store the list of generated functions and subfunctions
+ADIGATOR.GENFUNNAMES = cell(1,0);
 
 if exist(ADiGator_GeneratedFiles.m,'file') %v1.5 - cleanup to refer to the file definition above
     if ADIGATOR.OPTIONS.OVERWRITE
@@ -738,11 +746,16 @@ if ADIGATOR.OPTIONS.ECHO
 end
 ADIGATOR.OPTIONS.UNROLL = UserUnrollFlag;
 
-% v1.5 - save for future reference the path to the generated files
-FunctionInfo(1).DERIVFILES = ADiGator_GeneratedFiles;
-
-if nargout == 2
-  varargout{1} = FunctionInfo(1);
+if nargout > 1
+    varargout{1} = FunctionInfo(1);
+end
+% v1.5 - save for future reference the path to the generated files and the
+% list of functions
+if nargout > 2
+    varargout{2} = ADiGator_GeneratedFiles;
+end
+if nargout > 3
+    varargout{3} = ADIGATOR.GENFUNNAMES;
 end
 rmpath(adigatorTempDir);
 [sflag,msg] = rmdir(adigatorTempDir,'s');

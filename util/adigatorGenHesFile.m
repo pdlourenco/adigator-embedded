@@ -172,14 +172,14 @@ end
 addpath(CallingDir);
 
 % Call adigator twice
-[adiout,FunctionInfo] = adigator(UserFunName,UserFunInputs,AdiGrdFileName,opts);
+[adiout,FunctionInfo,ADi_DerivFiles,ADi_DerivFuns] = adigator(UserFunName,UserFunInputs,AdiGrdFileName,opts); % v1.5 - add new output with list of files/functions
 adiout = adiout{1};
 % Change derivative input
 x = UserFunInputs{derflag};
 xsize = x.func.size;
 vodname = x.deriv.vodname;
 UserFunInputs{derflag} = struct('f',x,['d',vodname],ones(prod(xsize),1));
-[adiout2,FunctionInfo2] = adigator(AdiGrdFileName,UserFunInputs,AdiHesFileName,opts);
+[adiout2,FunctionInfo2,ADi_DerivFiles2,ADi_DerivFuns2] = adigator(AdiGrdFileName,UserFunInputs,AdiHesFileName,opts); % v1.5 - add new output with list of files/functions
 adiout2 = adiout2{1};
 
 % v1.5 - remove chosen directory to the path to allow storage
@@ -379,14 +379,16 @@ fclose(fid);
 rehash
 %% --------------------- OUTPUT PROCESSING ------------------------------%%
 output.FunctionFile = UserFunName;
-% first derivative - Gradient
-output.GenFiles(1) = FunctionInfo.DERIVFILES;
+% first derivative - Gradient (v1.5)
+output.GenFiles(1) = ADi_DerivFiles;
 output.GenFiles(1).main = ADiGator_GeneratedFiles.Grd;
 output.GenFiles(1).name = GrdFileName;
-% second derivative - Hessian
-output.GenFiles(2) = updatestruct(output.GenFiles(1),FunctionInfo2.DERIVFILES);
+output.GenFiles(1).func = ADi_DerivFuns;
+% second derivative - Hessian (v1.5)
+output.GenFiles(2) = updatestruct(output.GenFiles(1),ADi_DerivFiles2);
 output.GenFiles(2).main = ADiGator_GeneratedFiles.Hes;
 output.GenFiles(2).name = HesFileName;
+output.GenFiles(2).func = ADi_DerivFuns2;
 % remainder info
 output.FunctionFile = UserFunName;
 output.GradientFile = GrdFileName;
