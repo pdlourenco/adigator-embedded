@@ -1,5 +1,11 @@
 function info = adigatorGenDerFile_embedded(DerType,UserFunName,UserFunInputs,varargin)
-%TODO: Missing header
+%TODO:  Missing header
+%TODO:  Modify gradients and Jacobians to output in column form, i.e.,
+%       replace the Grd = reshape(y.dz,[row col]); line by
+%                   Grd = reshape(y.dz,[col row]);
+%       This line only appears in the AdigatorGeneratedFiles(ii).name file,
+%       a dedicated patcher needs to do it (e.g., while it adds the
+%       %#codegen header
 
 %% -------------------------- ARGUMENTS PARSING -------------------------%%
 % parse options
@@ -47,6 +53,7 @@ end
 % .mat  - adigator generated static data (to be processed if user options = 'inline') - path
 % .name - name of the main file
 % .dername - name of the adigator generated processing
+% .func - cell with the list of functions inside the .m file
 %
 % each element of the array is a single derivative (all files are standalone)
 AdigatorGeneratedFiles = info.GenFiles;
@@ -61,21 +68,25 @@ for ii = 1:N_derivs
     % TODO this matfile should have several different variables depending
     % on the subfunctions. the current version considers only the main
     % function
-    tmp_adigator_struct = load(AdigatorGeneratedFiles(ii).mat,AdigatorGeneratedFiles(ii).dername); % load data
-    tmp_adigator_struct = prune_adigator_mat(tmp_adigator_struct.(AdigatorGeneratedFiles(ii).dername)); % remove unnecessary fields
-    save(AdigatorGeneratedFiles(ii).mat,'-struct','tmp_adigator_struct'); % replace existing mat file with the relevant fields only as individual vars
+    tmp_adigator_struct = load(AdigatorGeneratedFiles(ii).mat); % load data
+    tmp_adigator_struct = prune_adigator_mat(tmp_adigator_struct,AdigatorGeneratedFiles(ii).func); % remove unnecessary fields
+    save(AdigatorGeneratedFiles(ii).mat,'-struct','tmp_adigator_struct'); % replace existing mat file with the relevant fields only
     fprintf('done.\n');
 
     %%% if user requests inline option, the data is loaded from a function
     if inline
         % generate new data function (tmp)
-        fprintf('\t\t Generating data function as requested in inline mode...');
-        AdigatorGeneratedFiles(ii).data = structure_to_embed_mfile([AdigatorGeneratedFiles(ii).name,'_data'],tmp_adigator_struct,AdigatorGeneratedFiles(ii).path);
+        fprintf('\t\t Generating data function(s) as requested in inline mode...');
+        for funidx=1:numel(AdigatorGeneratedFiles(ii).func)
+            AdigatorGeneratedFiles(ii).data{funidx} = ['data_',AdigatorGeneratedFiles(ii).name,'_',AdigatorGeneratedFiles(ii).func{funidx}];
+            AdigatorGeneratedFiles(ii).datapath{funidx} = structure_to_embed_mfile(AdigatorGeneratedFiles(ii).data{funidx},...
+                                                            tmp_adigator_struct.(AdigatorGeneratedFiles(ii).func{funidx}),AdigatorGeneratedFiles(ii).path);
+        end
         fprintf('done.\n');
 
         % patch the adigator generated derivative file
         fprintf('\t Processing ADiGator derivative file... ');
-        % adigator_patch_derivative(AdigatorGeneratedFiles(ii).m,AdigatorGeneratedFiles(ii).dername)
+        % adigator_patch_derivative(AdigatorGeneratedFiles(ii).m,AdigatorGeneratedFiles(ii).dername,AdigatorGeneratedFiles(ii).data{funidx})
         % TODO - WIP
         fprintf('done.\n');
 
@@ -115,47 +126,50 @@ end
 end
 
 %% ---------------- PRUNE ADIGATOR_DERIVATIVE DATA ------------------%%
-function structout = prune_adigator_mat(structin)
+function structout = prune_adigator_mat(structin,funnames)
+% PRUNE_ADIGATOR_MAT
+% Keep only <funcName>.Gator*Data.Index* per derivative function.
+% Downcast integer-valued arrays to int32/uint32 to shrink embedded consts.
 
-% get all the fieldnames in
-fn = fieldnames(structin);
-keepTop = fn(startsWith(fn, "Gator") & endsWith(fn,"Data"));
-structout = struct();
+for jj = 1:numel(funnames) % go through each of the functions
+    if isfield(structin,funnames{jj}) % if field exists, save it
+        fn = fieldnames(structin.(funnames{jj}));
+        keepTop = fn(startsWith(fn, "Gator") & endsWith(fn,"Data"));
+        auxstruct = struct();
 
-for ii = 1:numel(keepTop)
-    gname = keepTop{ii};
-    G = structin.(gname);
-    if ~isstruct(G), continue; end
-    fG = fieldnames(G);
+        for ii = 1:numel(keepTop)
+            gname = keepTop{ii};
+            G = structin.(funnames{jj}).(gname);
+            if ~isstruct(G), continue; end
+            fG = fieldnames(G);
 
-    % Keep only Index* subfields
-    keepIdx = fG(startsWith(fG, "Index"));
-    if isempty(keepIdx), continue; end
+            % Keep only Index* subfields
+            keepIdx = fG(startsWith(fG, "Index"));
+            if isempty(keepIdx), continue; end
 
-    G2 = struct();
-    for k = 1:numel(keepIdx)
-        idxName = keepIdx{k};
-        A = G.(idxName);
+            G2 = struct();
+            for k = 1:numel(keepIdx)
+                idxName = keepIdx{k};
+                A = G.(idxName);
 
-        % Down-cast numeric integer arrays to save memory
-        if isnumeric(A) && isreal(A) && all(isfinite(A(:))) && all(abs(A(:) - round(A(:))) < 1e-12)
-            % Nonnegative? prefer uint32; otherwise int32
-            if all(A(:) >= 0)
-                A = uint32(A);
-            else
-                A = int32(A);
+                % Down-cast numeric integer arrays to save memory
+                if isnumeric(A) && isreal(A) && all(isfinite(A(:))) && all(abs(A(:) - round(A(:))) < 1e-12)
+                    % Nonnegative? prefer uint32; otherwise int32
+                    if all(A(:) >= 0)
+                        A = uint32(A);
+                    else
+                        A = int32(A);
+                    end
+                end
+                % Logical stays logical; other types left as-is (doubles etc.)
+                G2.(idxName) = A;
+            end
+
+            if ~isempty(fieldnames(G2))
+                auxstruct.(gname) = G2;
             end
         end
-        % Logical stays logical; other types left as-is (doubles etc.)
-        G2.(idxName) = A;
-    end
-
-    if ~isempty(fieldnames(G2))
-        structout.(gname) = G2;
+        structout.(funnames{jj}) = auxstruct;
     end
 end
-
 end
-
-
-
