@@ -1,11 +1,5 @@
 function info = adigatorGenDerFile_embedded(DerType,UserFunName,UserFunInputs,varargin)
 %TODO:  Missing header
-%TODO:  Modify gradients and Jacobians to output in column form, i.e.,
-%       replace the Grd = reshape(y.dz,[row col]); line by
-%                   Grd = reshape(y.dz,[col row]);
-%       This line only appears in the AdigatorGeneratedFiles(ii).name file,
-%       a dedicated patcher needs to do it (e.g., while it adds the
-%       %#codegen header
 
 %% -------------------------- ARGUMENTS PARSING -------------------------%%
 % parse options
@@ -65,9 +59,6 @@ for ii = 1:N_derivs
 
     %%% process the data file to prune it of unnecessary data for derivative evaluation
     fprintf('\t Processing static data file (cleaning up unnecessary data)... ');
-    % TODO this matfile should have several different variables depending
-    % on the subfunctions. the current version considers only the main
-    % function
     tmp_adigator_struct = load(AdigatorGeneratedFiles(ii).mat); % load data
     tmp_adigator_struct = prune_adigator_mat(tmp_adigator_struct,AdigatorGeneratedFiles(ii).func); % remove unnecessary fields
     save(AdigatorGeneratedFiles(ii).mat,'-struct','tmp_adigator_struct'); % replace existing mat file with the relevant fields only
@@ -100,7 +91,7 @@ for ii = 1:N_derivs
     if coderload
         % patch the adigator generated derivative file
         fprintf('\t Processing ADiGator derivative file... ');
-        auxiliary_deriv_filecontents = adigator_patch_derivative(AdigatorGeneratedFiles(ii).m,AdigatorGeneratedFiles(ii).dername,0);
+        auxiliary_deriv_filecontents = adigator_patch_derivative(AdigatorGeneratedFiles(ii).m,AdigatorGeneratedFiles(ii).dername,AdigatorGeneratedFiles(ii).func,0);
         fprintf('done.\n');
 
         % cleanup (remove derivative file)
