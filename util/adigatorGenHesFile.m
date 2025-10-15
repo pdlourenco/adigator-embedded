@@ -76,6 +76,11 @@ function output = adigatorGenHesFile(UserFunName,UserFunInputs,varargin)
 %                                   derivative data in the user provided
 %                                   folder and not necessarily in the 
 %                                   calling directory
+%                                   Add parser for the user provided options
+%                                   Provide the paths to all the generated
+%                                   functions and files (.mat and .m)
+%                                   Modify output gradients to be in column
+%                                   form, i.e. f = df/dx'*x+x'*d2f/dx2*x;
 
 
 if ~ischar(UserFunName)
@@ -246,12 +251,12 @@ m = prod(ysize);
 dydxdx = [ystr,'.d',vodname,'d',vodname];
 if n == 1
   % derivative wrt a scalar..
-  if m == 1
+  if m == 1 % function is a scalar
     fprintf(Hfid,['Hes = ',dydxdx,';\n']);
-  elseif any(n == 1)
+  elseif any(n == 1) % v1.5 - this is always true, as n is a scalar and equal to 1 ERROR
     fprintf(Hfid,'Hes = zeros(%1.0f,%1.0f);\n',ysize);
     fprintf(Hfid,['Hes(',dydxdx,'_location) = ',dydxdx,';\n']);
-  elseif m>= 250 && dydxdxnnz/m <= 3/4
+  elseif m>= 250 && dydxdxnnz/m <= 3/4 && opts.embed_mode == 'c' % v1.5 - only allow sparse matrices if in classic mode (no embed)
     % Sparse projection..
     rowind = [dydxdx,'_location(:,1)'];
     colind = [dydxdx,'_location(:,2)'];
@@ -267,7 +272,8 @@ else
   if m == 1
     % y scalar
     count = 0;
-  elseif any(ysize) == 1
+  % elseif any(ysize) == 1 % v1.5 probably an error, as ysize is always positive
+  elseif any(ysize == 1)
     yind = 'yind';
     fprintf(Hfid,[yind,' = ',dydxdx,'_location(:,1);\n']);
     count = 1;
@@ -278,7 +284,8 @@ else
     fprintf(Hfid,[yind,' = (',colind,'-1)*%1.0f + ',rowind,';\n'],ysize(1));
     count = 2;
   end
-  if any(xsize) == 1
+  % if any(xsize) == 1 % v1.5 probably an error, as xsize is always positive
+  if any(xsize == 1)
     count = count+1;
     xind1 = 'xind1';
     fprintf(Hfid,[xind1,' = ',dydxdx,'_location(:,%1.0f);\n'],count);
@@ -305,7 +312,7 @@ else
     rowind = 'xyind1';
     fprintf(Hfid,[rowind,' = (',xind1,'-1)*%1.0f + ',yind,';\n'],n);
   end
-  if m*n*n >= 250 && dydxdxnnz/(m*n*n) <= 3/4
+  if m*n*n >= 250 && dydxdxnnz/(m*n*n) <= 3/4 && opts.embed_mode == 'c' % v1.5 - only allow sparse matrices if in classic mode (no embed)
     fprintf(Hfid,['Hes = sparse(',rowind,',',xind2,',',dydxdx,',%1.0f,%1.0f);\n'],m*n,n);
   else
     fprintf(Hfid,'Hes = zeros(%1.0f,%1.0f);\n',m*n,n);
@@ -329,15 +336,21 @@ elseif dydxsize(2) == 1 && all(ysize>1)
 end
 dydxnnz  = size(adiout.deriv.nzlocs,1);
 dydx = [ystr,'.d',vodname];
+%v1.5:	process this to output Jacobians correctly, i.e., in [m n] form ( m = numel(y), n = numel(x))
+dydzsize_print = [dydxsize(2) dydxsize(1)];
 for fid = [Gfid,Hfid]
   if dydxnnz == dydxnumel
-    fprintf(fid,['Grd = reshape(',dydx,',[%1.0f %1.0f]);\n'],dydxsize);
-  elseif dydxsize(1) == 1 && dydxsize(2) == 1
+    if any(dydxsize == 1) % we can use the reshape directly, no transposing
+        fprintf(fid,['Grd = reshape(',dydx,',[%1.0f %1.0f]);\n'],dydzsize_print);
+    else % we need to transpose to work in a column-first logic
+        fprintf(fid,['Grd = reshape(',dydx,',[%1.0f %1.0f])'';\n'],dydxsize);
+    end
+  elseif dydxsize(1) == 1 && dydxsize(2) == 1 % function and variable are scalars
     fprintf(fid,['Grd = ',dydx,';\n']);
-  elseif dydxsize(1) == 1
+  elseif dydxsize(1) == 1 % function is scalar
     fprintf(fid,'Grd = zeros(1,%1.0f);',dydxsize(2));
     fprintf(fid,['Grd(',dydx,'_location) = ',dydx,';\n']);
-  elseif dydxsize(2) == 1
+  elseif dydxsize(2) == 1 % variable is scalar
     fprintf(fid,'Grd = zeros(%1.0f,1);',dydxsize(2));
     fprintf(fid,['Grd(',dydx,'_location) = ',dydx,';\n']);
   else
@@ -363,13 +376,14 @@ for fid = [Gfid,Hfid]
         colstr = [dyloc,'(:,2)'];
       end
     end
-    if dydxnumel >= 250 && dydxnnz/dydxnumel <= 3/4
+    if dydxnumel >= 250 && dydxnnz/dydxnumel <= 3/4 && opts.embed_mode == 'c' % v1.5 - only allow sparse matrices if in classic mode (no embed)
       % Project Sparse
-      fprintf(fid,['Grd = sparse(',rowstr,',',colstr,',',dydx,',%1.0f,%1.0f);\n'],dydxsize);
+      fprintf(fid,['Grd = sparse(',rowstr,',',colstr,',',dydx,',%1.0f,%1.0f)'';\n'],dydxsize);
     else
       % Project Full
-      fprintf(fid,'Grd = zeros(%1.0f,%1.0f);\n',dydxsize);
-      fprintf(fid,['Grd((',colstr,'-1)*%1.0f+',rowstr,') = ',dydx,';\n'],dydxsize(1));
+      fprintf(fid,'Grd_aux = zeros(%1.0f,%1.0f);\n',dydzsize_print);
+      fprintf(fid,['Grd_aux((',colstr,'-1)*%1.0f+',rowstr,') = ',dydx,';\n'],dydxsize(1));
+      fprintf(fid,'Grd = Grd_aux'';\n'); % v1.5 - ensure that the output is in the right form
     end
   end
   fprintf(fid,['Fun = ',ystr,'.f;\n']);

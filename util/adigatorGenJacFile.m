@@ -76,6 +76,10 @@ function output = adigatorGenJacFile(UserFunName,UserFunInputs,varargin)
 %                                   calling directory
 %                                   Add parser for the user provided options
 %                                   Add option for user to specify filename
+%                                   Provide the paths to all the generated
+%                                   functions and files (.mat and .m)
+%                                   Modify output gradients to be in column
+%                                   form, i.e. f = df/dx'*x+x'*d2f/dx2*x;
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ OPTIONS SETUP ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 opts = adigatorOptions(); % default options
@@ -237,15 +241,20 @@ dydxnnz  = size(adiout.deriv.nzlocs,1);
 % If dydx has => 250 elements and has <= 75% nonzeros, project into sparse
 % matrix, otherwise project into full matrix.
 dy = [ystr,'.d',vodname];
+%v1.5:	process this to output Jacobians correctly, i.e., in [m n] form ( m = numel(y), n = numel(x))
 if dydxnnz == dydxnumel
-  fprintf(fid,['Jac = reshape(',dy,',[%1.0f %1.0f]);\n'],dydxsize);
-elseif dydxsize(1) == 1 && dydxsize(2) == 1
+    if any(dydxsize == 1) % we can use the reshape directly, no transposing
+        fprintf(fid,['Jac = reshape(',dy,',[%1.0f %1.0f]);\n'],[dydxsize(2) dydxsize(1)]);
+    else % we need to transpose to work in a column-first logic
+        fprintf(fid,['Jac = reshape(',dy,',[%1.0f %1.0f])'';\n'],dydxsize);
+    end
+elseif dydxsize(1) == 1 && dydxsize(2) == 1 % function and variable are scalars
   fprintf(fid,['Jac = ',dy,';\n']);
-elseif dydxsize(1) == 1
-  fprintf(fid,'Jac = zeros(1,%1.0f);',dydxsize(2));
-  fprintf(fid,['Jac(',dy,'_location) = ',dy,';\n']);
-elseif dydxsize(2) == 1
+elseif dydxsize(1) == 1 % function is scalar
   fprintf(fid,'Jac = zeros(%1.0f,1);',dydxsize(2));
+  fprintf(fid,['Jac(',dy,'_location) = ',dy,';\n']);
+elseif dydxsize(2) == 1 % variable is scalar
+  fprintf(fid,'Jac = zeros(1,%1.0f);',dydxsize(2));
   fprintf(fid,['Jac(',dy,'_location) = ',dy,';\n']);
 else
   dyloc = [dy,'_location'];
@@ -270,7 +279,7 @@ else
       colstr = [dyloc,'(:,2)'];
     end
   end
-  if dydxnumel >= 250 && dydxnnz/dydxnumel <= 3/4
+  if dydxnumel >= 250 && dydxnnz/dydxnumel <= 3/4 && opts.embed_mode == 'c' % v1.5 - only allow sparse matrices if in classic mode (no embed)
     % Project Sparse
     fprintf(fid,['Jac = sparse(',rowstr,',',colstr,',',dy,',%1.0f,%1.0f);\n'],dydxsize);
   else
