@@ -1,4 +1,4 @@
-function txt = adigator_patch_derivative(deriv_filepath, deriv_filename, subfun_list,apply_codegen_only)
+function txt = adigator_patch_derivative(deriv_filepath, deriv_filename, subfun_list,apply_codegen_only,data_functions)
 %PATCH_ADIGATOR_FILE    Patch an ADiGator-generated function for Embedded Coder
 %                       assuming a coder.load option
 %
@@ -21,121 +21,138 @@ function txt = adigator_patch_derivative(deriv_filepath, deriv_filename, subfun_
 %   Changelog:
 %
 
-txt  = fileread(deriv_filepath);
+if nargin<5 % codeload option selected
+    data_functions = {};
+end
+
+txt = readlines(deriv_filepath);
 orig = txt;
 
 % ------------------------------------------------------------------------
-% 1) Insert %#codegen on the *next* line after all function headers
+% 1) Remove the ADiGator_LoadData() subfunction entirely
 % ------------------------------------------------------------------------
-funcLineExpr = "(?m)^(?<hdr>\s*function[^\n\r]*)$";
-m = regexp(txt, funcLineExpr, 'names', 'once');
-if ~isempty(m)
-    hdr = m.hdr;
-    if ~contains(txt, "%#codegen")
-        newHdr = sprintf('%s\n%%#codegen\n', hdr);
-        txt = regexprep(txt, funcLineExpr, escapeReplacement(newHdr), 'once');
-    end
-end
-
-if apply_codegen_only; return; end
+patterns = {'function ADiGator_LoadData()'};
+idx = find_in_file(txt,patterns,1,1,[]);
+if ~isempty(idx); txt(idx:end) = []; end
 
 % ------------------------------------------------------------------------
 % 2) Remove the "if isempty(...); ADiGator_LoadData(); end" block entirely
 % ------------------------------------------------------------------------
-% TODO THIS IS NOT WORKING
-globalName = "ADiGator_" + deriv_filename;
-% Match the whole line, allowing spaces, optional semicolons, and an optional trailing comment
-pat = "^\s*if\s+isempty\(\s*" + regexptranslate("escape", globalName) + "\s*\)\s*;?\s*ADiGator_LoadData\(\)\s*;?\s*end\s*(?:%.*)?\s*$";
-ws = "[\s\xA0]*";  % \xA0 covers non-breaking space
-pat = "^" + ws + "if" + ws + "isempty\(" + ws + regexptranslate("escape", globalName) + ws + "\)" + ws + ";?" + ws + ...
-      "AdiGator_LoadData(?:\(" + ws + "\))?" + ws + ";?" + ws + "end" + ws + "(?:%.*)?$";
-% Remove all such lines (line-by-line anchors)
-txt = regexprep(txt, pat, '', 'once');
+patterns = {'if isempty', deriv_filename, 'ADiGator_LoadData();'};
+idx = find_in_file(txt,patterns,1,0,[]);
+inc = 0;
+for ii=1:length(idx)
+    txt(idx+inc) = [];
+    inc = inc - 1;
+end
 
+% create global variable name
+globalName = ['ADiGator_',deriv_filename];
 
-for ii = 1:numel(subfun_list) % run through the list of subfunctions
+for fun = 1:length(subfun_list)
     % ------------------------------------------------------------------------
-    % 2) Replace the global declaration with a persistent one.
+    % 3) Insert %#codegen on the *next* line after all function headers
+    % ------------------------------------------------------------------------
+    patterns = {'function',subfun_list{fun}};
+    fidx = find_in_file(txt,patterns,1,0,'%');
+    txt = [txt(1:(fidx));
+        "%#codegen";
+        txt((fidx+1):end)];
+    if apply_codegen_only; break; end
+
+    % ------------------------------------------------------------------------
+    % 4) Replace the global declaration with a call to the function that fills
+    %    the required data without any loading (not even at compile time)
+    %    INLINE OPTION (no extra .mat files)
+    % ------------------------------------------------------------------------
+    % ------------------------------------------------------------------------
+    % 4) Replace the global declaration with a persistent one.
     %    Also introduce a loading call for the correct function every time the
     %    persistent variable is declared, to fill it
+    %    CODERLOAD OPTION (load at compile time)
     % ------------------------------------------------------------------------
+    % find the global variable declaration
+    patterns = {'global', globalName};
+    gidx = find_in_file(txt,patterns,fidx,1,[]);
+    if ~isempty(data_functions) % inline option
+        txt(gidx) = []; % remove the declaration
+        gidx = gidx-1;
+        loading_call = globalName+" = coder.const("+data_functions{fun}+"());";
+    else % coderload option
+        % ------------------------------------------------------------------------
+        % 4) Replace the global declaration with a persistent one.
+        %    Also introduce a loading call for the correct function every time the
+        %    persistent variable is declared, to fill it
+        % ------------------------------------------------------------------------
+        txt(gidx) = strrep(txt(gidx),'global','persistent'); % declare persistent
+        % add the loading call
+        loading_call = "if isempty(" +globalName+"); "+globalName+" = coder.load('"+deriv_filename+".mat','"+subfun_list{fun}+"'); end";
+    end
+    txt = [txt(1:(gidx));
+           loading_call;
+           txt((gidx+1):end)];
 
-    % Build a pattern to find the function
-    % Pattern explanation:
-    % ^\s*function\s+(?:.*?=\s*)?myfun\s*\([^)]*\)\s*\r?\n  : function line (with or without outputs)
-    % (?:[ \t]*(?:%.*)?\r?\n)*                             : any number of blank/comment lines
-    % \s*global\s+ABC\s*;?                                 : the global declaration line
-    pat = ['(^\s*function\s+(?:.*?=\s*)?' subfun_list{ii} '\s*\([^)]*\)\s*\r?\n' ...
-        '(?:[ \t]*(?:%.*)?\r?\n)*\s*global\s+ABC\s*;?)'];
-    % Build the output for the new persistent variable
-    globalStr = 'persistent '+globalName+';';
 
-    % Build the loading call
-    loadStr = 'if isempty(' +globalName+'); '+globalName+' = coder.load('+deriv_filename+','+subfun_list{ii}+');';
-
-    % Replacement:
-    % $1 → everything up to and including the function and comments
-    rep = [globalStr '\n' loadStr];
-
-    % Perform the replacement
-    txt = regexprep(txt, pat, rep, 'lineanchors');
-
-    %TODO: modify this to remove the function name from the structure
     % ------------------------------------------------------------------------
-    % 4) Rewrite every assignment of the form:
-    %      GatorXData = ADiGator_<myfun>(.optionalMyfun).GatorXData;
+    % 5) Rewrite every assignment of the form:
+    %      GatorXData = ADiGator_<myfun>.function_name.GatorXData;
     %    to:
-    %      GatorXData = coder.const(ADiGator_<myfun>.GatorXData);
+    %      GatorXData = coder.const(ADiGator_<myfun>.function_name.GatorXData);
     % ------------------------------------------------------------------------
-    % Direct from global (with or without .myfun)
-    for V = gatorList.'
-        directA = "(?m)^\s*(" + V + ")\s*=\s*" + regexptranslate('escape', globalName) + "\." + V + "\s*;\s*$";
-        txt = regexprep(txt, directA, '$1 = coder.const(' + globalName + '.' + V + ');');
-
-        directB = "(?m)^\s*(" + V + ")\s*=\s*" + regexptranslate('escape', globalName) + "\." + regexptranslate('escape', subfun_list{ii}) + "\." + V + "\s*;\s*$";
-        txt = regexprep(txt, directB, '$1 = coder.const(' + globalName + '.' + V + ');');
+    patterns = {'Gator','Data',globalName,subfun_list{fun}};
+    gdidx = find_in_file(txt,patterns,fidx,2,[]);
+    for ii=1:length(gdidx)
+        % add constant
+        txt(gdidx) = strrep(txt(gdidx),'Data = ADiGator','Data = coder.const(ADiGator');
+        txt(gdidx) = strrep(txt(gdidx),'Data;','Data);');
+        if ~isempty(data_functions)
+            % remove the unnecessary field
+            txt(gdidx) = strrep(txt(gdidx),['.',subfun_list{fun},'.'],'.');
+        end
     end
 end
 
 % ------------------------------------------------------------------------
-% 5) Remove the ADiGator_LoadData() subfunction entirely
-% ------------------------------------------------------------------------
-subPat = "(?ms)^\s*function\s+ADiGator_LoadData\s*\(\s*\)\s*.*?^\s*end\s*$";
-txt = regexprep(txt, subPat, '', 'once');
-
-% ------------------------------------------------------------------------
 % 6) Save back if changed
 % ------------------------------------------------------------------------
-if ~strcmp(txt, orig)
-    fid = fopen(deriv_filepath,'w'); fwrite(fid, txt); fclose(fid);
+if length(txt)~=length(orig) || ~all(strcmp(txt, orig))
+    writelines(txt, deriv_filepath);
 end
 end
 
 % ================= helpers =================
-
-function out = replace_global_line(matchStruct, globalName)
-line = matchStruct.match{1};
-if contains(line, "global") && contains(line, globalName)
-    out = regexprep(line, '\<global\>', 'persistent');
-else
-    out = line; % leave unrelated global lines alone
+% find all the elements in a string array that contain all the patterns
+function idx = find_in_file(txt,patterns,start,once,avoid_start)
+idx = [];
+for line = start:length(txt)
+    pat_find = false(size(patterns));
+    if ~isempty(avoid_start)
+        avoid = ~(~isempty(txt{line}) && (txt{line}(1) ~= avoid_start));
+    else
+        avoid = false;
+    end
+    if ~avoid
+        for pat = 1:length(patterns)
+            pat_find(pat) = contains(txt(line),patterns{pat});
+            if ~pat_find(pat)
+                break;
+            end
+        end
+    end
+    if all(pat_find)
+        if isempty(idx)
+            last_idx = line;
+        else
+            last_idx = idx(end);
+        end
+        idx = [idx line]; %#ok<AGROW>
+        if once == 1; return; end % only one instance
+        if once > 1 % more than one instance
+            if line-last_idx > 2
+                idx(end) = [];
+                return;
+            end
+        end
+    end
 end
 end
-
-function s = buildCoderLoad(globalName, matfile, gatorList)
-% Build the compact coder.load block (single line) with only needed vars
-quoted = join("'" + gatorList + "'", ', ');
-if strlength(quoted) == 0
-    % Fallback: no explicit varlist -> load everything (still compile-time)
-    s = sprintf("if isempty(%s); %s = coder.load('%s'); end", globalName, globalName, matfile);
-else
-    s = sprintf("if isempty(%s); %s = coder.load('%s', %s); end", ...
-                globalName, globalName, matfile, quoted);
-end
-end
-
-function out = escapeReplacement(s)
-out = strrep(s, '\', '\\');
-out = strrep(out, '$', '\$');
-end
-
