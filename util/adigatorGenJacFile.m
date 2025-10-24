@@ -80,6 +80,8 @@ function output = adigatorGenJacFile(UserFunName,UserFunInputs,varargin)
 %                                   functions and files (.mat and .m)
 %                                   Modify output gradients to be in column
 %                                   form, i.e. f = df/dx'*x+x'*d2f/dx2*x;
+%                                   when computing gradients. Maintaining 
+%                                   numerator form when computing Hessians and Jacobians
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ OPTIONS SETUP ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 opts = adigatorOptions(); % default options
@@ -231,16 +233,53 @@ ystr = FunctionInfo.Output.Names{1};
 % Call the ADiGatorJac file
 fprintf(fid,[ystr,' = ',AdiJacFileName,'(',InputStr2,');\n']);
 
+% v1.5
+% following the conventions on https://en.wikipedia.org/wiki/Matrix_calculus
+
+%%% SCALAR FUNCTION OF VECTOR VARIABLE (GRADIENT)
+% f: Rn -> R
+% x in Rn
+%
+% Gradient_x(f) = [df/dx1
+%                  ...
+%                  df/dxn]
+%
+% size(Gradient_x(f)) = [length(x) length(f)]
+%
+% usage in computations: Gradient_x(f)' * x
+%%% VECTOR FUNCTION OF VECTOR VARIABLE (JACOBIAN)
+% f: Rn -> Rm
+% x in Rn
+%
+% Jacobian(f)_x = [df1/dx1  ... df1/dxn
+%                  ...
+%                  dfm/dx1   ... dfn/dxn]
+%
+% size(Gradient(f)) = [length(x) length(f)]
+%
+% usage in computations: Jacobian_x(f) * x
+
+%%% GENERALIZATION
+% f: Rnxm -> Rrxc
+% x in Rnxm
+%
+%		    c=1	    c=1	    c>1	    c>1
+%		    r=1	    r>1	    r=1	    r>1
+% n=1	m=1	1 x 1	r x 1	c x 1	r x c
+% n=1	m>1	m x 1	r x m	c x m	r*c x m
+% n>1	m=1	n x 1	r x n	c x n	r*c x n
+% n>1	m>1	n x m	r x n*m	c x n*m	r*c x n*m
+
 % Check to see how many non-zeros in Jacobian
 xsize = x.func.size;
 ysize = adiout.func.size;
 dydxsize = [prod(ysize), prod(xsize)];
 dydxnumel  = dydxsize(1)*dydxsize(2);
-if dydxsize(1) == 1 && all(xsize>1)
+if dydxsize(1) == 1 && all(xsize>1) % scalar function of matrix variable
   dydxsize = xsize;
   ysize = [xsize(1) 1];
   xsize = [xsize(2) 1];
-elseif dydxsize(2) == 1 && all(ysize>1)
+elseif dydxsize(2) == 1 && all(ysize>1) % matrix function of scalar variable
   dydxsize = ysize;
   xsize = [ysize(2) 1];
   ysize = [ysize(1) 1];
@@ -249,22 +288,30 @@ dydxnnz  = size(adiout.deriv.nzlocs,1);
 % If dydx has => 250 elements and has <= 75% nonzeros, project into sparse
 % matrix, otherwise project into full matrix.
 dy = [ystr,'.d',vodname];
-%v1.5:	process this to output Jacobians correctly, i.e., in [m n] form ( m = numel(y), n = numel(x))
-if dydxnnz == dydxnumel
-    if any(dydxsize == 1) % we can use the reshape directly, no transposing
-        fprintf(fid,['Jac = reshape(',dy,',[%1.0f %1.0f]);\n'],[dydxsize(2) dydxsize(1)]);
-    else % we need to transpose to work in a column-first logic
-        fprintf(fid,['Jac = reshape(',dy,',[%1.0f %1.0f])'';\n'],dydxsize);
+%v1.5:	process this to output Jacobians and Gradients correctly, as shown above
+if dydxnnz == dydxnumel % all elements are nonzero
+    if dydxsize(1) == 1 % the function is a scalar, use the Gradient convention if user selected
+        if strcmp(NameAppendix,'Jac') % Use Jacobian convention
+            fprintf(fid,['Jac = reshape(',dy,',[%1.0f %1.0f]);\n'],[dydxsize(1) dydxsize(2)]);
+        else
+            fprintf(fid,['Jac = reshape(',dy,',[%1.0f %1.0f]);\n'],[dydxsize(2) dydxsize(1)]);
+        end
+    else % the function is not a scalar -> use the Jacobian convention
+        fprintf(fid,['Jac = reshape(',dy,',[%1.0f %1.0f]);\n'],dydxsize);
     end
 elseif dydxsize(1) == 1 && dydxsize(2) == 1 % function and variable are scalars
   fprintf(fid,['Jac = ',dy,';\n']);
-elseif dydxsize(1) == 1 % function is scalar
-  fprintf(fid,'Jac = zeros(%1.0f,1);',dydxsize(2));
+elseif dydxsize(1) == 1 % function is scalar -> use Gradient convention if user selected Gradient
+    if strcmp(NameAppendix,'Jac') % Use Jacobian convention
+        fprintf(fid,'Jac = zeros(1,%1.0f);',dydxsize(2));
+    else
+        fprintf(fid,'Jac = zeros(%1.0f,1);',dydxsize(2));
+    end
+    fprintf(fid,['Jac(',dy,'_location) = ',dy,';\n']);
+elseif dydxsize(2) == 1 % variable is scalar -> use Jacobian convention
+  fprintf(fid,'Jac = zeros(%1.0f,1);',dydxsize(1));
   fprintf(fid,['Jac(',dy,'_location) = ',dy,';\n']);
-elseif dydxsize(2) == 1 % variable is scalar
-  fprintf(fid,'Jac = zeros(1,%1.0f);',dydxsize(2));
-  fprintf(fid,['Jac(',dy,'_location) = ',dy,';\n']);
-else
+else % Jacobian is a matrix -> Jacobian convention
   dyloc = [dy,'_location'];
   if ~any(ysize == 1)
     % Output is matrix

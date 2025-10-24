@@ -81,16 +81,8 @@ function output = adigatorGenHesFile(UserFunName,UserFunInputs,varargin)
 %                                   functions and files (.mat and .m)
 %                                   Modify output gradients to be in column
 %                                   form, i.e. f = df/dx'*x+x'*d2f/dx2*x;
-
-
-if ~ischar(UserFunName)
-  error(['First input to adigator must be string name of function to be ',...
-    'differentiated']);
-end
-GrdFileName    = [UserFunName,'_Grd'];          % Name of gradient wrapper
-AdiGrdFileName = [UserFunName,'_ADiGatorGrd'];  % Name of first deriv file
-HesFileName    = [UserFunName,'_Hes'];          % Name of hessian wrapper
-AdiHesFileName = [UserFunName,'_ADiGatorHes'];  % Name of second deriv file
+%                                   when computing gradients. Maintaining 
+%                                   numerator form when computing Hessians and Jacobians
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ OPTIONS SETUP ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 opts = adigatorOptions();
@@ -105,6 +97,17 @@ else
         opts.overwrite = 1;
     end
 end
+
+%% ~~~~~~~~~~~~~~~~~~~~~~~~~~ INPUTS PARSING ~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
+if ~ischar(UserFunName)
+  error(['First input to adigator must be string name of function to be ',...
+    'differentiated']);
+end
+NameAppendix   = 'Grd';
+GrdFileName    = [UserFunName,'_Grd'];          % Name of gradient wrapper
+AdiGrdFileName = [UserFunName,'_ADiGatorGrd'];  % Name of first deriv file
+HesFileName    = [UserFunName,'_Hes'];          % Name of hessian wrapper
+AdiHesFileName = [UserFunName,'_ADiGatorHes'];  % Name of second deriv file
 
 % Quick input check
 if ~iscell(UserFunInputs)
@@ -256,6 +259,55 @@ fprintf(Hfid,[ystr,' = ',AdiHesFileName,'(',InputStr2,');\n']);
 
 ysize = adiout.func.size;
 
+% v1.5
+% following the conventions on https://en.wikipedia.org/wiki/Matrix_calculus
+
+%%% SCALAR FUNCTION OF VECTOR VARIABLE (GRADIENT)
+% f: Rn -> R
+% x in Rn
+%
+% Gradient_x(f) = [df/dx1
+%                  ...
+%                  df/dxn]
+%
+% size(Gradient_x(f)) = [length(x) length(f)]
+%
+% usage in computations: Gradient_x(f)' * x
+%%% VECTOR FUNCTION OF VECTOR VARIABLE (JACOBIAN)
+% f: Rn -> Rm
+% x in Rn
+%
+% Jacobian(f)_x = [df1/dx1  ... df1/dxn
+%                  ...
+%                  dfm/dx1   ... dfn/dxn]
+%
+% size(Gradient(f)) = [length(x) length(f)]
+%
+% usage in computations: Jacobian_x(f) * x
+%%% SCALAR FUNCTION OF VECTOR VARIABLE (HESSIAN)
+% f: Rn -> Rm
+% x in Rn
+%
+% Hessian(f)_x = [d2f/dx1dx1  ... d2f/dx1dxn
+%                 ...
+%                 d2f/dxndx1  ... d2f/dxndxn]
+%
+% size(Gradient(f)) = [length(x) length(f)]
+%
+% usage in computations: x' * Hessian_x(f) * x
+
+%%% GENERALIZATION
+% f: Rnxm -> Rrxc
+% x in Rnxm
+%
+%		    c=1	    c=1	    c>1	    c>1
+%		    r=1	    r>1	    r=1	    r>1
+% n=1	m=1	1 x 1	r x 1	c x 1	r x c
+% n=1	m>1	m x 1	r x m	c x m	r*c x m
+% n>1	m=1	n x 1	r x n	c x n	r*c x n
+% n>1	m>1	n x m	r x n*m	c x n*m	r*c x n*m
+
+% Check to see how many non-zeros in Hessian
 dydxdxnnz = size(adiout2.(['d',vodname]).deriv.nzlocs,1);
 n = prod(xsize);
 m = prod(ysize);
@@ -336,35 +388,44 @@ end
 % matrix, otherwise project into full matrix.
 dydxsize = [prod(ysize), prod(xsize)];
 dydxnumel  = dydxsize(1)*dydxsize(2);
-if dydxsize(1) == 1 && all(xsize>1)
+if dydxsize(1) == 1 && all(xsize>1) % scalar function of matrix variable
   dydxsize = xsize;
   ysize = [xsize(1) 1];
   xsize = [xsize(2) 1];
-elseif dydxsize(2) == 1 && all(ysize>1)
+elseif dydxsize(2) == 1 && all(ysize>1) % matrix function of scalar variable
   dydxsize = ysize;
   xsize = [ysize(2) 1];
   ysize = [ysize(1) 1];
 end
 dydxnnz  = size(adiout.deriv.nzlocs,1);
+% If dydx has => 250 elements and has <= 75% nonzeros, project into sparse
+% matrix, otherwise project into full matrix.
 dydx = [ystr,'.d',vodname];
 %v1.5:	process this to output Jacobians correctly, i.e., in [m n] form ( m = numel(y), n = numel(x))
-dydzsize_print = [dydxsize(2) dydxsize(1)];
 for fid = [Gfid,Hfid]
-  if dydxnnz == dydxnumel
-    if any(dydxsize == 1) % we can use the reshape directly, no transposing
-        fprintf(fid,['Grd = reshape(',dydx,',[%1.0f %1.0f]);\n'],dydzsize_print);
-    else % we need to transpose to work in a column-first logic
-        fprintf(fid,['Grd = reshape(',dydx,',[%1.0f %1.0f])'';\n'],dydxsize);
+  if dydxnnz == dydxnumel % all elements are nonzero
+    if dydxsize(1) == 1 % the function is a scalar, use the Gradient convention if user selected
+        if strcmp(NameAppendix,'Jac') % Use Jacobian convention
+            fprintf(fid,['Grd = reshape(',dydx,',[%1.0f %1.0f]);\n'],[dydxsize(1) dydxsize(2)]);
+        else
+            fprintf(fid,['Grd = reshape(',dydx,',[%1.0f %1.0f]);\n'],[dydxsize(2) dydxsize(1)]);
+        end
+    else % the function is not a scalar -> use the Jacobian convention
+        fprintf(fid,['Grd = reshape(',dydx,',[%1.0f %1.0f]);\n'],dydxsize);
     end
   elseif dydxsize(1) == 1 && dydxsize(2) == 1 % function and variable are scalars
     fprintf(fid,['Grd = ',dydx,';\n']);
-  elseif dydxsize(1) == 1 % function is scalar
-    fprintf(fid,'Grd = zeros(1,%1.0f);',dydxsize(2));
+  elseif dydxsize(1) == 1 % function is scalar -> use Gradient convention if user selected Gradient
+    if strcmp(NameAppendix,'Jac') % Use Jacobian convention
+        fprintf(fid,'Grd = zeros(1,%1.0f);',dydxsize(2));
+    else
+        fprintf(fid,'Grd = zeros(%1.0f,1);',dydxsize(2));
+    end
     fprintf(fid,['Grd(',dydx,'_location) = ',dydx,';\n']);
-  elseif dydxsize(2) == 1 % variable is scalar
-    fprintf(fid,'Grd = zeros(%1.0f,1);',dydxsize(2));
+  elseif dydxsize(2) == 1 % variable is scalar -> use Jacobian convention
+    fprintf(fid,'Grd = zeros(%1.0f,1);',dydxsize(1));
     fprintf(fid,['Grd(',dydx,'_location) = ',dydx,';\n']);
-  else
+  else % Jacobian is a matrix -> Jacobian convention
     dyloc = [dydx,'_location'];
     if ~any(ysize == 1)
       % Output is matrix
@@ -392,9 +453,8 @@ for fid = [Gfid,Hfid]
       fprintf(fid,['Grd = sparse(',rowstr,',',colstr,',',dydx,',%1.0f,%1.0f)'';\n'],dydxsize);
     else
       % Project Full
-      fprintf(fid,'Grd_aux = zeros(%1.0f,%1.0f);\n',dydzsize_print);
-      fprintf(fid,['Grd_aux((',colstr,'-1)*%1.0f+',rowstr,') = ',dydx,';\n'],dydxsize(1));
-      fprintf(fid,'Grd = Grd_aux'';\n'); % v1.5 - ensure that the output is in the right form
+      fprintf(fid,'Grd = zeros(%1.0f,%1.0f);\n',dydxsize);
+      fprintf(fid,['Grd((',colstr,'-1)*%1.0f+',rowstr,') = ',dydx,';\n'],dydxsize(1));
     end
   end
   fprintf(fid,['Fun = ',ystr,'.f;\n']);
@@ -432,3 +492,5 @@ else
 end
 
 fprintf(['\n<strong>adigatorGenHesFile</strong> successfully generated Hessian wrapper file: ''',HesFileName,''';\n\n']);
+
+end
