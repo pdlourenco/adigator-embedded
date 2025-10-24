@@ -50,6 +50,12 @@ function info = adigatorGenDerFile_embedded(DerType,UserFunName,UserFunInputs,va
 %
 %   Changelog:
 %
+%   TODO:
+%       - Remove the computation of unnecessary variables by running CHECKCODE on each file.
+%         Some functions load the mat file and assign Gator*Data structures but don't use them.
+%         Each ADiGator derivative function returns the desired derivative as well as all 
+%         lower order derivatives and the function itself. This might not be desirable in
+%         embedded code, where only the minimum number of computations should take place
 
 %% -------------------------- ARGUMENTS PARSING -------------------------%%
 % parse options
