@@ -129,12 +129,6 @@ end
 if derflag == 0
   error('derivative input of user function not found - possibly embedded within a cell/structure, use adigator function if this is the case');
 end
-UserFun = str2func(UserFunName);
-% Output Check
-if nargout(UserFun) ~= 1
-  error('User function must contain single output');
-end
-
 
 % File checks
 if isempty(opts.path) % v1.5 - allow user to specify the path
@@ -145,6 +139,17 @@ else
         mkdir(CallingDir);
     end
 end
+% v1.5 - add chosen directory to the path to allow storage
+% in userdefined directories
+original_path = path();
+addpath(CallingDir);
+
+UserFun = str2func(UserFunName);
+% Output Check
+if nargout(UserFun) ~= 1
+  error_restore_path(original_path,'User function must contain single output');
+end
+
 % Store the path to the generated files (v1.5)
 ADiGator_GeneratedFiles.Grd = fullfile(CallingDir, [GrdFileName, '.m']);
 ADiGator_GeneratedFiles.Hes = fullfile(CallingDir, [HesFileName, '.m']);
@@ -154,7 +159,7 @@ if exist(ADiGator_GeneratedFiles.Grd,'file')
     delete(ADiGator_GeneratedFiles.Grd);
     rehash
   else
-    error(['The file ',ADiGator_GeneratedFiles.Grd,' already exists, ',...
+    error_restore_path(original_path,['The file ',ADiGator_GeneratedFiles.Grd,' already exists, ',...
       'quitting transformation. To set manual overwrite of file use ',...
       '''''adigatorOptions(''OVERWRITE'',1);''''. Alternatively, delete the ',...
       'existing file and any associated .mat file.']);
@@ -165,31 +170,37 @@ if exist(ADiGator_GeneratedFiles.Hes,'file')
     delete(ADiGator_GeneratedFiles.Hes);
     rehash
   else
-    error(['The file ',ADiGator_GeneratedFiles.Hes,' already exists, ',...
+    error_restore_path(original_path,['The file ',ADiGator_GeneratedFiles.Hes,' already exists, ',...
       'quitting transformation. To set manual overwrite of file use ',...
       '''''adigatorOptions(''OVERWRITE'',1);''''. Alternatively, delete the ',...
       'existing file and any associated .mat file.']);
   end
 end
 
-% v1.5 - add chosen directory to the path to allow storage
-% in userdefined directories
-addpath(CallingDir);
-
 % Call adigator twice
-[adiout,FunctionInfo,ADi_DerivFiles,ADi_DerivFuns] = adigator(UserFunName,UserFunInputs,AdiGrdFileName,opts); % v1.5 - add new output with list of files/functions
+try % v1.5 - add try-catch to avoid leaving unnecessary changes to path active
+    [adiout,FunctionInfo,ADi_DerivFiles,ADi_DerivFuns] = adigator(UserFunName,UserFunInputs,AdiGrdFileName,opts); % v1.5 - add new output with list of files/functions
+catch ME
+    path(original_path);
+    rethrow(ME);
+end
 adiout = adiout{1};
 % Change derivative input
 x = UserFunInputs{derflag};
 xsize = x.func.size;
 vodname = x.deriv.vodname;
 UserFunInputs{derflag} = struct('f',x,['d',vodname],ones(prod(xsize),1));
+
+try % v1.5 - add try-catch to avoid leaving unnecessary changes to path active
 [adiout2,FunctionInfo2,ADi_DerivFiles2,ADi_DerivFuns2] = adigator(AdiGrdFileName,UserFunInputs,AdiHesFileName,opts); % v1.5 - add new output with list of files/functions
+catch ME
+    path(original_path);
+    rethrow(ME);
+end
 adiout2 = adiout2{1};
 
-% v1.5 - remove chosen directory to the path to allow storage
-% in userdefined directories
-rmpath(CallingDir);
+% v1.5 - restore the path to its original state
+path(original_path);
 
 Gfid = fopen(ADiGator_GeneratedFiles.Grd,'w+');
 Hfid = fopen(ADiGator_GeneratedFiles.Hes,'w+');
