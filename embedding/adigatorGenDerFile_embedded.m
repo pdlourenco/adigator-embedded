@@ -125,7 +125,7 @@ for derf = 1:N_derivs
         % generate new data function (tmp)
         fprintf('\t\t Generating data function(s) as requested in inline mode...');
         for funidx=1:numel(AdigatorGeneratedFiles(derf).func)
-            AdigatorGeneratedFiles(derf).data{funidx} = ['data_',AdigatorGeneratedFiles(derf).name,'_',AdigatorGeneratedFiles(derf).func{funidx}];
+            AdigatorGeneratedFiles(derf).data{funidx} = ['data_',AdigatorGeneratedFiles(derf).func{funidx}];
             AdigatorGeneratedFiles(derf).datapath{funidx} = structure_to_embed_mfile(AdigatorGeneratedFiles(derf).data{funidx},...
                                                             tmp_adigator_struct.(AdigatorGeneratedFiles(derf).func{funidx}),AdigatorGeneratedFiles(derf).path);
         end
