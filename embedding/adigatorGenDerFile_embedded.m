@@ -202,7 +202,7 @@ for jj = 1:numel(funnames) % go through each of the functions
                 A = G.(idxName);
 
                 % Down-cast numeric integer arrays to save memory
-                if isnumeric(A) && isreal(A) && all(isfinite(A(:))) && all(abs(A(:) - round(A(:))) < 1e-12)
+                if ~issparse(A) && isnumeric(A) && isreal(A) && all(isfinite(A(:))) && all(abs(A(:) - round(A(:))) < 1e-12)
                     % Nonnegative? prefer uint32; otherwise int32
                     if all(A(:) >= 0)
                         A = uint32(A);
