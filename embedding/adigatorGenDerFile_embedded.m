@@ -192,13 +192,17 @@ for jj = 1:numel(funnames) % go through each of the functions
             if ~isstruct(G), continue; end
             fG = fieldnames(G);
 
-            % Keep only Index* subfields
-            keepIdx = fG(startsWith(fG, "Index"));
-            if isempty(keepIdx), continue; end
+            % Keep the only subfields that are not empty
+            keepIdx = check_adigator_mat_empty(G,fG);
+
+            % Keep Index* subfields
+            keepIdx = startsWith(fG, "Index") | keepIdx;
+            if ~any(keepIdx), continue; end
 
             G2 = struct();
-            for k = 1:numel(keepIdx)
-                idxName = keepIdx{k};
+            idxNames = fG(keepIdx);
+            for k = 1:numel(idxNames)
+                idxName = idxNames{k};
                 A = G.(idxName);
 
                 % Down-cast numeric integer arrays to save memory
@@ -222,3 +226,14 @@ for jj = 1:numel(funnames) % go through each of the functions
     end
 end
 end
+
+
+function keepIdx = check_adigator_mat_empty(structin,fields)
+
+keepIdx = false(size(fields));
+
+for ii = 1:numel(fields)
+    keepIdx(ii) = ~isempty(structin.(fields{ii}));
+end
+end
+
