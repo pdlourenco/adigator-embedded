@@ -1,4 +1,4 @@
-function txt = adigator_patch_derivative(deriv_filepath, deriv_filename, subfun_list,apply_codegen_only,data_functions)
+function txt = adigator_patch_derivative(deriv_filepath, deriv_filename, subfun_list,apply_codegen_only,data_functions,mat_filepath)
 %PATCH_ADIGATOR_FILE    Patch an ADiGator-generated function for Embedded Coder
 %                       assuming a coder.load option
 %
@@ -23,6 +23,9 @@ function txt = adigator_patch_derivative(deriv_filepath, deriv_filename, subfun_
 
 if nargin<5 % codeload option selected
     data_functions = {};
+end
+if nargin<6 % default mat path: same directory as the .m file, same base name
+    mat_filepath = deriv_filename + ".mat";
 end
 
 txt = readlines(deriv_filepath);
@@ -86,7 +89,7 @@ for fun = 1:length(subfun_list)
         % ------------------------------------------------------------------------
         txt(gidx) = strrep(txt(gidx),'global','persistent'); % declare persistent
         % add the loading call
-        loading_call = "if isempty(" +globalName+"); "+globalName+" = coder.load('"+deriv_filename+".mat','"+subfun_list{fun}+"'); end";
+        loading_call = "if isempty(" +globalName+"); "+globalName+" = coder.load('"+mat_filepath+"','"+subfun_list{fun}+"'); end";
     end
     txt = [txt(1:(gidx));
            loading_call;

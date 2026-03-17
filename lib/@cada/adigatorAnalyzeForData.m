@@ -59,7 +59,7 @@ for Fcount = 2:length(ADIGATORFORDATA(FORCOUNT).FOR)
   ForLengths  = ADIGATORFORDATA(FORCOUNT).FOR(Fcount).LENGTHS;
   FORLOCS     = ADIGATORFORDATA(FORCOUNT).FOR(Fcount).LOCS;
   if size(ForLengths,2) < OuterLoopMaxLength
-    ForLengths(end,OuterLoopMaxLenght) = 0;
+    ForLengths(end,OuterLoopMaxLength) = 0;
   end
   % Set MAXLENGTH field of ADIGATORFORDATA
   ADIGATORFORDATA(FORLOCS(1,end)).MAXLENGTH = max(ForLengths(:));

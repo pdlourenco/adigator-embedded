@@ -146,7 +146,7 @@ for derf = 1:N_derivs
     if coderload
         % patch the adigator generated derivative file
         fprintf('\t Processing ADiGator derivative file... ');
-        auxiliary_deriv_filecontents = adigator_patch_derivative(AdigatorGeneratedFiles(derf).m,AdigatorGeneratedFiles(derf).dername,AdigatorGeneratedFiles(derf).func,0);
+        auxiliary_deriv_filecontents = adigator_patch_derivative(AdigatorGeneratedFiles(derf).m,AdigatorGeneratedFiles(derf).dername,AdigatorGeneratedFiles(derf).func,0,{},AdigatorGeneratedFiles(derf).mat);
         fprintf('done.\n');
 
         % cleanup (remove derivative file)
