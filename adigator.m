@@ -762,6 +762,8 @@ rmpath(adigatorTempDir);
 if ~sflag
   warning('Could not remove old temp directory -- message produced: %s',msg);
 end
+% Clear global state so successive calls (e.g. in test suites) start clean
+clear global ADIGATOR ADIGATORFORDATA ADIGATORDATA ADIGATORVARIABLESTORAGE
 end
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ FILEKEEPING ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%

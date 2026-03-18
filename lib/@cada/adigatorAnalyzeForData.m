@@ -22,7 +22,7 @@ function adigatorAnalyzeForData(FORCOUNT,dummyVar) %#ok<INUSD>
 % GetDataDependencies: given a set of indices and/or sizes collected over
 %    multiple embedded FOR loops, this routine recursively calls itself to
 %    find which loops the data is dependent upon
-% RemoveUnnneededIndices: given the dependency map from
+% RemoveUnneededData: given the dependency map from
 %    GetDataDependencies, this routine removes the ones which are repeated
 %    (i.e. independent)
 % GetSubsrefInds:   obtains the derivative index mapping for subsref
@@ -455,7 +455,7 @@ for Scount   = 1:length(ADIGATORFORDATA(FORCOUNT).SUBSASGN)
       % This dimension changes - put it into same form as indice
       % array.
       % Zeros in bSize mean there was an empty assignment, make these into
-      % Inf so that GetDataDependencies and RemoveUnneededIndices doesnt
+      % Inf so that GetDataDependencies and RemoveUnneededData doesnt
       % think that they are cases which subsasgn just didnt fire.
       bSizeTemp = zeros(1,prod(FORLENGTHS));
       bSizeTemp(logical(sum(reshape(ASGNINDS,NUMinds,prod(FORLENGTHS)),1)))...

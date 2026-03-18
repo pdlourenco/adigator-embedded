@@ -29,7 +29,6 @@ if nargin<6 % default mat path: same directory as the .m file, same base name
 end
 
 txt = readlines(deriv_filepath);
-orig = txt;
 
 % ------------------------------------------------------------------------
 % 1) Remove the ADiGator_LoadData() subfunction entirely
@@ -103,7 +102,7 @@ for fun = 1:length(subfun_list)
     %      GatorXData = coder.const(ADiGator_<myfun>.function_name.GatorXData);
     % ------------------------------------------------------------------------
     patterns = {'Gator','Data',globalName,subfun_list{fun}};
-    gdidx = find_in_file(txt,patterns,fidx,2,[]);
+    gdidx = find_in_file(txt,patterns,fidx,0,[]); % collect ALL matches; patterns are specific enough
     for ii=1:length(gdidx)
         % add constant
         txt(gdidx) = strrep(txt(gdidx),'Data = ADiGator','Data = coder.const(ADiGator');
@@ -115,16 +114,11 @@ for fun = 1:length(subfun_list)
     end
 end
 
-% ------------------------------------------------------------------------
-% 6) Save back if changed
-% ------------------------------------------------------------------------
-if length(txt)~=length(orig) || ~all(strcmp(txt, orig))
-    writelines(txt, deriv_filepath);
-end
-end
-
 % ================= helpers =================
 % find all the elements in a string array that contain all the patterns
+%   once == 1  : return after the first match
+%   once == 0  : return all matches (no early exit)
+%   once >  1  : stop when gap between consecutive matches exceeds 2 lines (legacy, avoid)
 function idx = find_in_file(txt,patterns,start,once,avoid_start)
 idx = [];
 for line = start:length(txt)

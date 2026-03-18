@@ -293,8 +293,8 @@ elseif ADIGATOR.OPTIONS.UNROLL && FunID > 1
       end
       if FunctionInfo(FunID).DERNUMBER > 1
         FunctionStr = FunctionInfo(FunID).File.Name;
-        if length(FunctionStr) > 8 && strcmp(FunctionStr(1:7),'ADiGator')
-          FunctionStr = ['ADiGator_',FunctionStr(8:end)];
+        if startsWith(FunctionStr,'ADiGator')
+          FunctionStr = ['ADiGator_',FunctionStr(length('ADiGator')+1:end)];
         end
       else
         FunctionStr = sprintf(['ADiGator_',FunctionInfo(FunID).File.Name,'%1.0f'],CurrentIter);
@@ -1013,8 +1013,8 @@ if FunID == 1
 else
   if FunctionInfo(FunID).DERNUMBER > 1
     FileName = FunctionInfo(FunID).File.Name;
-    if length(FileName) > 8 && strcmp(FileName(1:7),'ADiGator')
-      FileName = ['ADiGator_',FileName(8:end)];
+    if startsWith(FileName,'ADiGator')
+      FileName = ['ADiGator_',FileName(length('ADiGator')+1:end)];
     end
   elseif ADIGATOR.OPTIONS.UNROLL && FunID > 1
     IterCount = FunctionInfo(FunID).Iteration.IterCount;
