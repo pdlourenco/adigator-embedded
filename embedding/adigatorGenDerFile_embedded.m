@@ -42,7 +42,7 @@ function info = adigatorGenDerFile_embedded(DerType,UserFunName,UserFunInputs,va
 %       info            information about the differentiation process
 %
 %	Dependencies:
-%		adigatorGenJacFile, adigatorGenHesFile, structure_to_embed_mfile, adigator_patch_derivative
+%		adigatorGenJacFile, adigatorGenHesFile, structure_to_embed_mfile
 %
 %   Copyright GMV, S.A.
 %   Property of GMV, S.A.; all rights reserved
@@ -121,8 +121,10 @@ for derf = 1:N_derivs
     fprintf('done.\n');
 
     %%% if user requests inline option, the data is loaded from a function
+    % adigator already emits coder.const(data_<name>()) in the derivative file
+    % (Level 2); we only need to generate the data helper and fold files.
     if inline
-        % generate new data function (tmp)
+        % generate new data function
         fprintf('\t\t Generating data function(s) as requested in inline mode...');
         for funidx=1:numel(AdigatorGeneratedFiles(derf).func)
             AdigatorGeneratedFiles(derf).data{funidx} = ['data_',AdigatorGeneratedFiles(derf).func{funidx}];
@@ -130,33 +132,26 @@ for derf = 1:N_derivs
                                                             tmp_adigator_struct.(AdigatorGeneratedFiles(derf).func{funidx}),AdigatorGeneratedFiles(derf).path);
         end
         fprintf('done.\n');
-
-        % patch the adigator generated derivative file
-        fprintf('\t Processing ADiGator derivative file... ');
-        auxiliary_deriv_filecontents = adigator_patch_derivative(AdigatorGeneratedFiles(derf).m,AdigatorGeneratedFiles(derf).dername,AdigatorGeneratedFiles(derf).func,0,AdigatorGeneratedFiles(derf).data);
-        fprintf('done.\n');
-
-        % cleanup (derivative file)
-        delete(AdigatorGeneratedFiles(derf).m);
-        % cleanup (static data file)
-        delete(AdigatorGeneratedFiles(derf).mat);
     end
 
-    %%% if user requests the coderload option, the data is loaded at compile time from a file
-    if coderload
-        % patch the adigator generated derivative file
-        fprintf('\t Processing ADiGator derivative file... ');
-        auxiliary_deriv_filecontents = adigator_patch_derivative(AdigatorGeneratedFiles(derf).m,AdigatorGeneratedFiles(derf).dername,AdigatorGeneratedFiles(derf).func,0,{},AdigatorGeneratedFiles(derf).mat);
-        fprintf('done.\n');
+    %%% read derivative file — already correct from adigator (Level 2 changes)
+    % No patching needed: persistent/coder.load/%#codegen/coder.const are emitted
+    % directly by adigatorFunctionInitialize and adigator.
+    fprintf('\t Reading ADiGator derivative file... ');
+    auxiliary_deriv_filecontents = readlines(AdigatorGeneratedFiles(derf).m);
+    fprintf('done.\n');
 
-        % cleanup (remove derivative file)
-        delete(AdigatorGeneratedFiles(derf).m);
+    % cleanup (derivative file)
+    delete(AdigatorGeneratedFiles(derf).m);
+    if inline
+        % cleanup (static data file — replaced by data helper functions)
+        delete(AdigatorGeneratedFiles(derf).mat);
     end
 
     %%% embed derivative and data function into the main wrapper
     fprintf('\t Embed data and derivative functions... ');
-    % patch main wrapper with %#codegen
-    main_deriv_filecontents = adigator_patch_derivative(AdigatorGeneratedFiles(derf).main,AdigatorGeneratedFiles(derf).name,{AdigatorGeneratedFiles(derf).name},1);
+    % wrapper already has %#codegen from adigatorGenJacFile/GenHesFile (Level 1)
+    main_deriv_filecontents = readlines(AdigatorGeneratedFiles(derf).main);
     % write to file
     writelines(main_deriv_filecontents,AdigatorGeneratedFiles(derf).main,'WriteMode','overwrite');
     writelines(["";""],AdigatorGeneratedFiles(derf).main,'WriteMode','append');
@@ -168,7 +163,7 @@ for derf = 1:N_derivs
             delete(AdigatorGeneratedFiles(derf).datapath{dataf});
         end
     end
-    
+
     fprintf('done.\n')
 end
 

@@ -2,6 +2,12 @@ function txt = adigator_patch_derivative(deriv_filepath, deriv_filename, subfun_
 %PATCH_ADIGATOR_FILE    Patch an ADiGator-generated function for Embedded Coder
 %                       assuming a coder.load option
 %
+% DEPRECATED (v1.5): adigatorGenDerFile_embedded no longer calls this function.
+% As of v1.5, embed-mode code (persistent, coder.load, %#codegen, coder.const)
+% is emitted directly by adigator() and adigatorGenJacFile/adigatorGenHesFile
+% when opts.embed_mode ~= 'c'.  This file is retained only for users who
+% generated classic-mode files manually and wish to retrofit them.
+%
 % Assumptions:
 % - The MAT file at MATFILE contains only top-level variables named Gator*Data
 %   (e.g., Gator1Data, Gator2Data, ...), each with Index* fields inside.
@@ -19,7 +25,7 @@ function txt = adigator_patch_derivative(deriv_filepath, deriv_filename, subfun_
 %   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %
 %   Changelog:
-%
+%   2025    v1.5 - Deprecated; embed-mode logic moved into adigator core.
 
 if nargin<5 % codeload option selected
     data_functions = {};

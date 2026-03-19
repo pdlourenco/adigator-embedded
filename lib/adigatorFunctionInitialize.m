@@ -1004,12 +1004,26 @@ for Icount = 1:NUMinputs
 end
 InStr = cell2mat(InStr);
 GlobalVarName = ['ADiGator_',ADIGATOR.PRINT.FILENAME]; % v1.5 - change name for clarity (it's not the matfile name)
+embed_mode = ADIGATOR.OPTIONS.EMBED_MODE; % v1.5
 if FunID == 1
   % Main Function
   FileName    = ADIGATOR.PRINT.FILENAME;
   fprintf(fid,['function ',OutStr,' = ',FileName,'(',InStr(1:end-1),')\n']);
-  fprintf(fid,['global ',GlobalVarName,'\n']);
-  fprintf(fid,['if isempty(',GlobalVarName,'); ADiGator_LoadData(); end\n']);
+  if embed_mode ~= 'c' % v1.5 - %#codegen required for MATLAB Coder
+    fprintf(fid,'%%#codegen\n');
+  end
+  if embed_mode == 'c'
+    fprintf(fid,['global ',GlobalVarName,'\n']);
+    fprintf(fid,['if isempty(',GlobalVarName,'); ADiGator_LoadData(); end\n']);
+  elseif embed_mode == 'l' % coderload: persistent + compile-time coder.load
+    fprintf(fid,['persistent ',GlobalVarName,'\n']);
+    matpath = ADIGATOR.PRINT.FILEPATHS.mat;
+    fprintf(fid,['if isempty(',GlobalVarName,'); ',GlobalVarName,...
+      ' = coder.load(''',matpath,'''); end\n']);
+  elseif embed_mode == 'i' % inline: coder.const(data_<name>())
+    DataFunc = ['data_',FileName];
+    fprintf(fid,[GlobalVarName,' = coder.const(',DataFunc,'());\n']);
+  end
 else
   if FunctionInfo(FunID).DERNUMBER > 1
     FileName = FunctionInfo(FunID).File.Name;
@@ -1028,12 +1042,24 @@ else
   else
     fprintf(fid,['function ',OutStr,' = ',FileName,'(',InStr(1:end-1),')\n']);
   end
-  fprintf(fid,['global ',GlobalVarName,'\n']);
+  if embed_mode ~= 'c' % v1.5
+    fprintf(fid,'%%#codegen\n');
+  end
+  if embed_mode == 'c'
+    fprintf(fid,['global ',GlobalVarName,'\n']);
+  else
+    fprintf(fid,['persistent ',GlobalVarName,'\n']);
+  end
 end
-% Print Data References
+% Print Data References (v1.5 - wrap with coder.const in non-classic modes)
 for Dcount = 1:ADIGATOR.DERNUMBER
-  fprintf(fid,['Gator%1.0dData = ',GlobalVarName,'.',FileName,...
-    '.Gator%1.0dData;\n'],Dcount,Dcount);
+  if embed_mode == 'c'
+    fprintf(fid,['Gator%1.0dData = ',GlobalVarName,'.',FileName,...
+      '.Gator%1.0dData;\n'],Dcount,Dcount);
+  else
+    fprintf(fid,['Gator%1.0dData = coder.const(',GlobalVarName,'.',FileName,...
+      '.Gator%1.0dData);\n'],Dcount,Dcount);
+  end
 end
 
 

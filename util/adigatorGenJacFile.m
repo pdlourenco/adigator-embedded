@@ -217,6 +217,9 @@ fprintf(fid,'%% provided ''AS IS'' with NO WARRANTIES OF ANY KIND and no merchan
 fprintf(fid,'%% or fitness for any purpose or application.\n\n');
 
 fprintf(fid,functionstr);
+if opts.embed_mode ~= 'c' % v1.5 - required for MATLAB Coder
+  fprintf(fid,'%%#codegen\n');
+end
 % Change the derivative input..
 x = UserFunInputs{derflag};
 vodname = x.deriv.vodname;
@@ -301,46 +304,64 @@ if dydxnnz == dydxnumel % all elements are nonzero
     end
 elseif dydxsize(1) == 1 && dydxsize(2) == 1 % function and variable are scalars
   fprintf(fid,['Jac = ',dy,';\n']);
-elseif dydxsize(1) == 1 % function is scalar -> use Gradient convention if user selected Gradient
-    if strcmp(NameAppendix,'Jac') % Use Jacobian convention
-        fprintf(fid,'Jac = zeros(1,%1.0f);',dydxsize(2));
+elseif opts.embed_mode ~= 'c'
+  % v1.5 - embedded modes: use literal linidx computed at generation time from
+  % adiout.deriv.nzlocs, eliminating the runtime dy_location round-trip.
+  linidx = compute_wrapper_linidx(adiout.deriv.nzlocs, x.func.size, adiout.func.size);
+  if dydxsize(1) == 1 % scalar function
+    if strcmp(NameAppendix,'Jac')
+      fprintf(fid,'Jac = zeros(1,%1.0f);\n',dydxsize(2));
     else
-        fprintf(fid,'Jac = zeros(%1.0f,1);',dydxsize(2));
+      fprintf(fid,'Jac = zeros(%1.0f,1);\n',dydxsize(2));
+    end
+  elseif dydxsize(2) == 1 % scalar variable
+    fprintf(fid,'Jac = zeros(%1.0f,1);\n',dydxsize(1));
+  else
+    fprintf(fid,'Jac = zeros(%1.0f,%1.0f);\n',dydxsize);
+  end
+  fprintf(fid,['Jac(%s) = ',dy,';\n'],mat2str(linidx(:)'));
+else % classic mode: runtime dy_location-based assembly
+  if dydxsize(1) == 1 % function is scalar -> use Gradient convention if user selected Gradient
+    if strcmp(NameAppendix,'Jac') % Use Jacobian convention
+      fprintf(fid,'Jac = zeros(1,%1.0f);',dydxsize(2));
+    else
+      fprintf(fid,'Jac = zeros(%1.0f,1);',dydxsize(2));
     end
     fprintf(fid,['Jac(',dy,'_location) = ',dy,';\n']);
-elseif dydxsize(2) == 1 % variable is scalar -> use Jacobian convention
-  fprintf(fid,'Jac = zeros(%1.0f,1);',dydxsize(1));
-  fprintf(fid,['Jac(',dy,'_location) = ',dy,';\n']);
-else % Jacobian is a matrix -> Jacobian convention
-  dyloc = [dy,'_location'];
-  if ~any(ysize == 1)
-    % Output is matrix
-    fprintf(fid,['funloc = (',dyloc,'(:,2)-1)*%1.0f + ',dyloc,'(:,1);\n'],ysize(1));
-    rowstr = 'funloc';
-    if ~any(xsize == 1)
-      % Input is matrix
-      fprintf(fid,['varloc = (',dyloc,'(:,4)-1)*%1.0f + ',dyloc,'(:,3);\n'],xsize(1));
-      colstr = 'varloc';
+  elseif dydxsize(2) == 1 % variable is scalar -> use Jacobian convention
+    fprintf(fid,'Jac = zeros(%1.0f,1);',dydxsize(1));
+    fprintf(fid,['Jac(',dy,'_location) = ',dy,';\n']);
+  else % Jacobian is a matrix -> Jacobian convention
+    dyloc = [dy,'_location'];
+    if ~any(ysize == 1)
+      % Output is matrix
+      fprintf(fid,['funloc = (',dyloc,'(:,2)-1)*%1.0f + ',dyloc,'(:,1);\n'],ysize(1));
+      rowstr = 'funloc';
+      if ~any(xsize == 1)
+        % Input is matrix
+        fprintf(fid,['varloc = (',dyloc,'(:,4)-1)*%1.0f + ',dyloc,'(:,3);\n'],xsize(1));
+        colstr = 'varloc';
+      else
+        colstr = [dyloc,'(:,3)'];
+      end
     else
-      colstr = [dyloc,'(:,3)'];
+      rowstr = [dyloc,'(:,1)'];
+      if ~any(xsize == 1)
+        % Input is matrix
+        fprintf(fid,['varloc = (',dyloc,'(:,3)-1)*%1.0f + ',dyloc,'(:,2);\n'],xsize(1));
+        colstr = 'varloc';
+      else
+        colstr = [dyloc,'(:,2)'];
+      end
     end
-  else
-    rowstr = [dyloc,'(:,1)'];
-    if ~any(xsize == 1)
-      % Input is matrix
-      fprintf(fid,['varloc = (',dyloc,'(:,3)-1)*%1.0f + ',dyloc,'(:,2);\n'],xsize(1));
-      colstr = 'varloc';
+    if dydxnumel >= 250 && dydxnnz/dydxnumel <= 3/4 % classic mode only
+      % Project Sparse
+      fprintf(fid,['Jac = sparse(',rowstr,',',colstr,',',dy,',%1.0f,%1.0f);\n'],dydxsize);
     else
-      colstr = [dyloc,'(:,2)'];
+      % Project Full
+      fprintf(fid,'Jac = zeros(%1.0f,%1.0f);\n',dydxsize);
+      fprintf(fid,['Jac((',colstr,'-1)*%1.0f+',rowstr,') = ',dy,';\n'],dydxsize(1));
     end
-  end
-  if dydxnumel >= 250 && dydxnnz/dydxnumel <= 3/4 && opts.embed_mode == 'c' % v1.5 - only allow sparse matrices if in classic mode (no embed)
-    % Project Sparse
-    fprintf(fid,['Jac = sparse(',rowstr,',',colstr,',',dy,',%1.0f,%1.0f);\n'],dydxsize);
-  else
-    % Project Full
-    fprintf(fid,'Jac = zeros(%1.0f,%1.0f);\n',dydxsize);
-    fprintf(fid,['Jac((',colstr,'-1)*%1.0f+',rowstr,') = ',dy,';\n'],dydxsize(1));
   end
 end
 fprintf(fid,['Fun = ',ystr,'.f;\n']);
@@ -362,3 +383,34 @@ output.JacobianStructure = sparse(adiout.deriv.nzlocs(:,1),...
   adiout.deriv.nzlocs(:,2),ones(dydxnnz,1),dydxsize(1),dydxsize(2));
 
 fprintf(['\n<strong>adigatorGenJacFile</strong> successfully generated Jacobian wrapper file: ''',JacFileName,''';\n\n']);
+
+end % adigatorGenJacFile
+
+% =========================================================================
+function linidx = compute_wrapper_linidx(nzlocs, orig_ysize, orig_xsize)
+% COMPUTE_WRAPPER_LINIDX  Column-major linear indices into the assembled
+% Jacobian matrix, computed at code-generation time from nzlocs.
+%
+% This mirrors the index arithmetic that the runtime dy_location mechanism
+% performs at runtime, but does it statically using the known nzlocs so that
+% the wrapper can embed literal indices instead of reading from GatorXData.
+%
+% nzlocs    [nnz x 2]  col1=function-element idx, col2=variable-element idx
+% orig_ysize            size() of function output before any shape adjustment
+% orig_xsize            size() of differentiation variable before adjustment
+%
+% v1.5 - Pedro Lourenco @ GMV
+ny = prod(orig_ysize);
+nx = prod(orig_xsize);
+if ny == 1 && all(orig_xsize > 1)
+  % Scalar function of matrix variable: Gradient convention reshapes Jac to
+  % input shape.  nzlocs(:,2) is already the linear index into that shape.
+  linidx = int32(nzlocs(:,2));
+elseif nx == 1 && all(orig_ysize > 1)
+  % Matrix function of scalar variable: Jac shaped as output.
+  linidx = int32(nzlocs(:,1));
+else
+  % Standard case: Jac is [ny x nx], column-major.
+  linidx = int32((nzlocs(:,2)-1)*ny + nzlocs(:,1));
+end
+end % compute_wrapper_linidx

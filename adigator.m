@@ -727,11 +727,13 @@ if ADIGATOR.OPTIONS.UNROLL
     end
   end
 end
-fprintf(Dfid,'\n\nfunction ADiGator_LoadData()\n');
-fprintf(Dfid,['global ADiGator_',ADIGATOR.PRINT.FILENAME,'\n']);
-fprintf(Dfid,['ADiGator_',ADIGATOR.PRINT.FILENAME,' = load(''',...
-  ADIGATOR.PRINT.FILENAME,'.mat'');\n']);
-fprintf(Dfid,'return\nend');
+if ADIGATOR.OPTIONS.EMBED_MODE == 'c' % v1.5 - only emit LoadData in classic mode
+  fprintf(Dfid,'\n\nfunction ADiGator_LoadData()\n');
+  fprintf(Dfid,['global ADiGator_',ADIGATOR.PRINT.FILENAME,'\n']);
+  fprintf(Dfid,['ADiGator_',ADIGATOR.PRINT.FILENAME,' = load(''',...
+    ADIGATOR.PRINT.FILENAME,'.mat'');\n']);
+  fprintf(Dfid,'return\nend');
+end
 
 eval(['global ADiGator_',ADIGATOR.PRINT.FILENAME]);
 eval(['ADiGator_',ADIGATOR.PRINT.FILENAME,' = load(''',...

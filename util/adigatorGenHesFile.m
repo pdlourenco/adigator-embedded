@@ -239,6 +239,10 @@ end
 
 fprintf(Gfid,Gfuncstr);
 fprintf(Hfid,Hfuncstr);
+if opts.embed_mode ~= 'c' % v1.5 - required for MATLAB Coder
+  fprintf(Gfid,'%%#codegen\n');
+  fprintf(Hfid,'%%#codegen\n');
+end
 % Change the derivative input..
 
 xfunstr = ['gator_',xstr,'.f'];
@@ -415,46 +419,62 @@ for fid = [Gfid,Hfid]
     end
   elseif dydxsize(1) == 1 && dydxsize(2) == 1 % function and variable are scalars
     fprintf(fid,['Grd = ',dydx,';\n']);
-  elseif dydxsize(1) == 1 % function is scalar -> use Gradient convention if user selected Gradient
-    if strcmp(NameAppendix,'Jac') % Use Jacobian convention
-        fprintf(fid,'Grd = zeros(1,%1.0f);',dydxsize(2));
-    else
-        fprintf(fid,'Grd = zeros(%1.0f,1);',dydxsize(2));
-    end
-    fprintf(fid,['Grd(',dydx,'_location) = ',dydx,';\n']);
-  elseif dydxsize(2) == 1 % variable is scalar -> use Jacobian convention
-    fprintf(fid,'Grd = zeros(%1.0f,1);',dydxsize(1));
-    fprintf(fid,['Grd(',dydx,'_location) = ',dydx,';\n']);
-  else % Jacobian is a matrix -> Jacobian convention
-    dyloc = [dydx,'_location'];
-    if ~any(ysize == 1)
-      % Output is matrix
-      fprintf(fid,['funloc = (',dyloc,'(:,2)-1)*%1.0f + ',dyloc,'(:,1);\n'],ysize(1));
-      rowstr = 'funloc';
-      if ~any(xsize == 1)
-        % Input is matrix
-        fprintf(fid,['varloc = (',dyloc,'(:,4)-1)*%1.0f + ',dyloc,'(:,3);\n'],xsize(1));
-        colstr = 'varloc';
+  elseif opts.embed_mode ~= 'c'
+    % v1.5 - embedded modes: literal linidx from nzlocs, no dy_location round-trip
+    linidx = compute_wrapper_linidx(adiout.deriv.nzlocs, x.func.size, adiout.func.size);
+    if dydxsize(1) == 1 % scalar function
+      if strcmp(NameAppendix,'Jac')
+        fprintf(fid,'Grd = zeros(1,%1.0f);\n',dydxsize(2));
       else
-        colstr = [dyloc,'(:,3)'];
+        fprintf(fid,'Grd = zeros(%1.0f,1);\n',dydxsize(2));
       end
+    elseif dydxsize(2) == 1 % scalar variable
+      fprintf(fid,'Grd = zeros(%1.0f,1);\n',dydxsize(1));
     else
-      rowstr = [dyloc,'(:,1)'];
-      if ~any(xsize == 1)
-        % Input is matrix
-        fprintf(fid,['varloc = (',dyloc,'(:,3)-1)*%1.0f + ',dyloc,'(:,2);\n'],xsize(1));
-        colstr = 'varloc';
-      else
-        colstr = [dyloc,'(:,2)'];
-      end
-    end
-    if dydxnumel >= 250 && dydxnnz/dydxnumel <= 3/4 && opts.embed_mode == 'c' % v1.5 - only allow sparse matrices if in classic mode (no embed)
-      % Project Sparse
-      fprintf(fid,['Grd = sparse(',rowstr,',',colstr,',',dydx,',%1.0f,%1.0f)'';\n'],dydxsize);
-    else
-      % Project Full
       fprintf(fid,'Grd = zeros(%1.0f,%1.0f);\n',dydxsize);
-      fprintf(fid,['Grd((',colstr,'-1)*%1.0f+',rowstr,') = ',dydx,';\n'],dydxsize(1));
+    end
+    fprintf(fid,['Grd(%s) = ',dydx,';\n'],mat2str(linidx(:)'));
+  else % classic mode: runtime dy_location-based assembly
+    if dydxsize(1) == 1 % function is scalar -> use Gradient convention if user selected Gradient
+      if strcmp(NameAppendix,'Jac') % Use Jacobian convention
+        fprintf(fid,'Grd = zeros(1,%1.0f);',dydxsize(2));
+      else
+        fprintf(fid,'Grd = zeros(%1.0f,1);',dydxsize(2));
+      end
+      fprintf(fid,['Grd(',dydx,'_location) = ',dydx,';\n']);
+    elseif dydxsize(2) == 1 % variable is scalar -> use Jacobian convention
+      fprintf(fid,'Grd = zeros(%1.0f,1);',dydxsize(1));
+      fprintf(fid,['Grd(',dydx,'_location) = ',dydx,';\n']);
+    else % Jacobian is a matrix -> Jacobian convention
+      dyloc = [dydx,'_location'];
+      if ~any(ysize == 1)
+        % Output is matrix
+        fprintf(fid,['funloc = (',dyloc,'(:,2)-1)*%1.0f + ',dyloc,'(:,1);\n'],ysize(1));
+        rowstr = 'funloc';
+        if ~any(xsize == 1)
+          % Input is matrix
+          fprintf(fid,['varloc = (',dyloc,'(:,4)-1)*%1.0f + ',dyloc,'(:,3);\n'],xsize(1));
+          colstr = 'varloc';
+        else
+          colstr = [dyloc,'(:,3)'];
+        end
+      else
+        rowstr = [dyloc,'(:,1)'];
+        if ~any(xsize == 1)
+          % Input is matrix
+          fprintf(fid,['varloc = (',dyloc,'(:,3)-1)*%1.0f + ',dyloc,'(:,2);\n'],xsize(1));
+          colstr = 'varloc';
+        else
+          colstr = [dyloc,'(:,2)'];
+        end
+      end
+      % sparse only in classic mode (embed_mode=='c' guaranteed here)
+      if dydxnumel >= 250 && dydxnnz/dydxnumel <= 3/4
+        fprintf(fid,['Grd = sparse(',rowstr,',',colstr,',',dydx,',%1.0f,%1.0f)'';\n'],dydxsize);
+      else
+        fprintf(fid,'Grd = zeros(%1.0f,%1.0f);\n',dydxsize);
+        fprintf(fid,['Grd((',colstr,'-1)*%1.0f+',rowstr,') = ',dydx,';\n'],dydxsize(1));
+      end
     end
   end
   fprintf(fid,['Fun = ',ystr,'.f;\n']);
@@ -493,4 +513,21 @@ end
 
 fprintf(['\n<strong>adigatorGenHesFile</strong> successfully generated Hessian wrapper file: ''',HesFileName,''';\n\n']);
 
+end % adigatorGenHesFile
+
+% =========================================================================
+function linidx = compute_wrapper_linidx(nzlocs, orig_ysize, orig_xsize)
+% COMPUTE_WRAPPER_LINIDX  Column-major linear indices into the assembled
+% Gradient/Jacobian matrix, computed at code-generation time from nzlocs.
+% See adigatorGenJacFile for full documentation.
+% v1.5 - Pedro Lourenco @ GMV
+ny = prod(orig_ysize);
+nx = prod(orig_xsize);
+if ny == 1 && all(orig_xsize > 1)
+  linidx = int32(nzlocs(:,2));
+elseif nx == 1 && all(orig_ysize > 1)
+  linidx = int32(nzlocs(:,1));
+else
+  linidx = int32((nzlocs(:,2)-1)*ny + nzlocs(:,1));
 end
+end % compute_wrapper_linidx
