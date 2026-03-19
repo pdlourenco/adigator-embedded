@@ -316,75 +316,89 @@ dydxdxnnz = size(adiout2.(['d',vodname]).deriv.nzlocs,1);
 n = prod(xsize);
 m = prod(ysize);
 dydxdx = [ystr,'.d',vodname,'d',vodname];
+% v1.5 Level 1: pre-compute literal Hessian assembly indices from generation-time nzlocs
+if opts.embed_mode ~= 'c'
+  dydxdxlocs_ = adiout2.(['d',vodname]).deriv.nzlocs;
+  dydxlocs_   = adiout.deriv.nzlocs;
+  if ~isempty(dydxdxlocs_) && ~isempty(dydxlocs_)
+    HesLocs1_ = dydxlocs_(dydxdxlocs_(:,1), :);
+    if n == 1
+      linidx_Hes = int32(HesLocs1_(:,1));
+    else
+      HesRow_ = int32((HesLocs1_(:,2)-1)*m + HesLocs1_(:,1));
+      HesCol_ = int32(dydxdxlocs_(:,2));
+      linidx_Hes = int32((HesCol_-1)*(m*n) + HesRow_);
+    end
+  else
+    linidx_Hes = int32([]);
+  end
+end
 if n == 1
   % derivative wrt a scalar..
   if m == 1 % function is a scalar
     fprintf(Hfid,['Hes = ',dydxdx,';\n']);
-  elseif any(n == 1) % v1.5 - this is always true, as n is a scalar and equal to 1 ERROR
+  elseif opts.embed_mode ~= 'c'
+    % v1.5 Level 1 - embedded modes: literal linidx from nzlocs, no _location round-trip
+    fprintf(Hfid,'Hes = zeros(%1.0f,%1.0f);\n',ysize);
+    fprintf(Hfid,['Hes(%s) = ',dydxdx,';\n'],mat2str(linidx_Hes(:)'));
+  else % classic mode
     fprintf(Hfid,'Hes = zeros(%1.0f,%1.0f);\n',ysize);
     fprintf(Hfid,['Hes(',dydxdx,'_location) = ',dydxdx,';\n']);
-  elseif m>= 250 && dydxdxnnz/m <= 3/4 && opts.embed_mode == 'c' % v1.5 - only allow sparse matrices if in classic mode (no embed)
-    % Sparse projection..
-    rowind = [dydxdx,'_location(:,1)'];
-    colind = [dydxdx,'_location(:,2)'];
-    fprintf(Hfid,['Hes = sparse(',rowind,',',colind,',',dydxdx,',%1.0f,%1.0f);\n'],ysize);
-  else
-    rowind = [dydxdx,'_location(:,1)'];
-    colind = [dydxdx,'_location(:,2)'];
-    fprintf(Hfid,'Hes = zeros(%1.0f,%1.0f);\n',ysize);
-    ind = sprintf(['(',colind,'-1)*%1.0f + ',rowind],ysize(1));
-    fprintf(Hfid,['Hes(',ind,') = ',dydxdx,';\n']);
   end
 else
-  if m == 1
-    % y scalar
-    count = 0;
-  % elseif any(ysize) == 1 % v1.5 probably an error, as ysize is always positive
-  elseif any(ysize == 1)
-    yind = 'yind';
-    fprintf(Hfid,[yind,' = ',dydxdx,'_location(:,1);\n']);
-    count = 1;
-  else
-    rowind = [dydxdx,'_location(:,1)'];
-    colind = [dydxdx,'_location(:,2)'];
-    yind = 'yind';
-    fprintf(Hfid,[yind,' = (',colind,'-1)*%1.0f + ',rowind,';\n'],ysize(1));
-    count = 2;
-  end
-  % if any(xsize) == 1 % v1.5 probably an error, as xsize is always positive
-  if any(xsize == 1)
-    count = count+1;
-    xind1 = 'xind1';
-    fprintf(Hfid,[xind1,' = ',dydxdx,'_location(:,%1.0f);\n'],count);
-    count = count+1;
-    xind2 = 'xind2';
-    fprintf(Hfid,[xind2,' = ',dydxdx,'_location(:,%1.0f);\n'],count);
-  else
-    count  = count+1;
-    rowind = sprintf([dydxdx,'_location(:,%1.0f)'],count);
-    count  = count+1;
-    colind = sprintf([dydxdx,'_location(:,%1.0f)'],count);
-    xind1  = 'xind1';
-    fprintf(Hfid,[xind1,' = (',colind,'-1)*%1.0f + ',rowind,';\n'],xsize(1));
-    count  = count+1;
-    rowind = sprintf([dydxdx,'_location(:,%1.0f)'],count);
-    count  = count+1;
-    colind = sprintf([dydxdx,'_location(:,%1.0f)'],count);
-    xind2  = 'xind2';
-    fprintf(Hfid,[xind2,' = (',colind,'-1)*%1.0f + ',rowind,';\n'],xsize(1));
-  end
-  if m == 1
-    rowind = xind1;
-  else
-    rowind = 'xyind1';
-    fprintf(Hfid,[rowind,' = (',xind1,'-1)*%1.0f + ',yind,';\n'],n);
-  end
-  if m*n*n >= 250 && dydxdxnnz/(m*n*n) <= 3/4 && opts.embed_mode == 'c' % v1.5 - only allow sparse matrices if in classic mode (no embed)
-    fprintf(Hfid,['Hes = sparse(',rowind,',',xind2,',',dydxdx,',%1.0f,%1.0f);\n'],m*n,n);
-  else
+  if opts.embed_mode ~= 'c'
+    % v1.5 Level 1 - embedded modes: literal linidx from nzlocs, no _location round-trip
     fprintf(Hfid,'Hes = zeros(%1.0f,%1.0f);\n',m*n,n);
-    ind = sprintf(['(',xind2,'-1)*%1.0f + ',rowind],m*n);
-    fprintf(Hfid,['Hes(',ind,') = ',dydxdx,';\n']);
+    fprintf(Hfid,['Hes(%s) = ',dydxdx,';\n'],mat2str(linidx_Hes(:)'));
+  else % classic mode: runtime _location-based assembly
+    if m == 1
+      % y scalar
+      count = 0;
+    elseif any(ysize == 1)
+      yind = 'yind';
+      fprintf(Hfid,[yind,' = ',dydxdx,'_location(:,1);\n']);
+      count = 1;
+    else
+      rowind = [dydxdx,'_location(:,1)'];
+      colind = [dydxdx,'_location(:,2)'];
+      yind = 'yind';
+      fprintf(Hfid,[yind,' = (',colind,'-1)*%1.0f + ',rowind,';\n'],ysize(1));
+      count = 2;
+    end
+    if any(xsize == 1)
+      count = count+1;
+      xind1 = 'xind1';
+      fprintf(Hfid,[xind1,' = ',dydxdx,'_location(:,%1.0f);\n'],count);
+      count = count+1;
+      xind2 = 'xind2';
+      fprintf(Hfid,[xind2,' = ',dydxdx,'_location(:,%1.0f);\n'],count);
+    else
+      count  = count+1;
+      rowind = sprintf([dydxdx,'_location(:,%1.0f)'],count);
+      count  = count+1;
+      colind = sprintf([dydxdx,'_location(:,%1.0f)'],count);
+      xind1  = 'xind1';
+      fprintf(Hfid,[xind1,' = (',colind,'-1)*%1.0f + ',rowind,';\n'],xsize(1));
+      count  = count+1;
+      rowind = sprintf([dydxdx,'_location(:,%1.0f)'],count);
+      count  = count+1;
+      colind = sprintf([dydxdx,'_location(:,%1.0f)'],count);
+      xind2  = 'xind2';
+      fprintf(Hfid,[xind2,' = (',colind,'-1)*%1.0f + ',rowind,';\n'],xsize(1));
+    end
+    if m == 1
+      rowind = xind1;
+    else
+      rowind = 'xyind1';
+      fprintf(Hfid,[rowind,' = (',xind1,'-1)*%1.0f + ',yind,';\n'],n);
+    end
+    if m*n*n >= 250 && dydxdxnnz/(m*n*n) <= 3/4
+      fprintf(Hfid,['Hes = sparse(',rowind,',',xind2,',',dydxdx,',%1.0f,%1.0f);\n'],m*n,n);
+    else
+      fprintf(Hfid,'Hes = zeros(%1.0f,%1.0f);\n',m*n,n);
+      ind = sprintf(['(',xind2,'-1)*%1.0f + ',rowind],m*n);
+      fprintf(Hfid,['Hes(',ind,') = ',dydxdx,';\n']);
+    end
   end
 end
 
