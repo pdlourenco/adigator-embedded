@@ -21,11 +21,30 @@ Constraints that shape the plan (verified against the codebase):
 
 - The code requires real MATLAB. The embedding layer uses `arguments`
   blocks (R2019b+), `readlines`/`writelines` (R2022a+), and string arrays,
-  so **minimum release is R2022a** and **GNU Octave is not an option**.
+  so **minimum release is R2022a**. **GNU Octave is not viable today**:
+  besides those three features (all unsupported in Octave), the core relies
+  on `classdef`-based operator overloading (`lib/@cada/cada.m`,
+  `@cadastruct`) with heavy `subsref`/`subsasgn` dispatch, an area where
+  Octave's classdef support is incomplete. Octave could only become an
+  option after a deliberate compatibility layer (replace `arguments`
+  blocks, shim `readlines`/`writelines`, audit string usage, verify classdef
+  dispatch) — tracked as a possible future work item for license-free local
+  runs and private-repo CI, not assumed by this plan. The cheap
+  license-free alternative for contributors is the local pre-push script
+  (§3.3), which runs the same suites in an existing MATLAB session.
 - CI runs on GitHub Actions with `matlab-actions/setup-matlab@v2`.
   For a public repository, MathWorks provides licensed MATLAB on
   GitHub-hosted runners at no cost; for a private repository a MATLAB
   batch-licensing token must be stored as the `MLM_LICENSE_TOKEN` secret.
+- MATLAB installation is the dominant fixed cost of every job, so the PR
+  pipeline is a **single job** (one install, sequential steps) rather than
+  parallel jobs that each pay the install (§3.1).
+- The repository already contains validation assets that the test suites
+  reuse rather than reinvent: the finite-difference harness in
+  `unit_tests/test_unarymath_rules.m`, and examples with built-in
+  ADiGator-vs-finite-difference comparisons (`examples/jacobians/arrowhead`,
+  `examples/jacobians/polydatafit`, `examples/stiffodes/brusselator`) —
+  see §2.4a.
 - Core transformation tests need base MATLAB only. The optimization
   examples need the Optimization Toolbox; code-generation validation needs
   MATLAB Coder. These are isolated in separate, individually skippable jobs.
@@ -136,51 +155,81 @@ merges; license-gated jobs skip cleanly when products are unavailable.
 Known-issue mapping (test ↔ `docs/ANALYSIS.md`): B1→TS-U-04, B2→TS-U-05,
 B3/B4→TS-U-06, B7/B8/B9/B10→TS-I-01, B11/B12→TS-U-07, B13→TS-U-08.
 
+### 2.4a Reuse of existing validation assets
+
+The suites are built on what the repository already validates with, rather
+than parallel new machinery:
+
+| Existing asset | Reused as |
+|----------------|-----------|
+| FD harness in `unit_tests/test_unarymath_rules.m` (perturbation, tolerance, singularity exclusion) | Extracted to `tests/helpers/fdcheck.m`; shared by TS-U-01/02/03 and the value checks of TS-I-01/04. |
+| `examples/jacobians/arrowhead/main.m` (ADiGator vs FD and compressed FD) | TS-S-01 case with the existing comparison promoted from printed output to an assertion; small `N` for PR-speed, large `N` nightly. |
+| `examples/jacobians/polydatafit/main.m` (FD comparison) | TS-S-01 assertion case. |
+| `examples/stiffodes/brusselator/main.m` (FD comparison) | TS-S-01 assertion case. |
+| `examples/hessians/logsumexp`, `examples/optimization/pipg` (`gapfun` + analytic structure), brachistochrone | Fixture functions for TS-I-01/02/04 (known analytic gradients/Hessians, struct inputs, aux inputs, subfunctions). |
+| `util/adigatorUncompressJac.m` / `adigatorColor.m` round trip | Compression sanity case inside TS-I-01. |
+
+New fixtures are only written where no example covers the case — chiefly
+the degenerate shapes in TS-I-01 (row-vector inputs, matrix-of-scalar,
+vector-output Hessians with m≠n) that the bug analysis showed are exactly
+the untested paths.
+
 ---
 
 ## 3. CI implementation (GitHub Actions)
 
 ### 3.1 Workflows
 
+Every GitHub Actions *job* runs on a fresh runner and pays the MATLAB
+install/license handshake again, while *steps* within a job share one
+install. The PR pipeline is therefore a single job with sequential steps
+(lint is cheap and fails fast before the test steps), and parallel jobs are
+reserved for the nightly workflow where the product set or release actually
+differs.
+
 **`.github/workflows/ci.yml`** — on `push` to `master` and all PRs:
 
 ```yaml
 jobs:
-  lint:          # TS-U-09, minutes
+  test:                       # one MATLAB install for the whole PR gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: matlab-actions/setup-matlab@v2
-        with: { release: latest }
-      - uses: matlab-actions/run-command@v2
+        with: { release: latest, cache: true }
+      - name: Lint (TS-U-09)
+        uses: matlab-actions/run-command@v2
         with: { command: "addpath(genpath('tests')); ci_lint" }
-
-  unit:          # TS-U-01..08
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: matlab-actions/setup-matlab@v2
-        with: { release: latest }
-      - uses: matlab-actions/run-tests@v2
+      - name: Unit tests (TS-U-01..08)
+        uses: matlab-actions/run-tests@v2
         with:
           select-by-folder: tests/unit
           test-results-junit: results/unit.xml
           code-coverage-cobertura: results/coverage-unit.xml
+      - name: Integration tests (TS-I-01..04)
+        if: success()
+        uses: matlab-actions/run-tests@v2
+        with:
+          select-by-folder: tests/integration
+          test-results-junit: results/integration.xml
+          code-coverage-cobertura: results/coverage-integration.xml
       - uses: actions/upload-artifact@v4
-        if: always()
-        with: { name: unit-results, path: results }
-
-  integration:   # TS-I-01..04, needs: unit
-    ... same pattern, select-by-folder: tests/integration,
-        upload generated files from tempdir as artifact on failure
+        if: always()           # JUnit+coverage always; generated files on failure
+        with: { name: ci-results, path: results }
 ```
 
-**`.github/workflows/nightly.yml`** — `schedule` (cron) + manual dispatch:
-release matrix `{R2022a, latest}` running unit+integration (TS-S-03);
-`examples` job with `products: Optimization_Toolbox` (TS-S-01); `codegen`
-job with `products: MATLAB_Coder` (TS-S-02). Toolbox jobs check license
-availability at startup (`license('test',...)`) and `assumeFail` → skip
-rather than error when unavailable.
+(`cache: true` additionally caches the MATLAB installation across runs of
+the same release, cutting the remaining setup time.)
+
+**`.github/workflows/nightly.yml`** — `schedule` (cron) + manual dispatch.
+Jobs are split here only along axes that genuinely need separate installs:
+- release matrix `{R2022a, latest}` re-running unit+integration (TS-S-03) —
+  different MATLAB versions cannot share an install;
+- one job with `products: Optimization_Toolbox MATLAB_Coder` running the
+  examples (TS-S-01) and codegen (TS-S-02) steps sequentially on a single
+  install; steps check product availability (`license('test',...)`) and
+  `assumeFail` → skip rather than error when a product is missing, so the
+  same workflow runs on licenses without Coder.
 
 ### 3.2 Licensing and runners
 
@@ -215,6 +264,10 @@ rather than error when unavailable.
   on `cd`.
 - **Artifacts:** JUnit XML + Cobertura coverage on every run; on failure,
   upload the generated `.m`/`.mat` files for offline diagnosis.
+- **Local runner:** a `tests/ci_local.m` entry point runs lint + unit +
+  integration (and, license permitting, the nightly suites) in the
+  developer's existing MATLAB session — the license-free way to get the CI
+  verdict before pushing; optionally wired as a git pre-push hook.
 
 ### 3.4 Phased rollout
 
