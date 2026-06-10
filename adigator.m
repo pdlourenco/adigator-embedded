@@ -762,6 +762,10 @@ rmpath(adigatorTempDir);
 if ~sflag
   warning('Could not remove old temp directory -- message produced: %s',msg);
 end
+% Clear transformation-state globals so successive calls (e.g. in test
+% suites) start clean. The runtime data global ADiGator_<name> set up above
+% for immediate evaluation of the generated file is deliberately kept.
+clear global ADIGATOR ADIGATORFORDATA ADIGATORDATA ADIGATORVARIABLESTORAGE
 end
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ FILEKEEPING ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%

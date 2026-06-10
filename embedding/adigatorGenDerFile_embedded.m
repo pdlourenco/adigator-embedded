@@ -42,7 +42,7 @@ function info = adigatorGenDerFile_embedded(DerType,UserFunName,UserFunInputs,va
 %       info            information about the differentiation process
 %
 %	Dependencies:
-%		adigatorGenJacFile, adigatorGenHesFile, structure_to_embed_mfile, adigator_patch_derivative
+%		adigatorGenJacFile, adigatorGenHesFile, structure_to_embed_mfile, adigator_patch_derivative, prune_adigator_mat
 %
 %   Copyright GMV, S.A.
 %   Property of GMV, S.A.; all rights reserved
@@ -174,66 +174,6 @@ end
 
 end
 
-%% ---------------- PRUNE ADIGATOR_DERIVATIVE DATA ------------------%%
-function structout = prune_adigator_mat(structin,funnames)
-% PRUNE_ADIGATOR_MAT
-% Keep only <funcName>.Gator*Data.Index* per derivative function.
-% Downcast integer-valued arrays to int32/uint32 to shrink embedded consts.
-
-for jj = 1:numel(funnames) % go through each of the functions
-    if isfield(structin,funnames{jj}) % if field exists, save it
-        fn = fieldnames(structin.(funnames{jj}));
-        keepTop = fn(startsWith(fn, "Gator") & endsWith(fn,"Data"));
-        auxstruct = struct();
-
-        for ii = 1:numel(keepTop)
-            gname = keepTop{ii};
-            G = structin.(funnames{jj}).(gname);
-            if ~isstruct(G), continue; end
-            fG = fieldnames(G);
-
-            % Keep the only subfields that are not empty
-            keepIdx = check_adigator_mat_empty(G,fG);
-
-            % Keep Index* subfields
-            keepIdx = startsWith(fG, "Index") | keepIdx;
-            if ~any(keepIdx), continue; end
-
-            G2 = struct();
-            idxNames = fG(keepIdx);
-            for k = 1:numel(idxNames)
-                idxName = idxNames{k};
-                A = G.(idxName);
-
-                % Down-cast numeric integer arrays to save memory
-                if ~issparse(A) && isnumeric(A) && isreal(A) && all(isfinite(A(:))) && all(abs(A(:) - round(A(:))) < 1e-12)
-                    % Nonnegative? prefer uint32; otherwise int32
-                    if all(A(:) >= 0)
-                        A = uint32(A);
-                    else
-                        A = int32(A);
-                    end
-                end
-                % Logical stays logical; other types left as-is (doubles etc.)
-                G2.(idxName) = A;
-            end
-
-            if ~isempty(fieldnames(G2))
-                auxstruct.(gname) = G2;
-            end
-        end
-        structout.(funnames{jj}) = auxstruct;
-    end
-end
-end
-
-
-function keepIdx = check_adigator_mat_empty(structin,fields)
-
-keepIdx = false(size(fields));
-
-for ii = 1:numel(fields)
-    keepIdx(ii) = ~isempty(structin.(fields{ii}));
-end
-end
+% prune_adigator_mat was extracted to embedding/prune_adigator_mat.m so it
+% can be unit-tested (see tests/unit/UPruneMatTest.m).
 
