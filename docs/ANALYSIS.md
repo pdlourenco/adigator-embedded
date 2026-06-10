@@ -235,10 +235,13 @@ referring to the nonexistent `RemoveUnneededIndices` (the function is
 | B2 (format string) | **Fixed** — pinned by `tests/unit/UEmbedMfileTest.m`. |
 | B5 (`structout` undefined) | **Fixed** in the extracted pruner. |
 | B15 (`OuterLoopMaxLenght` crash) | **Fixed** (see §1.3a). |
+| B7 (vector-output Hessian row multiplier) | **Fixed** — `(xind1-1)*m + yind` in `adigatorGenHesFile`, consistent with the documented `[m*n × n]` layout and `output.HessianStructure`. Covered by `hesVectorOutput*` in `tests/integration/IShapeMatrixTest.m`. |
+| B13 (`Gfid` never closed) | **Fixed** — both wrapper fids closed in `adigatorGenHesFile`. |
+| B8, B9, B10 | Open — pinned as auto-flipping `KnownIssue` cases in `tests/integration/IShapeMatrixTest.m` (the tests `assumeFail` while the documented behavior reproduces and become hard regression guards once fixed). |
 | Pruner near-integer tolerance | **Fixed** — exact `isequal(A,round(A))` check (salvaged from PR #1). |
 | `coder.load` path override | Optional `mat_filepath` argument added to `adigator_patch_derivative` (salvaged from PR #1, but defaulting to the file *name* so generated code stays relocatable). |
 | Test hygiene | `adigator.m` now clears its transformation-state globals on exit; `updatestruct` warns on lossy type coercion (salvaged from PR #1). |
-| B3, B4, B6–B14 | Open — to be pinned by CI plan Phase 1 tests, then fixed (B7 next). |
+| B3, B4, B6, B11, B12, B14 | Open — to be pinned by further CI plan Phase 1/2 tests. |
 | PR #1 architectural commits (direct emission + literal linidx) | Discarded — right direction (§2.1) but defective: `compute_wrapper_linidx` called with swapped size arguments at both call sites, second differentiation cannot parse `persistent`/`coder.*` statements, inline mode references a nonexistent struct level, and classic mode was left inconsistent with embed modes. To be reimplemented once TS-I-01 exists. |
 
 ---
