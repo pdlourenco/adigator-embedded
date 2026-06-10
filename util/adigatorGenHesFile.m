@@ -373,7 +373,11 @@ else
     rowind = xind1;
   else
     rowind = 'xyind1';
-    fprintf(Hfid,[rowind,' = (',xind1,'-1)*%1.0f + ',yind,';\n'],n);
+    % v1.5 (B7 fix): row of the [m*n x n] Hessian is (x1-1)*m + y, matching
+    % the documented layout and output.HessianStructure below. The previous
+    % multiplier n made rows exceed m*n for n>m (runtime error) and collide
+    % for n<m (silently wrong Hessian); only m==n worked.
+    fprintf(Hfid,[rowind,' = (',xind1,'-1)*%1.0f + ',yind,';\n'],m);
   end
   if m*n*n >= 250 && dydxdxnnz/(m*n*n) <= 3/4 && opts.embed_mode == 'c' % v1.5 - only allow sparse matrices if in classic mode (no embed)
     fprintf(Hfid,['Hes = sparse(',rowind,',',xind2,',',dydxdx,',%1.0f,%1.0f);\n'],m*n,n);
@@ -460,7 +464,10 @@ for fid = [Gfid,Hfid]
   fprintf(fid,['Fun = ',ystr,'.f;\n']);
   fprintf(fid,'end');
 end
-fclose(fid);
+% v1.5 (B13 fix): close both wrapper files, not just the loop's last fid;
+% the embedded pipeline reads these files back immediately.
+fclose(Gfid);
+fclose(Hfid);
 rehash
 %% --------------------- OUTPUT PROCESSING ------------------------------%%
 output.FunctionFile = UserFunName;
