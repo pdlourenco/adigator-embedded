@@ -200,6 +200,18 @@ itself and the implementation:
   existing callers worth documenting prominently (fminunc/fmincon accept
   both, but user code doing `g*d` will break).
 
+### 1.3a Core-library bug found via PR #1
+
+**B15 — `OuterLoopMaxLenght` undefined-variable crash.**
+`lib/@cada/adigatorAnalyzeForData.m:62` referenced the misspelled (and
+therefore undefined) variable `OuterLoopMaxLenght` inside
+`if size(ForLengths,2) < OuterLoopMaxLength`, so any transformation with
+nested rolled `for` loops whose inner-loop length table is shorter than the
+outer loop's maximum crashed with "Unrecognized function or variable".
+Identified in (now closed) PR #1. **Fixed** along with two comment typos
+referring to the nonexistent `RemoveUnneededIndices` (the function is
+`RemoveUnneededData`).
+
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
 - `cadaunarymath.m` derivative-rule corrections (`asec`, `acsc`, `asecd`,
@@ -214,6 +226,20 @@ itself and the implementation:
 - `any(ysize) == 1` → `any(ysize == 1)` (two occurrences) in
   `adigatorGenHesFile` — upstream always took the vector branch even for
   matrix-valued operands.
+
+### 1.5 Fix disposition log
+
+| Item | Status |
+|------|--------|
+| B1 (`Data*` down-cast) | **Fixed** — down-cast restricted to `Index*`; pruner extracted to `embedding/prune_adigator_mat.m`; pinned by `tests/unit/UPruneMatTest.m`. The fix landed together with integer/logical class preservation in `structure_to_embed_mfile.m` (salvaged from PR #1) — the two are coupled: preserving integer classes in the inline emitter without restricting the down-cast would have *extended* the corruption to inline mode. |
+| B2 (format string) | **Fixed** — pinned by `tests/unit/UEmbedMfileTest.m`. |
+| B5 (`structout` undefined) | **Fixed** in the extracted pruner. |
+| B15 (`OuterLoopMaxLenght` crash) | **Fixed** (see §1.3a). |
+| Pruner near-integer tolerance | **Fixed** — exact `isequal(A,round(A))` check (salvaged from PR #1). |
+| `coder.load` path override | Optional `mat_filepath` argument added to `adigator_patch_derivative` (salvaged from PR #1, but defaulting to the file *name* so generated code stays relocatable). |
+| Test hygiene | `adigator.m` now clears its transformation-state globals on exit; `updatestruct` warns on lossy type coercion (salvaged from PR #1). |
+| B3, B4, B6–B14 | Open — to be pinned by CI plan Phase 1 tests, then fixed (B7 next). |
+| PR #1 architectural commits (direct emission + literal linidx) | Discarded — right direction (§2.1) but defective: `compute_wrapper_linidx` called with swapped size arguments at both call sites, second differentiation cannot parse `persistent`/`coder.*` statements, inline mode references a nonexistent struct level, and classic mode was left inconsistent with embed modes. To be reimplemented once TS-I-01 exists. |
 
 ---
 
