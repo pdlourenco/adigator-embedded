@@ -144,7 +144,9 @@ classdef IEmbedModesTest < matlab.unittest.TestCase
                 struct('embed_mode','i','path',idir,'echo',0));
 
             txtI = readlines(fullfile(idir, 'sgrad_fix_Grd.m'));
-            tc.verifyTrue(any(contains(txtI, 'Grd([')), ...
+            % adigatorGenJacFile names the wrapper output variable 'Jac'
+            % even with the 'Grd' appendix, so the scatter line is Jac([...])
+            tc.verifyTrue(any(contains(txtI, 'Jac([')), ...
                 'inline wrapper does not use a literal scatter index');
 
             xv = [0.7; -1.3; 0.4; 2.1];
