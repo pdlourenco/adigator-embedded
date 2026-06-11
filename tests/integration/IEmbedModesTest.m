@@ -128,10 +128,102 @@ classdef IEmbedModesTest < matlab.unittest.TestCase
             tc.verifyEqual(G.l, G.c, 'AbsTol', 0, 'coderload vs classic gradient');
             tc.verifyEqual(G.i, G.c, 'AbsTol', 0, 'inline vs classic gradient');
         end
+
+        function sparseGradientLiteralScatter(tc)
+            % structurally sparse gradient: embed modes emit a literal
+            % linear-index scatter in the wrapper (ANALYSIS.md §2.1)
+            writeLocalFixture('sgrad_fix', 'y = x(1)^2 + sin(x(3));');
+            base = pwd;
+            cdir = fullfile(base, 'sc_c');
+            idir = fullfile(base, 'sc_i');
+            adigatorGenDerFile_embedded('gradient', 'sgrad_fix', ...
+                {adigatorCreateDerivInput([4 1],'x')}, ...
+                struct('embed_mode','c','path',cdir,'echo',0));
+            adigatorGenDerFile_embedded('gradient', 'sgrad_fix', ...
+                {adigatorCreateDerivInput([4 1],'x')}, ...
+                struct('embed_mode','i','path',idir,'echo',0));
+
+            txtI = readlines(fullfile(idir, 'sgrad_fix_Grd.m'));
+            % adigatorGenJacFile names the wrapper output variable 'Jac'
+            % even with the 'Grd' appendix, so the scatter line is Jac([...])
+            tc.verifyTrue(any(contains(txtI, 'Jac([')), ...
+                'inline wrapper does not use a literal scatter index');
+
+            xv = [0.7; -1.3; 0.4; 2.1];
+            Gexp = [2*xv(1); 0; cos(xv(3)); 0];
+            c1 = cdInto(cdir); clear('sgrad_fix_Grd'); rehash; %#ok<NASGU>
+            [Gc, Fc] = sgrad_fix_Grd(xv);
+            clear c1
+            tc.verifySize(Gc, [4 1]);
+            tc.verifyEqual(Gc, Gexp, 'AbsTol', 1e-12);
+
+            c2 = cdInto(idir); clear('sgrad_fix_Grd'); rehash; %#ok<NASGU>
+            try
+                [Gi, Fi] = sgrad_fix_Grd(xv);
+            catch e
+                if strcmp(e.identifier, 'MATLAB:UndefinedFunction') && ...
+                        contains(e.message, 'coder.')
+                    tc.assumeFail("inline evaluation requires MATLAB Coder: " + e.message);
+                end
+                rethrow(e);
+            end
+            clear c2
+            tc.verifyEqual(Gi, Gc, 'AbsTol', 0, 'inline vs classic sparse gradient');
+            tc.verifyEqual(Fi, Fc, 'AbsTol', 0);
+        end
+
+        function sparseHessianLiteralScatter(tc)
+            % structurally sparse Hessian: literal scatter in the Hes wrapper
+            writeLocalFixture('shess_fix', 'y = x(1)*x(2) + x(3);');
+            base = pwd;
+            cdir = fullfile(base, 'sh_c');
+            idir = fullfile(base, 'sh_i');
+            adigatorGenDerFile_embedded('hessian', 'shess_fix', ...
+                {adigatorCreateDerivInput([3 1],'x')}, ...
+                struct('embed_mode','c','path',cdir,'echo',0));
+            adigatorGenDerFile_embedded('hessian', 'shess_fix', ...
+                {adigatorCreateDerivInput([3 1],'x')}, ...
+                struct('embed_mode','i','path',idir,'echo',0));
+
+            txtI = readlines(fullfile(idir, 'shess_fix_Hes.m'));
+            tc.verifyTrue(any(contains(txtI, 'Hes([')), ...
+                'inline Hessian wrapper does not use a literal scatter index');
+
+            xv = [0.7; -1.3; 0.4];
+            Hexp = [0 1 0; 1 0 0; 0 0 0];
+            c1 = cdInto(cdir); clear('shess_fix_Hes'); rehash; %#ok<NASGU>
+            [Hc, Gc, Fc] = shess_fix_Hes(xv);
+            clear c1
+            tc.verifyEqual(Hc, Hexp, 'AbsTol', 1e-12);
+            tc.verifyEqual(Gc, [xv(2); xv(1); 1], 'AbsTol', 1e-12);
+
+            c2 = cdInto(idir); clear('shess_fix_Hes'); rehash; %#ok<NASGU>
+            try
+                [Hi, Gi, Fi] = shess_fix_Hes(xv);
+            catch e
+                if strcmp(e.identifier, 'MATLAB:UndefinedFunction') && ...
+                        contains(e.message, 'coder.')
+                    tc.assumeFail("inline evaluation requires MATLAB Coder: " + e.message);
+                end
+                rethrow(e);
+            end
+            clear c2
+            tc.verifyEqual(Hi, Hc, 'AbsTol', 0, 'inline vs classic sparse Hessian');
+            tc.verifyEqual(Gi, Gc, 'AbsTol', 0);
+            tc.verifyEqual(Fi, Fc, 'AbsTol', 0);
+        end
     end
 end
 
 function cleanupObj = cdInto(d)
 old = cd(d);
 cleanupObj = onCleanup(@() cd(old));
+end
+
+function writeLocalFixture(name, body)
+fid = fopen([name,'.m'],'w');
+assert(fid > 0, 'could not create fixture %s', name);
+fprintf(fid, 'function y = %s(x)\n%s\nend\n', name, body);
+fclose(fid);
+rehash;
 end

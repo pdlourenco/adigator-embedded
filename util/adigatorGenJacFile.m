@@ -294,6 +294,26 @@ dydxnnz  = size(adiout.deriv.nzlocs,1);
 % If dydx has => 250 elements and has <= 75% nonzeros, project into sparse
 % matrix, otherwise project into full matrix.
 dy = [ystr,'.d',vodname];
+% v1.5 (ANALYSIS.md §2.1): in embed modes, precompute the scatter indices
+% at generation time and emit them as a literal vector. This removes the
+% per-call _location index arithmetic from the wrapper, and the indices
+% become compile-time constants in the generated C code. nzlocs columns are
+% linear indices into the unrolled [prod(ysize) x prod(xsize)] Jacobian, so
+% the displayed-shape linear index is direct (remap cases) or the standard
+% column-major combination.
+embedscatter = opts.embed_mode ~= 'c';
+if embedscatter
+  if remapcase == 1      % scalar function of matrix variable: index is x
+    linidx = adiout.deriv.nzlocs(:,2);
+  elseif remapcase == 2  % matrix function of scalar variable: index is y
+    linidx = adiout.deriv.nzlocs(:,1);
+  else
+    linidx = (adiout.deriv.nzlocs(:,2)-1)*dydxsize(1) + adiout.deriv.nzlocs(:,1);
+  end
+  scatteridx = mat2str(linidx(:).');
+else
+  scatteridx = [dy,'_location']; % single-column cases only (see below)
+end
 %v1.5:	process this to output Jacobians and Gradients correctly, as shown above
 if dydxnnz == dydxnumel % all elements are nonzero
     if dydxsize(1) == 1 % the function is a scalar, use the Gradient convention if user selected
@@ -313,11 +333,14 @@ elseif dydxsize(1) == 1 % function is scalar -> use Gradient convention if user 
     else
         fprintf(fid,'Jac = zeros(%1.0f,1);',dydxsize(2));
     end
-    fprintf(fid,['Jac(',dy,'_location) = ',dy,';\n']);
+    fprintf(fid,['Jac(',scatteridx,') = ',dy,';\n']);
 elseif dydxsize(2) == 1 % variable is scalar -> use Jacobian convention
   fprintf(fid,'Jac = zeros(%1.0f,1);',dydxsize(1));
-  fprintf(fid,['Jac(',dy,'_location) = ',dy,';\n']);
-else % Jacobian is a matrix -> Jacobian convention
+  fprintf(fid,['Jac(',scatteridx,') = ',dy,';\n']);
+elseif embedscatter % matrix Jacobian, embed modes: literal linear scatter
+  fprintf(fid,'Jac = zeros(%1.0f,%1.0f);\n',dydxsize);
+  fprintf(fid,['Jac(',scatteridx,') = ',dy,';\n']);
+else % Jacobian is a matrix -> Jacobian convention (classic runtime indexing)
   dyloc = [dy,'_location'];
   if ~any(ysize == 1)
     % Output is matrix

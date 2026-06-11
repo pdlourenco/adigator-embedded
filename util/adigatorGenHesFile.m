@@ -311,11 +311,37 @@ ysize = adiout.func.size;
 % n>1	m>1	n x m	r x n*m	c x n*m	r*c x n*m
 
 % Check to see how many non-zeros in Hessian
-dydxdxnnz = size(adiout2.(['d',vodname]).deriv.nzlocs,1);
+dydxdxlocs = adiout2.(['d',vodname]).deriv.nzlocs; % v1.5 - hoisted, also used for HessianStructure
+dydxlocs   = adiout.deriv.nzlocs;
+dydxdxnnz  = size(dydxdxlocs,1);
 n = prod(xsize);
 m = prod(ysize);
 dydxdx = [ystr,'.d',vodname,'d',vodname];
-if n == 1
+% v1.5 (ANALYSIS.md §2.1): in embed modes, compute the Hessian scatter
+% indices at generation time and emit a literal vector instead of the
+% runtime _location arithmetic. dydxdxlocs(:,1) indexes the first-derivative
+% nonzeros (rows of dydxlocs); dydxdxlocs(:,2) is the linear index of the
+% second differentiation variable. This mirrors the runtime mapping and
+% output.HessianStructure exactly.
+if opts.embed_mode ~= 'c' && ~(n == 1 && m == 1)
+  HesLocs1_ = dydxlocs(dydxdxlocs(:,1),:);
+  if n == 1
+    linidxHes = HesLocs1_(:,1);                 % linear into zeros(ysize)
+  elseif m == 1
+    linidxHes = (dydxdxlocs(:,2)-1)*n + HesLocs1_(:,2);   % zeros(n,n)
+  else
+    HesRow_   = (HesLocs1_(:,2)-1)*m + HesLocs1_(:,1);
+    linidxHes = (dydxdxlocs(:,2)-1)*(m*n) + HesRow_;      % zeros(m*n,n)
+  end
+  if n == 1
+    fprintf(Hfid,'Hes = zeros(%1.0f,%1.0f);\n',ysize);
+  elseif m == 1
+    fprintf(Hfid,'Hes = zeros(%1.0f,%1.0f);\n',n,n);
+  else
+    fprintf(Hfid,'Hes = zeros(%1.0f,%1.0f);\n',m*n,n);
+  end
+  fprintf(Hfid,['Hes(',mat2str(linidxHes(:).'),') = ',dydxdx,';\n']);
+elseif n == 1
   % derivative wrt a scalar..
   if m == 1 % function is a scalar
     fprintf(Hfid,['Hes = ',dydxdx,';\n']);
@@ -394,11 +420,14 @@ end
 % matrix, otherwise project into full matrix.
 dydxsize = [prod(ysize), prod(xsize)];
 dydxnumel  = dydxsize(1)*dydxsize(2);
+remapcase = 0; % v1.5: remember the shape remap (see adigatorGenJacFile B10 fix)
 if dydxsize(1) == 1 && all(xsize>1) % scalar function of matrix variable
+  remapcase = 1;
   dydxsize = xsize;
   ysize = [xsize(1) 1];
   xsize = [xsize(2) 1];
 elseif dydxsize(2) == 1 && all(ysize>1) % matrix function of scalar variable
+  remapcase = 2;
   dydxsize = ysize;
   xsize = [ysize(2) 1];
   ysize = [ysize(1) 1];
@@ -407,6 +436,21 @@ dydxnnz  = size(adiout.deriv.nzlocs,1);
 % If dydx has => 250 elements and has <= 75% nonzeros, project into sparse
 % matrix, otherwise project into full matrix.
 dydx = [ystr,'.d',vodname];
+% v1.5 (ANALYSIS.md §2.1): literal scatter indices in embed modes, mirroring
+% adigatorGenJacFile (see comment there)
+embedscatter = opts.embed_mode ~= 'c';
+if embedscatter
+  if remapcase == 1
+    linidx = adiout.deriv.nzlocs(:,2);
+  elseif remapcase == 2
+    linidx = adiout.deriv.nzlocs(:,1);
+  else
+    linidx = (adiout.deriv.nzlocs(:,2)-1)*dydxsize(1) + adiout.deriv.nzlocs(:,1);
+  end
+  scatteridx = mat2str(linidx(:).');
+else
+  scatteridx = [dydx,'_location']; % single-column cases only (see below)
+end
 %v1.5:	process this to output Jacobians correctly, i.e., in [m n] form ( m = numel(y), n = numel(x))
 for fid = [Gfid,Hfid]
   if dydxnnz == dydxnumel % all elements are nonzero
@@ -427,11 +471,14 @@ for fid = [Gfid,Hfid]
     else
         fprintf(fid,'Grd = zeros(%1.0f,1);',dydxsize(2));
     end
-    fprintf(fid,['Grd(',dydx,'_location) = ',dydx,';\n']);
+    fprintf(fid,['Grd(',scatteridx,') = ',dydx,';\n']);
   elseif dydxsize(2) == 1 % variable is scalar -> use Jacobian convention
     fprintf(fid,'Grd = zeros(%1.0f,1);',dydxsize(1));
-    fprintf(fid,['Grd(',dydx,'_location) = ',dydx,';\n']);
-  else % Jacobian is a matrix -> Jacobian convention
+    fprintf(fid,['Grd(',scatteridx,') = ',dydx,';\n']);
+  elseif embedscatter % matrix Jacobian, embed modes: literal linear scatter
+    fprintf(fid,'Grd = zeros(%1.0f,%1.0f);\n',dydxsize);
+    fprintf(fid,['Grd(',scatteridx,') = ',dydx,';\n']);
+  else % Jacobian is a matrix -> Jacobian convention (classic runtime indexing)
     dyloc = [dydx,'_location'];
     if ~any(ysize == 1)
       % Output is matrix
@@ -491,8 +538,7 @@ output.GenFiles(2).func = ADi_DerivFuns2;
 output.FunctionFile = UserFunName;
 output.GradientFile = GrdFileName;
 output.HessianFile  = HesFileName;
-dydxdxlocs = adiout2.(['d',vodname]).deriv.nzlocs;
-dydxlocs   = adiout.deriv.nzlocs;
+% (dydxdxlocs/dydxlocs hoisted above the Hessian print section, v1.5)
 HesLocs1 = dydxlocs(dydxdxlocs(:,1),:);
 if n == 1
   HesPat = zeros(ysize);
