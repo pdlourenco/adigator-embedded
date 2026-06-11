@@ -87,18 +87,21 @@ function options = adigatorOptions(varargin)
 %                  its exit variables take the union over all iterations.
 %                  The generated file may be called with any 1 <= n <= max.
 %                  PADDED-PROGRAM SEMANTICS: the file differentiates the
-%                  max-padded program. Results agree with the true n-sized
-%                  program iff post-loop code is padding-benign (sums, dot
-%                  products, scatter/gather over the loop-written entries:
-%                  yes; length/end/mean/max over a grown array's padded
-%                  tail: no - they see max). Skipped iterations leave
-%                  exact structural zeros; the output sparsity pattern is
-%                  the fixed max-trip-count pattern. Uses of the named
-%                  input OTHER than as a loop bound are baked at the max
-%                  value. Loops are matched BY TRIP-COUNT VALUE: give each
-%                  runtime-bound parameter a distinct max value that no
-%                  fixed loop in the code shares. Not compatible with
-%                  'unroll'.
+%                  max-padded program. Generated code references the named
+%                  input BY NAME, so arrays the user code sizes directly
+%                  by it (e.g. zeros(N,1)) are allocated at the runtime
+%                  value; arrays with literal analyzed sizes keep the max
+%                  size, with exact structural zeros beyond the executed
+%                  prefix; derivative buffers and the output sparsity
+%                  pattern always use the fixed max-trip-count pattern.
+%                  Results agree with the true n-sized program iff
+%                  post-loop code is padding-benign (sums, dot products,
+%                  scatter/gather over the loop-written entries: yes;
+%                  length/end/mean/max over a FIXED-size buffer's padded
+%                  tail: no - they see max). Loops are matched BY
+%                  TRIP-COUNT VALUE: give each runtime-bound parameter a
+%                  distinct max value that no fixed loop in the code
+%                  shares. Not compatible with 'unroll'.
 % ------------------------------------------------------------------------
 %
 % NOTES:    The default value of the OVERWRITE option changes depending

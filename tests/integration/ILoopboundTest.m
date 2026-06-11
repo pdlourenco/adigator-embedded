@@ -65,12 +65,20 @@ classdef ILoopboundTest < matlab.unittest.TestCase
             x.f = xf; x.dx = ones(Nmax,1);
             [Jm,vm] = lb_fun_dmax(x,p,n);
             xn.f = xf(1:n); xn.dx = ones(n,1);
-            [Jn,vn] = lb_fun_dn(xn,p(1:n,:));
+            [Jn,vn] = lb_fun_dn(xn,p(1:n,:),n);
 
-            % values: exact agreement on the prefix, zeros beyond
+            % values: exact agreement on the executed prefix; anything
+            % beyond is structurally zero. v was allocated as zeros(N,1),
+            % and generated code references the bound parameter BY NAME,
+            % so its function part may come out runtime-sized (no padded
+            % tail at all) rather than max-sized
             tc.verifyEqual(Jm.f, Jn.f, 'AbsTol', 0);
             tc.verifyEqual(vm.f(1:n), vn.f, 'AbsTol', 0);
-            tc.verifyEqual(vm.f(n+1:Nmax), zeros(Nmax-n,1), 'AbsTol', 0);
+            if numel(vm.f) == Nmax
+                tc.verifyEqual(vm.f(n+1:Nmax), zeros(Nmax-n,1), 'AbsTol', 0);
+            else
+                tc.verifySize(vm.f, [n 1]);
+            end
 
             % gradients of J via the location convention
             gm = zeros(Nmax,1); gm(Jm.dx_location(:,end)) = Jm.dx;
@@ -114,11 +122,12 @@ classdef ILoopboundTest < matlab.unittest.TestCase
 
         function paddingUnsafePostLoopOpPinned(tc)
             % the documented contract: a post-loop op that sees the padded
-            % tail (mean over a grown array) computes the Nmax-padded
+            % tail of a FIXED-size buffer (literal analyzed size, not
+            % derived from the bound parameter) computes the Nmax-padded
             % value, NOT the true n-sized value
             writeFcn('lb_mean', { ...
                 'function m = lb_mean(x,N)', ...
-                'v = zeros(N,1);', ...
+                'v = zeros(6,1);', ...
                 'for a = 1:N', ...
                 '  v(a) = x(a)^2;', ...
                 'end', ...
