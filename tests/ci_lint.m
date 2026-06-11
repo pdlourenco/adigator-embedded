@@ -27,6 +27,7 @@ folders = { ...
 nerr = 0;
 nwarn = 0;
 nfiles = 0;
+findings = cell(0,1);
 for f = folders
     if ~isfolder(f{1}), continue; end
     files = dir(fullfile(f{1}, '*.m'));
@@ -40,6 +41,8 @@ for f = folders
                 nerr = nerr + 1;
             else
                 nwarn = nwarn + 1;
+                findings{end+1,1} = sprintf('%s:%d: %s', ...
+                    fp, msgs(m).line, msgs(m).message); %#ok<AGROW>
             end
         end
     end
@@ -56,9 +59,12 @@ basefile = fullfile(thisDir, 'lint_baseline.txt');
 if isfile(basefile)
     base = str2double(strtrim(fileread(basefile)));
     if nwarn > base
+        % print every finding so the new ones are identifiable in the log
+        fprintf(2, '%s\n', findings{:});
         error('ci_lint:ratchet', ...
             ['ci_lint: checkcode findings increased to %d (baseline %d). ', ...
-             'Fix the new findings, or consciously raise tests/lint_baseline.txt.'], ...
+             'Fix the new findings (all findings listed above), or ', ...
+             'consciously raise tests/lint_baseline.txt.'], ...
             nwarn, base);
     elseif nwarn < base
         fprintf(['ci_lint: findings below baseline (%d < %d); consider ', ...
