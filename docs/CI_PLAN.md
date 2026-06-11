@@ -253,6 +253,13 @@ Jobs are split here only along axes that genuinely need separate installs:
   be on the license tied to the token.
 - If the token cannot cover Coder, run TS-S-02 on a self-hosted runner with
   a local install, kept in the nightly workflow only.
+- *Observed on hosted public-repo runners:* requesting `products:
+  MATLAB_Coder` does not yield `codegen` (`license('test','MATLAB_Coder')`
+  is false, `which codegen` empty), while `coder.load`/`coder.const`
+  resolve in base MATLAB regardless. Consequently TS-I-02's numeric
+  cross-mode checks run everywhere, but TS-S-02 stays assumption-filtered
+  until run on a runner whose license actually includes Coder (MLM token
+  or self-hosted).
 
 ### 3.3 Conventions and policies
 
