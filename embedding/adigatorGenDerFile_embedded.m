@@ -41,6 +41,11 @@ function info = adigatorGenDerFile_embedded(DerType,UserFunName,UserFunInputs,va
 %   Output:
 %       info            information about the differentiation process
 %
+%   Note: 'gradient' and 'hessian' modes both produce myfun_Grd /
+%   myfun_ADiGatorGrd files. The files are functionally equivalent (same
+%   first derivative, same column-gradient convention), so generating one
+%   mode after the other harmlessly overwrites them.
+%
 %	Dependencies:
 %		adigatorGenJacFile, adigatorGenHesFile, structure_to_embed_mfile, adigator_patch_derivative, prune_adigator_mat
 %
@@ -63,11 +68,14 @@ opts = adigatorOptions();
 if nargin>3
     optfields = fieldnames(varargin{1});
     for Fcount = 1:length(optfields)
-        opts.(lower(optfields{Fcount})) = varargin{1}.(lower(optfields{Fcount}));
+        % v1.5 (B12 fix): lower-case only the destination field; the user's
+        % struct must be read with the field name they actually used
+        opts.(lower(optfields{Fcount})) = varargin{1}.(optfields{Fcount});
     end
 else
     varargin = {opts};
 end
+opts.embed_mode = adigatorNormalizeEmbedMode(opts.embed_mode); % v1.5 (B11 fix)
 
 %% --------------------- Call the ADiGator wrappers ---------------------%%
 switch DerType
@@ -119,6 +127,11 @@ for derf = 1:N_derivs
     tmp_adigator_struct = prune_adigator_mat(tmp_adigator_struct,AdigatorGeneratedFiles(derf).func); % remove unnecessary fields
     save(AdigatorGeneratedFiles(derf).mat,'-struct','tmp_adigator_struct'); % replace existing mat file with the relevant fields only
     fprintf('done.\n');
+    % v1.5 (B6): pruning strips the re-differentiation metadata that
+    % adigator stores for higher-order passes; make that explicit
+    fprintf(['\t\t NOTE: the pruned %s keeps runtime data only and can no ',...
+        'longer be used as input to another adigator differentiation.\n'],...
+        AdigatorGeneratedFiles(derf).mat);
 
     %%% if user requests inline option, the data is loaded from a function
     if inline

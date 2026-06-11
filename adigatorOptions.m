@@ -122,7 +122,9 @@ for i = 1:nargin/2
     case {'auxdata','echo','unroll','comments','overwrite','genpat',...
         'optoutput','complex'}
       options.(field) = logical(value);
-      case {'maxwhileiter','embed_mode','path'} % v1.5
+      case 'embed_mode' % v1.5 (B11 fix): accept c/classic, l/coderload, i/inline
+      options.embed_mode = adigatorNormalizeEmbedMode(value);
+      case {'maxwhileiter','path'} % v1.5
       options.(field) = value;
     otherwise
       warning(['Invalid option field: ',field])
