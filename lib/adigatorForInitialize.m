@@ -245,8 +245,26 @@ else
       if whileflag
         fprintf(fid,[indent,'while ',UserLoopVar.func.name,';\n']);
       else
-        fprintf(fid,[indent,'for ',ADIGATORFORDATA(ForCount).COUNTNAME,...
-          ' = 1:%1.0d\n'],ADIGATORFORDATA(ForCount).MAXLENGTH);
+        if ADIGATOR.DERNUMBER == 1 && ADIGATOR.FILE.FUNID == 1
+          LBname = adigatorLoopboundMatch(ADIGATOR.OPTIONS.LOOPBOUND,...
+            ADIGATORFORDATA(ForCount).MAXLENGTH);
+        else
+          LBname = '';
+        end
+        if ~isempty(LBname)
+          % Runtime trip count (loopbound option, issue #6 Tier 1): the
+          % body and its index tables were analyzed at the maximum trip
+          % count; running the first n <= max iterations uses the first n
+          % table columns and leaves exact structural zeros in the
+          % skipped tail (padded-program semantics, see adigatorOptions)
+          fprintf(fid,[indent,'assert(',LBname,' <= %1.0d);\n'],...
+            ADIGATORFORDATA(ForCount).MAXLENGTH);
+          fprintf(fid,[indent,'for ',ADIGATORFORDATA(ForCount).COUNTNAME,...
+            ' = 1:',LBname,'\n']);
+        else
+          fprintf(fid,[indent,'for ',ADIGATORFORDATA(ForCount).COUNTNAME,...
+            ' = 1:%1.0d\n'],ADIGATORFORDATA(ForCount).MAXLENGTH);
+        end
       end
     end
   else
@@ -330,8 +348,24 @@ else
           fprintf(fid,[indent,'for ',ADIGATORFORDATA(ForCount).COUNTNAME,...
             ' = 1:',LoopVarStr,'\n']);
         else
-          fprintf(fid,[indent,'for ',ADIGATORFORDATA(ForCount).COUNTNAME,...
-            ' = 1:%1.0d\n'],ADIGATORFORDATA(ForCount).MAXLENGTH);
+          if ADIGATOR.FILE.FUNID == 1
+            LBname = adigatorLoopboundMatch(ADIGATOR.OPTIONS.LOOPBOUND,...
+              ADIGATORFORDATA(ForCount).MAXLENGTH);
+          else
+            LBname = '';
+          end
+          if ~isempty(LBname)
+            % Runtime inner trip count (loopbound option, issue #6 Tier 1,
+            % nested-bounds form): same padded-program semantics per
+            % dimension as the outer runtime bound
+            fprintf(fid,[indent,'assert(',LBname,' <= %1.0d);\n'],...
+              ADIGATORFORDATA(ForCount).MAXLENGTH);
+            fprintf(fid,[indent,'for ',ADIGATORFORDATA(ForCount).COUNTNAME,...
+              ' = 1:',LBname,'\n']);
+          else
+            fprintf(fid,[indent,'for ',ADIGATORFORDATA(ForCount).COUNTNAME,...
+              ' = 1:%1.0d\n'],ADIGATORFORDATA(ForCount).MAXLENGTH);
+          end
         end
       else
         if isa(UserLoopVar,'cada')

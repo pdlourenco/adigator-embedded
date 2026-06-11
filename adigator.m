@@ -398,6 +398,44 @@ for Fcount = 1:FunCount
   FunStrChecks{Fcount} = ['\W',CheckName,'('];
 end
 
+%% ~~~~~~~~~ RESOLVE RUNTIME LOOP BOUNDS (roadmap R3, issue #6 T1) ~~~~~ %%
+% Each name in opts.loopbound must be an input of the main differentiated
+% function, passed to adigator as a plain numeric positive integer scalar:
+% the analysis runs at that (maximum) trip count and matching rolled loops
+% are printed with the named input as a runtime bound.
+nloopbound = length(opts.loopbound);
+ADIGATOR.OPTIONS.LOOPBOUND = struct('name',cell(1,nloopbound),...
+  'value',cell(1,nloopbound));
+if nloopbound > 0
+  if ADIGATOR.OPTIONS.UNROLL
+    error('adigator:loopbound:unroll',...
+      'the ''loopbound'' option cannot be combined with ''unroll''');
+  end
+  MainInNames = FunctionInfo(1).Input.Names;
+  for Lcount = 1:nloopbound
+    lbname = strtrim(opts.loopbound{Lcount});
+    InLoc  = find(strcmp(MainInNames,lbname),1);
+    if isempty(InLoc)
+      error('adigator:loopbound:name',...
+        ['loopbound parameter ''',lbname,''' is not an input of ',...
+        'function ''',FunctionInfo(1).File.Name,'''']);
+    end
+    lbval = UserFunInputs{InLoc};
+    if ~isnumeric(lbval) || ~isscalar(lbval) || lbval ~= floor(lbval) || lbval < 1
+      error('adigator:loopbound:value',...
+        ['loopbound parameter ''',lbname,''' must be passed to adigator ',...
+        'as a plain numeric positive integer scalar (the maximum trip ',...
+        'count to analyze for)']);
+    end
+    if any(cellfun(@(v) isequal(v,lbval),{ADIGATOR.OPTIONS.LOOPBOUND(1:Lcount-1).value}))
+      error('adigator:loopbound:value',...
+        ['loopbound parameters must have distinct values (loops are ',...
+        'matched by trip count)']);
+    end
+    ADIGATOR.OPTIONS.LOOPBOUND(Lcount).name  = lbname;
+    ADIGATOR.OPTIONS.LOOPBOUND(Lcount).value = lbval;
+  end
+end
 
 %% ~~~~~~~~~~~~~~~ DETERMINE WHAT NEEDS DERIV TAKEN ~~~~~~~~~~~~~~~~~~~~ %%
 ADIGATOR.DERIVCHECKS = struct('STRINGS',cell(FunCount,1),'NUM',cell(FunCount,1));
