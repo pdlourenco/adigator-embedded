@@ -15,7 +15,7 @@ function [outEvalStr, outEvalVar] = adigatorForIterEnd(ForCount,ForIter)
 %
 % Copyright 2011-214 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
-global ADIGATOR ADIGATORFORDATA
+global ADIGATOR ADIGATORFORDATA ADIGATORVARIABLESTORAGE
 if ADIGATOR.OPTIONS.PREALLOCATE
  % Pre-Allocation run for structures/cells
  outEvalVar = [];
@@ -464,6 +464,56 @@ elseif ADIGATOR.RUNFLAG == 1
   else
     outEvalStr = [];
     outEvalVar = [];
+  end
+  % ------- Runtime-bound loop exit unions (loopbound, issue #6 T1) ------ %
+  if ~whileflag && ForIter == ForLength && ~ADIGATOR.EMPTYFLAG && ...
+      ~ADIGATORFORDATA(ForCount).PARENTLOC && ADIGATOR.DERNUMBER == 1 && ...
+      ADIGATOR.FILE.FUNID == 1 && ...
+      ~isempty(adigatorLoopboundMatch(ADIGATOR.OPTIONS.LOOPBOUND,ForLength))
+    % This loop prints with a runtime trip count: its exits may occur
+    % after ANY iteration, so the saved exit variables must take the loop
+    % overmap (the union over every iteration's exit state, the for-loop
+    % analogue of the break exit unions) instead of the final-iteration
+    % objects; post-loop code is then analyzed and printed against shapes
+    % valid for any runtime trip count, with exact structural zeros in
+    % the skipped tail
+    if isempty(outEvalStr)
+      nPrevEval = 0;
+    else
+      nPrevEval = length(outEvalStr);
+    end
+    LoopCounts = ADIGATORFORDATA(ForCount).START:ADIGATORFORDATA(ForCount).END;
+    SaveCounts = LoopCounts(logical(ADIGATOR.VARINFO.SAVE.FOR(LoopCounts,2)));
+    nSave      = length(SaveCounts);
+    lbEvalStr  = cell(nSave,1);
+    lbEvalVar  = cell(nSave,1);
+    nLbEval    = 0;
+    for LBcount = 1:nSave
+      Scount  = SaveCounts(LBcount);
+      OverLoc = ADIGATOR.VARINFO.OVERMAP.FOR(Scount,1);
+      if ~OverLoc
+        continue
+      end
+      OverVar = ADIGATORVARIABLESTORAGE.OVERMAP{OverLoc};
+      if ~(isa(OverVar,'cada') || isa(OverVar,'cadastruct'))
+        continue
+      end
+      SaveLoc = ADIGATOR.VARINFO.SAVE.FOR(Scount,2);
+      ADIGATORVARIABLESTORAGE.SAVE{SaveLoc} = OverVar;
+      NameLoc = ADIGATOR.VARINFO.NAMELOCS(Scount,1);
+      VarStr  = ADIGATOR.VARINFO.NAMES{NameLoc};
+      nLbEval = nLbEval+1;
+      lbEvalVar{nLbEval} = OverVar;
+      lbEvalStr{nLbEval} = sprintf([VarStr,' = adigatorForEvalVar{%1.0d};'],...
+        nPrevEval+nLbEval);
+    end
+    if nPrevEval
+      outEvalStr = [outEvalStr(:); lbEvalStr(1:nLbEval)];
+      outEvalVar = [outEvalVar(:); lbEvalVar(1:nLbEval)];
+    else
+      outEvalStr = lbEvalStr(1:nLbEval);
+      outEvalVar = lbEvalVar(1:nLbEval);
+    end
   end
   if whileflag
     % See if inputs from last iteration match outputs
