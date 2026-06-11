@@ -26,6 +26,12 @@ if nargout == 1 && nargin == 1
   elseif (length(CallingFile) > 16 && strcmp(CallingFile(1:16),'adigatortempfunc')) ||...
       strcmp(CallingFile,'size.m')
     % This is being called from user code not a keyboard.
+    if isfield(x.func,'ndsize')
+      error('adigator:ndparam:size',...
+        ['size() of an N-D declared parameter is ambiguous between the ',...
+        'declared shape and its internal 2D fold; use the (fixed) ',...
+        'declared dimensions as constants instead']);
+    end
     if ADIGATOR.FORINFO.FLAG
       IncreaseForSizeCount();
       if ADIGATOR.RUNFLAG == 2
@@ -94,6 +100,12 @@ elseif nargin == 2 && (nargout == 1 || nargout == 0)
   else
     DimStr = sprintf('%1.0d',Dim);
   end
+  if isa(x,'cada') && isfield(x.func,'ndsize') && (numel(Dim) ~= 1 || Dim > 1)
+    error('adigator:ndparam:size',...
+      ['size(...,dim) with dim > 1 of an N-D declared parameter is ',...
+      'ambiguous between the declared shape and its internal 2D fold; ',...
+      'use the (fixed) declared dimensions as constants instead']);
+  end
   if numel(Dim) ~= 1 || Dim > 2
     error('Dimension must be either 1 or 2.')
   end
@@ -125,6 +137,12 @@ elseif nargin == 2 && (nargout == 1 || nargout == 0)
 
 elseif nargin == 1 && (nargout == 2 || nargout == 0)
   % 2 Outputs, size of 1st and 2nd dimension
+  if isfield(x.func,'ndsize')
+    error('adigator:ndparam:size',...
+      ['size() of an N-D declared parameter is ambiguous between the ',...
+      'declared shape and its internal 2D fold; use the (fixed) ',...
+      'declared dimensions as constants instead']);
+  end
   if ADIGATOR.FORINFO.FLAG
     IncreaseForSizeCount();
     if ADIGATOR.RUNFLAG == 2

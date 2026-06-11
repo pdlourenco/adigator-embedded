@@ -40,8 +40,10 @@ s.t.   B · h(u_k) = τ_k   for k = 1..K    moment matching per time step
   `Bf(:, ((k-1)*N + (a-1))*n + (1:n))`.
 - **Cell arrays:** `B{k}` of 2-D matrices, indexed by a loop counter
   (`@cadastruct` supports this), at the cost of less natural syntax.
-- A nicer surface syntax for both (`B(:,:,a,k)` on declared N-D
-  parameters) is roadmap item R2 (#11 Level 2).
+- The nicer surface syntax for both — `B(:,:,k)` / `B(:,:,a,k)` on
+  parameters declared `adigatorCreateAuxInput([m n K])` /
+  `([m n N K])`, folded and windowed automatically — is roadmap item R2
+  (#11 Level 2); see `examples/jacobians/ndparam`.
 
 ## What this example does NOT cover (and what will)
 

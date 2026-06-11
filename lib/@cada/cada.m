@@ -503,7 +503,23 @@ classdef cada
   methods
     function out = end(x,dim,ndim)
       % CADA overloaded END
-      if ndim == 1
+      if isfield(x.func,'ndsize') && ndim > 2
+        % N-D declared parameter referenced in slice form (issue #11
+        % Level 2): resolve from the declared shape; the last subscript
+        % position spans the fold of the remaining declared dimensions
+        nds = x.func.ndsize;
+        if dim < ndim
+          if dim <= length(nds)
+            out = nds(dim);
+          else
+            out = 1;
+          end
+        elseif dim <= length(nds)
+          out = prod(nds(dim:end));
+        else
+          out = 1;
+        end
+      elseif ndim == 1
         out = length(x);
       else
         out = size(x,dim);
