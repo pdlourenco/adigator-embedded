@@ -46,11 +46,10 @@ if ~isempty(idx); txt(idx:end) = []; end
 % ------------------------------------------------------------------------
 patterns = {'if isempty', deriv_filename, 'ADiGator_LoadData();'};
 idx = find_in_file(txt,patterns,1,0,[]);
-inc = 0;
-for ii=1:length(idx)
-    txt(idx+inc) = [];
-    inc = inc - 1;
-end
+% v1.5 (B3 fix): delete all matched lines at once. The previous loop
+% indexed with the whole idx vector on every iteration while shifting an
+% offset, deleting arbitrary lines whenever more than one guard matched.
+txt(idx) = [];
 
 % create global variable name
 globalName = ['ADiGator_',deriv_filename];
@@ -59,8 +58,17 @@ for fun = 1:length(subfun_list)
     % ------------------------------------------------------------------------
     % 3) Insert %#codegen on the *next* line after all function headers
     % ------------------------------------------------------------------------
-    patterns = {'function',subfun_list{fun}};
-    fidx = find_in_file(txt,patterns,1,0,'%');
+    % v1.5 (B4 fix): anchor on an actual function-definition line for this
+    % exact name. The previous substring search matched any line containing
+    % both 'function' and the name (e.g. headers of functions whose names
+    % contain this one as a substring), and a multi-line match crashed the
+    % insertion below.
+    fidx = find_function_header(txt,subfun_list{fun});
+    if isempty(fidx)
+        error('adigator_patch_derivative:headerNotFound',...
+            'function header for ''%s'' not found in %s',subfun_list{fun},deriv_filepath);
+    end
+    fidx = fidx(1);
     txt = [txt(1:(fidx));
         "%#codegen";
         txt((fidx+1):end)];
@@ -127,6 +135,15 @@ end
 end
 
 % ================= helpers =================
+% v1.5 (B4 fix): find the line defining function <fname> (not calls, not
+% comments, not names merely containing <fname> as a substring)
+function idx = find_function_header(txt,fname)
+pat = ['^\s*function\b[^%]*[\s=\],]',regexptranslate('escape',fname),'\s*\('];
+matches = regexp(txt,pat,'once');
+idx = find(~cellfun(@isempty,matches));
+idx = idx(:).'; % row, consistent with find_in_file
+end
+
 % find all the elements in a string array that contain all the patterns
 function idx = find_in_file(txt,patterns,start,once,avoid_start)
 idx = [];

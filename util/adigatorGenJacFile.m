@@ -92,9 +92,11 @@ else
     % parse options
     optfields = fieldnames(varargin{1});
     for Fcount = 1:length(optfields)
-        opts.(lower(optfields{Fcount})) = varargin{1}.(lower(optfields{Fcount}));
+        % v1.5 (B12 fix): lower-case only the destination field; the user's
+        % struct must be read with the field name they actually used
+        opts.(lower(optfields{Fcount})) = varargin{1}.(optfields{Fcount});
     end
-    if ~isfield(varargin{1},'overwrite')
+    if ~any(strcmpi(optfields,'overwrite'))
         opts.overwrite = 1;
     end
     % parse names
@@ -102,6 +104,7 @@ else
         NameAppendix = varargin{2};
     end
 end
+opts.embed_mode = adigatorNormalizeEmbedMode(opts.embed_mode); % v1.5 (B11 fix)
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ INPUTS PARSING ~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 if ~ischar(UserFunName)

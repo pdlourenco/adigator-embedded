@@ -243,7 +243,12 @@ referring to the nonexistent `RemoveUnneededIndices` (the function is
 | Pruner near-integer tolerance | **Fixed** — exact `isequal(A,round(A))` check (salvaged from PR #1). |
 | `coder.load` path override | Optional `mat_filepath` argument added to `adigator_patch_derivative` (salvaged from PR #1, but defaulting to the file *name* so generated code stays relocatable). |
 | Test hygiene | `adigator.m` now clears its transformation-state globals on exit; `updatestruct` warns on lossy type coercion (salvaged from PR #1). |
-| B3, B4, B6, B11, B12, B14 | Open — to be pinned by further CI plan Phase 1/2 tests. |
+| B3 (patcher multi-match deletion) | **Fixed** — matched guard lines deleted in one operation; pinned by `tests/unit/UPatchTest.m` (synthetic file with two loader guards and sentinel lines). |
+| B4 (patcher header matching) | **Fixed** — function headers located by an anchored regexp on the definition line; a lookalike subfunction whose name contains the target as a substring is exercised in `UPatchTest`. |
+| B6 (pruned `.mat` re-differentiation) | **Mitigated** — explicit notice printed when pruning strips the higher-order metadata. |
+| B11 (`embed_mode` comparisons) | **Fixed** — `adigatorNormalizeEmbedMode` validates and normalizes (`classic`/`coderload`/`inline`, any case) at option-parse time in `adigatorOptions` and all three generators; pinned by `tests/unit/UOptionsTest.m`. |
+| B12 (option-field case folding) | **Fixed** — parsers read the user's struct with the field name as given and lower-case only the destination; end-to-end upper-case-spelling case in `UOptionsTest`. |
+| B14 (gradient/Hessian `_Grd` collision) | **Won't fix (documented as benign)** — `adigatorGenJacFile(...,'Grd')` and `adigatorGenHesFile` generate *equivalent* `myfun_Grd`/`myfun_ADiGatorGrd` files (same first derivative, same column-gradient convention), so the overwrite cannot change results. Noted in `adigatorGenDerFile_embedded` help. |
 | PR #1 architectural commits (direct emission + literal linidx) | Discarded — right direction (§2.1) but defective: `compute_wrapper_linidx` called with swapped size arguments at both call sites, second differentiation cannot parse `persistent`/`coder.*` statements, inline mode references a nonexistent struct level, and classic mode was left inconsistent with embed modes. To be reimplemented once TS-I-01 exists. |
 
 ---
