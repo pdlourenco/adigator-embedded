@@ -838,9 +838,15 @@ if isa(x,'adigatorInput') || isa(x,'cada')
       end
     end
     x  = cada(1,x.func,deriv2);
-    xsize = x.func.size;
-    xsize(isinf(xsize)) = 10;
-    xt = rand(xsize);
+    if isfield(x.func,'ndsize')
+      % N-D declared parameter: the traced object is its 2D fold, but the
+      % initial native test evaluation needs the declared shape
+      xt = rand(x.func.ndsize);
+    else
+      xsize = x.func.size;
+      xsize(isinf(xsize)) = 10;
+      xt = rand(xsize);
+    end
   end
 elseif iscell(x)
   cellsize = numel(x);

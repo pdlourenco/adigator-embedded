@@ -21,8 +21,8 @@ indices, data dedup/range compression in the inline emitter.
 
 | # | Item | Source | Status |
 |---|------|--------|--------|
-| R1 | **Allocation-over-time example with today's machinery**: per-(actuator, time) terms vectorized over the product fold `N·K`, assembly wrappers for both reduction directions (moment matching per time step; time coupling), one generated file verified for several `(N,K)` pairs. Docs for the Level-1 patterns (folded 2D, cells). | #6 Tier 0, #11 options 1–2 + Level 1 | in progress |
-| R2 | **#11 Level 2 veneer**: N-D declarations for parameters, folded internally to 2D; `subsref` translates trailing-subscript slicing into affine column windows, multi-counter from day one (`B(:,:,a,k)`). | #11 L2 | planned |
+| R1 | **Allocation-over-time example with today's machinery**: per-(actuator, time) terms vectorized over the product fold `N·K`, assembly wrappers for both reduction directions (moment matching per time step; time coupling), one generated file verified for several `(N,K)` pairs. Docs for the Level-1 patterns (folded 2D, cells). | #6 Tier 0, #11 options 1–2 + Level 1 | done (PR #13) |
+| R2 | **#11 Level 2 veneer**: N-D declarations for parameters (`adigatorCreateAuxInput([m n ...])`), folded internally to 2D; `subsref` translates trailing-subscript slicing into affine column windows, multi-counter from day one (`B(:,:,a,k)`). Example `examples/jacobians/ndparam`, test `tests/integration/INDParamTest.m`. | #11 L2 | in progress |
 | R3 | **#6 Tier 1**: `loopbound` option — generate at `(Nmax,Kmax)`, runtime trip counts, break-union loop exits, padding-benign contract documented; nested-bounds form per #11 option 3. | #6 T1 | planned |
 | R4 | **Reverse mode, prototype path** (`docs/ANALYSIS.md` §3.4): standalone reverse transformer over the generated forward dialect, scoped to gradients of scalar costs with reductions — the companion both issues identify. | ANALYSIS §3 | planned |
 | R5 | **Remaining §2.1 optimizations**: `J'·v`/triplet output modes, dead-code slicing — re-scoped after R1's solver integration shows which output form matters. | ANALYSIS §2 | planned |

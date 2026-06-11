@@ -13,6 +13,13 @@ NDstr   = sprintf('%1.0f',ADIGATOR.DERNUMBER);
 ssize = length(s);
 bscalarflag = 0;
 if ssize == 1 && strcmp(s(1).type,'()') && (isa(b,'cada') || isnumeric(b))
+  if isa(x,'cada') && isfield(x.func,'ndsize') && length(s.subs) > 2
+    error('adigator:ndparam:subsasgn',...
+      ['subscripted assignment with more than two subscripts into an ',...
+      'N-D declared parameter is not supported (N-D declarations are ',...
+      'read-only slices); assign into an ordinary variable or the 2D ',...
+      'fold instead']);
+  end
   if ADIGATOR.FORINFO.FLAG
     IncreaseForAsgnCount();
   end
