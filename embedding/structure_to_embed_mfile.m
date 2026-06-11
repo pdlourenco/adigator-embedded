@@ -22,7 +22,13 @@ function filepath = structure_to_embed_mfile(funcName, dataStruct, outPath)
 %   Copyright 2025 Pedro Lourenço
 %
 %   Changelog:
-%   
+%       2026-06    Fix the format-string defect in the generated data
+%                  function header (B2) and preserve integer/logical
+%                  classes of embedded constants (PR #3).
+%                  Deduplicate identical sibling arrays into aliases and
+%                  emit integer arithmetic progressions as ranges; keep
+%                  single-precision constants single (ANALYSIS.md 2.1,
+%                  PR #10).
 
 arguments
   funcName   (1,1) string

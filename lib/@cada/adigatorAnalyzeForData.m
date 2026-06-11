@@ -39,7 +39,12 @@ function adigatorAnalyzeForData(FORCOUNT,dummyVar) %#ok<INUSD>
 %
 % Copyright 2011-2014 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
-
+%
+% Modifications as described below are Copyright GMV.
+% Changelog:
+%   2026-06    Fix the OuterLoopMaxLenght/OuterLoopMaxLength typo that
+%              crashed the analysis of nested rolled loops with an
+%              undefined-variable error (B15, PR #3).
 
 global ADIGATOR ADIGATORDATA ADIGATORFORDATA ADIGATORVARIABLESTORAGE
 DataNameCount = 0;

@@ -17,6 +17,14 @@ function [myLoopVar, outEvalStr, outEvalVar] = adigatorForInitialize(ForCount,Us
 %
 % Copyright 2011-214 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
+%
+% Modifications as described below are Copyright GMV.
+% Changelog:
+%   2026-06    Rolled loops whose analyzed trip count matches a
+%              'loopbound' parameter print with the parameter as a
+%              runtime bound, guarded by assert(name <= max) - outermost
+%              loops and constant-bound inner loops of the main function
+%              (roadmap R3, issue #6 Tier 1, PR #15).
 global ADIGATOR ADIGATORFORDATA ADIGATORVARIABLESTORAGE
 maxWhileIters = ADIGATOR.OPTIONS.MAXWHILEITER;
 if ~ADIGATOR.RUNFLAG

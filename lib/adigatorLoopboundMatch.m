@@ -10,6 +10,10 @@ function name = adigatorLoopboundMatch(loopbound,triplen)
 % runtime-bound parameter to carry a value no fixed loop shares.
 %
 % See also adigator adigatorOptions adigatorForInitialize adigatorForIterEnd
+%
+% Copyright GMV.
+% Changelog:
+%   2026-06    Created (roadmap R3, issue #6 Tier 1, PR #15).
 name = '';
 if ~isempty(loopbound)
   loc = find([loopbound.value] == triplen,1);

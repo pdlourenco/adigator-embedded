@@ -66,6 +66,15 @@ function [Outputs,varargout] = adigator(UserFunName,UserFunInputs,DerFileName,va
 %                                       1) the list of generated files and
 %                                       their path
 %                                       2) the list of generated functions
+%   2026-06                         Clear the global transformation state
+%                                   when generation completes (PR #3).
+%                                   Build the native test inputs of N-D
+%                                   declared parameters in their declared
+%                                   shape (roadmap R2, PR #14).
+%                                   Resolve the 'loopbound' option: named
+%                                   numeric inputs become runtime loop
+%                                   bounds, matched by their maximum
+%                                   trip-count value (roadmap R3, PR #15).
 
 global ADIGATOR ADIGATORFORDATA ADIGATORDATA ADIGATORVARIABLESTORAGE
 tstart = tic;

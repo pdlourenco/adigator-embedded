@@ -80,8 +80,20 @@ function output = adigatorGenJacFile(UserFunName,UserFunInputs,varargin)
 %                                   functions and files (.mat and .m)
 %                                   Modify output gradients to be in column
 %                                   form, i.e. f = df/dx'*x+x'*d2f/dx2*x;
-%                                   when computing gradients. Maintaining 
+%                                   when computing gradients. Maintaining
 %                                   numerator form when computing Hessians and Jacobians
+%   2026-06                         Read user option fields with the name
+%                                   as given, lower-casing only the
+%                                   destination (B12), and normalize
+%                                   EMBED_MODE aliases (B11) (PR #8).
+%                                   JacobianStructure decomposes unrolled
+%                                   nzlocs into the displayed shape when
+%                                   the scalar-of-matrix/matrix-of-scalar
+%                                   remap fires (B10, PR #5).
+%                                   In embed modes, precompute the scatter
+%                                   indices at generation time and emit
+%                                   them as literal vectors (ANALYSIS.md
+%                                   2.1, PR #9).
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ OPTIONS SETUP ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 opts = adigatorOptions(); % default options

@@ -19,7 +19,15 @@ function txt = adigator_patch_derivative(deriv_filepath, deriv_filename, subfun_
 %   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %
 %   Changelog:
-%
+%       2026-06    Delete the loader-guard lines in a single operation; the
+%                  old loop re-indexed with the full match vector while
+%                  shifting offsets and could delete arbitrary lines (B3).
+%                  Locate function headers with a regexp anchored on the
+%                  definition line (MATLAB \> end-of-word anchor), so
+%                  lookalike names cannot match, and error clearly on a
+%                  missing header (B4) (PR #8).
+%                  Optional mat_filepath for the coder.load reference,
+%                  defaulting to the file name for relocatability (PR #3).
 
 if nargin<5 % codeload option selected
     data_functions = {};

@@ -3,6 +3,14 @@ function y = subsref(x,s)
 %
 % Copyright 2011-2014 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
+%
+% Modifications as described below are Copyright GMV.
+% Changelog:
+%   2026-06    References with 3+ subscripts into an N-D declared
+%              parameter are rewritten by NDRefTranslate as the affine
+%              column window on the internal 2D fold, supporting loop
+%              counters in any trailing position (roadmap R2, issue #11
+%              Level 2, PR #14).
 global ADIGATOR
 ssize = length(s);
 for scount = 1:ssize;
