@@ -138,7 +138,9 @@ end
 % v1.5 (B4 fix): find the line defining function <fname> (not calls, not
 % comments, not names merely containing <fname> as a substring)
 function idx = find_function_header(txt,fname)
-pat = ['^\s*function\b[^%]*[\s=\],]',regexptranslate('escape',fname),'\s*\('];
+% NOTE: MATLAB regexp has no \b word boundary (\b is backspace); the
+% MATLAB-specific end-of-word anchor is \>
+pat = ['^\s*function\>[^%]*[\s=\],]',regexptranslate('escape',fname),'\s*\('];
 matches = regexp(txt,pat,'once');
 idx = find(~cellfun(@isempty,matches));
 idx = idx(:).'; % row, consistent with find_in_file

@@ -15,9 +15,17 @@ if ~ischar(mode) || isempty(mode)
     error('adigator:embedMode', ...
         'EMBED_MODE must be ''c''/''classic'', ''l''/''coderload'', or ''i''/''inline''');
 end
-mode = lower(mode(1));
-if ~any(mode == 'cli')
-    error('adigator:embedMode', ...
-        'unknown EMBED_MODE ''%s'' (use ''c''/''classic'', ''l''/''coderload'', ''i''/''inline'')', mode);
+% NOTE: explicit name mapping -- first-letter truncation would conflate
+% 'coderload' with 'classic' (both start with c)
+switch lower(mode)
+    case {'c','classic'}
+        mode = 'c';
+    case {'l','coderload'}
+        mode = 'l';
+    case {'i','inline'}
+        mode = 'i';
+    otherwise
+        error('adigator:embedMode', ...
+            'unknown EMBED_MODE ''%s'' (use ''c''/''classic'', ''l''/''coderload'', ''i''/''inline'')', mode);
 end
 end
