@@ -8,7 +8,7 @@ classdef SExamplesTest < matlab.unittest.TestCase
     % their printed comparisons are promoted to assertions where the
     % script's variables allow it.
     %
-    % Runs in the nightly products job; base-MATLAB examples run anywhere.
+    % Runs in the extended products job; base-MATLAB examples run anywhere.
 
     methods (TestClassSetup)
         function addPaths(tc)
