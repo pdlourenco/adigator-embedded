@@ -1,9 +1,11 @@
 function ci_lint()
-%CI_LINT  Phase-0 lint gate (CI plan TS-U-09, REQ-C-10).
+%CI_LINT  Lint gate (CI plan TS-U-09 / REQ-C-10, Phase 4 ratchet).
 %
 % Fails (errors) if checkcode reports a parse error in any toolbox source
-% folder. Warning-level findings are printed but do not fail the gate yet;
-% a warning-count ratchet is planned for CI Phase 4 (see docs/CI_PLAN.md).
+% folder, or if the total number of checkcode findings exceeds the
+% committed baseline in tests/lint_baseline.txt (warning-count ratchet:
+% legacy findings are tolerated, new ones are not). Without a baseline
+% file the count is reported but not gated.
 
 thisDir = fileparts(mfilename('fullpath'));
 root = fileparts(thisDir);
@@ -23,6 +25,7 @@ folders = { ...
     fullfile(root,'tests','system')};
 
 nerr = 0;
+nwarn = 0;
 nfiles = 0;
 for f = folders
     if ~isfolder(f{1}), continue; end
@@ -35,6 +38,8 @@ for f = folders
             if contains(msgs(m).message, 'Parse error', 'IgnoreCase', true)
                 fprintf(2, '%s:%d: %s\n', fp, msgs(m).line, msgs(m).message);
                 nerr = nerr + 1;
+            else
+                nwarn = nwarn + 1;
             end
         end
     end
@@ -43,5 +48,25 @@ end
 if nerr > 0
     error('ci_lint:parseErrors', 'ci_lint: %d parse error(s) found.', nerr);
 end
-fprintf('ci_lint: %d files checked, no parse errors.\n', nfiles);
+fprintf('ci_lint: %d files checked, no parse errors, %d checkcode finding(s).\n', ...
+    nfiles, nwarn);
+
+% ---- warning-count ratchet (CI plan Phase 4) ---- %
+basefile = fullfile(thisDir, 'lint_baseline.txt');
+if isfile(basefile)
+    base = str2double(strtrim(fileread(basefile)));
+    if nwarn > base
+        error('ci_lint:ratchet', ...
+            ['ci_lint: checkcode findings increased to %d (baseline %d). ', ...
+             'Fix the new findings, or consciously raise tests/lint_baseline.txt.'], ...
+            nwarn, base);
+    elseif nwarn < base
+        fprintf(['ci_lint: findings below baseline (%d < %d); consider ', ...
+            'tightening tests/lint_baseline.txt.\n'], nwarn, base);
+    end
+else
+    fprintf(['ci_lint: no baseline committed (tests/lint_baseline.txt); ', ...
+        'reporting only.\n']);
 end
+end
+
