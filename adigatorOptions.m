@@ -124,9 +124,16 @@ function options = adigatorOptions(varargin)
 %                                   that can be accepted for embedded code
 %                                   use, e.g., without runtime loading of 
 %                                   files/data/options.
-%                                   Add option for user to provide the path 
-%                                   to the directory where the generated 
+%                                   Add option for user to provide the path
+%                                   to the directory where the generated
 %                                   files should be stored
+%   2026-06                         Normalize EMBED_MODE aliases
+%                                   (c/classic, l/coderload, i/inline) at
+%                                   parse time (B11, PR #8).
+%                                   Add the LOOPBOUND option: runtime loop
+%                                   bounds with the padded-program
+%                                   contract documented above (roadmap R3,
+%                                   issue #6 Tier 1, PR #15).
 
 % Set Defaults
 options.embed_mode   = 'c'; % v1.5 - 'c(lassic)' | '(coder)l(oad)' | 'i(nline)'

@@ -9,6 +9,12 @@ function mode = adigatorNormalizeEmbedMode(mode)
 % scalar chars (opts.embed_mode == 'c'); a multi-character value such as
 % 'classic' made those comparisons error inside && conditions. Normalizing
 % once at option-parse time makes every downstream comparison safe.
+%
+% Copyright GMV.
+% Changelog:
+%   2026-06    Created (B11, PR #8); explicit alias mapping instead of
+%              first-letter truncation, which conflated 'coderload' with
+%              'classic' (PR #8 follow-up).
 
 if isstring(mode); mode = char(mode); end
 if ~ischar(mode) || isempty(mode)

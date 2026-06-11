@@ -54,6 +54,11 @@ function info = adigatorGenDerFile_embedded(DerType,UserFunName,UserFunInputs,va
 %   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %
 %   Changelog:
+%       2026-06    Extract the .mat pruner to prune_adigator_mat for
+%                  testability (fixes B5) with integer down-casting
+%                  restricted to Index* fields (B1) (PR #3).
+%                  Print an explicit notice that a pruned .mat no longer
+%                  supports re-differentiation (B6, PR #8).
 %
 %   TODO:
 %       - Remove the computation of unnecessary variables by running CHECKCODE on each file.

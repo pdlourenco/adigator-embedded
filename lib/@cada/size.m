@@ -5,6 +5,13 @@ function varargout = size(x,varargin)
 % advisable to set this to 1 if you are going to mess with this function.
 %
 % Written by Matthew J. Weinstein
+%
+% Modifications as described below are Copyright GMV.
+% Changelog:
+%   2026-06    Reject size queries past dimension 1 on N-D declared
+%              parameters: the declared shape and the internal 2D fold
+%              would silently disagree (roadmap R2, issue #11 Level 2,
+%              PR #14).
 global ADIGATOR
 NUMvod = ADIGATOR.NVAROFDIFF;
 fid    = ADIGATOR.PRINT.FID;

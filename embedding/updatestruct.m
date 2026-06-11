@@ -21,6 +21,8 @@ function out=updatestruct(default,in,addfields)
 %   Changelog:
 %       2025-10 PADL    Add option to add new fields if the input structure
 %                       has fields that the default one does not
+%       2026-06         Warn when a field assignment lossily coerces the
+%                       class of the default value (PR #3).
 
 if nargin<3
     addfields = false;

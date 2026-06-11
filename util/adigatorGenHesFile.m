@@ -81,8 +81,26 @@ function output = adigatorGenHesFile(UserFunName,UserFunInputs,varargin)
 %                                   functions and files (.mat and .m)
 %                                   Modify output gradients to be in column
 %                                   form, i.e. f = df/dx'*x+x'*d2f/dx2*x;
-%                                   when computing gradients. Maintaining 
+%                                   when computing gradients. Maintaining
 %                                   numerator form when computing Hessians and Jacobians
+%   2026-06                         Vector-output Hessian rows indexed as
+%                                   (x1-1)*m + y, matching the documented
+%                                   [m*n x n] layout (B7), and wrapper
+%                                   file handles closed before read-back
+%                                   (B13) (PR #4).
+%                                   Matrix-function-of-scalar Hessians
+%                                   branch on the output size and convert
+%                                   [row col] locations to linear indices
+%                                   (B8); sparse and full gradient
+%                                   branches emit the same m x n
+%                                   convention (B9) (PR #5).
+%                                   Read user option fields with the name
+%                                   as given (B12) and normalize
+%                                   EMBED_MODE aliases (B11) (PR #8).
+%                                   In embed modes, precompute the scatter
+%                                   indices at generation time and emit
+%                                   them as literal vectors (ANALYSIS.md
+%                                   2.1, PR #9).
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ OPTIONS SETUP ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 opts = adigatorOptions();
