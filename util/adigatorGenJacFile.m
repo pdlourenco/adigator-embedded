@@ -275,11 +275,14 @@ xsize = x.func.size;
 ysize = adiout.func.size;
 dydxsize = [prod(ysize), prod(xsize)];
 dydxnumel  = dydxsize(1)*dydxsize(2);
+remapcase = 0; % v1.5 (B10 fix): remember the shape remap for JacobianStructure
 if dydxsize(1) == 1 && all(xsize>1) % scalar function of matrix variable
+  remapcase = 1;
   dydxsize = xsize;
   ysize = [xsize(1) 1];
   xsize = [xsize(2) 1];
 elseif dydxsize(2) == 1 && all(ysize>1) % matrix function of scalar variable
+  remapcase = 2;
   dydxsize = ysize;
   xsize = [ysize(2) 1];
   ysize = [ysize(1) 1];
@@ -358,7 +361,21 @@ output.GenFiles(1).main = ADiGator_GeneratedFiles.Jac;
 output.GenFiles(1).name = JacFileName;
 output.GenFiles(1).func = ADi_DerivFuns;
 
-output.JacobianStructure = sparse(adiout.deriv.nzlocs(:,1),...
-  adiout.deriv.nzlocs(:,2),ones(dydxnnz,1),dydxsize(1),dydxsize(2));
+% v1.5 (B10 fix): nzlocs index the unrolled [prod(ysize) x prod(xsize)]
+% Jacobian. When the displayed shape was remapped above (scalar function of
+% matrix variable / matrix function of scalar variable), decompose the
+% unrolled linear indices into subscripts of the displayed shape; the old
+% code passed the unrolled indices to sparse() with the remapped size,
+% which errored or produced a wrong pattern.
+if remapcase == 1 % scalar function of matrix variable: column index is x
+  [strrows,strcols] = ind2sub(dydxsize, adiout.deriv.nzlocs(:,2));
+elseif remapcase == 2 % matrix function of scalar variable: row index is y
+  [strrows,strcols] = ind2sub(dydxsize, adiout.deriv.nzlocs(:,1));
+else
+  strrows = adiout.deriv.nzlocs(:,1);
+  strcols = adiout.deriv.nzlocs(:,2);
+end
+output.JacobianStructure = sparse(strrows,strcols,...
+  ones(dydxnnz,1),dydxsize(1),dydxsize(2));
 
 fprintf(['\n<strong>adigatorGenJacFile</strong> successfully generated Jacobian wrapper file: ''',JacFileName,''';\n\n']);

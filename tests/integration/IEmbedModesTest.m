@@ -1,0 +1,137 @@
+classdef IEmbedModesTest < matlab.unittest.TestCase
+    % IEmbedModesTest  Cross-mode equivalence of the embedded pipeline.
+    %
+    % CI plan: TS-I-02, verifies REQ-T-04 (embeddability) end-to-end across
+    % embed_mode 'c' (classic), 'l' (coderload), and 'i' (inline), using the
+    % pipg example's gap function: it has subfunctions (conefun, setfun) and
+    % an integer-valued constant matrix (eye(2)), so it exercises the data
+    % pruning (B1), patching, and inline-emission paths.
+    %
+    % Checks:
+    %  - generation succeeds in all three modes (pruning + patching included)
+    %  - static text properties of the generated code per mode
+    %  - numeric equality of [Grd, Fun] across modes and vs the analytic
+    %    gradient w + 2z
+    %
+    % Note: evaluating 'l'/'i' outputs in MATLAB requires the coder.*
+    % namespace (MATLAB Coder). On runners without it, the numeric
+    % cross-mode check is skipped via assumption (the nightly Coder job per
+    % docs/CI_PLAN.md runs it fully); generation and static checks always run.
+
+    methods (TestClassSetup)
+        function addPaths(tc)
+            import matlab.unittest.fixtures.PathFixture
+            testDir = fileparts(mfilename('fullpath'));
+            root = fileparts(fileparts(testDir));
+            tc.applyFixture(PathFixture(root));
+            tc.applyFixture(PathFixture(fullfile(root,'lib')));
+            tc.applyFixture(PathFixture(fullfile(root,'lib','cadaUtils')));
+            tc.applyFixture(PathFixture(fullfile(root,'util')));
+            tc.applyFixture(PathFixture(fullfile(root,'embedding')));
+            tc.applyFixture(PathFixture(fullfile(root,'examples','optimization','pipg')));
+        end
+    end
+
+    methods (TestMethodSetup)
+        function workInTempFolder(tc)
+            import matlab.unittest.fixtures.WorkingFolderFixture
+            tc.applyFixture(WorkingFolderFixture);
+        end
+    end
+
+    methods (Test)
+        function gradientEquivalentAcrossModes(tc)
+            baseDir = pwd;
+            modes = {'c','l','i'};
+            modeDir = struct();
+
+            % --- generate in all three modes, each into its own folder --- %
+            for k = 1:numel(modes)
+                mode = modes{k};
+                mdir = fullfile(baseDir, ['mode_', mode]);
+                modeDir.(mode) = mdir;
+                z = adigatorCreateDerivInput([2 1], 'z');
+                w = adigatorCreateAuxInput([2 1]);
+                opts = struct('embed_mode', mode, 'path', mdir, 'echo', 0);
+                adigatorGenDerFile_embedded('gradient', 'gapfun', {w, z}, opts);
+                tc.assertTrue(isfile(fullfile(mdir, 'gapfun_Grd.m')), ...
+                    sprintf('mode %s: wrapper not generated', mode));
+            end
+
+            % ------------------- static text properties ------------------ %
+            % coderload: persistent + coder.load, no global, no LoadData call
+            txtL = readlines(fullfile(modeDir.l, 'gapfun_Grd.m'));
+            tc.verifyTrue(any(contains(txtL, 'persistent ADiGator_')), ...
+                'mode l: persistent declaration missing');
+            tc.verifyTrue(any(contains(txtL, 'coder.load(')), ...
+                'mode l: coder.load call missing');
+            tc.verifyFalse(any(startsWith(strtrim(txtL), 'global ')), ...
+                'mode l: global declaration left in generated code');
+            tc.verifyFalse(any(contains(txtL, 'ADiGator_LoadData')), ...
+                'mode l: runtime loader left in generated code');
+            tc.verifyTrue(isfile(fullfile(modeDir.l, 'gapfun_ADiGatorGrd.mat')), ...
+                'mode l: pruned .mat missing');
+
+            % inline: coder.const data function, no global/load/.mat at all
+            txtI = readlines(fullfile(modeDir.i, 'gapfun_Grd.m'));
+            tc.verifyTrue(any(contains(txtI, 'coder.const(')), ...
+                'mode i: coder.const call missing');
+            tc.verifyFalse(any(startsWith(strtrim(txtI), 'global ')), ...
+                'mode i: global declaration left in generated code');
+            tc.verifyFalse(any(contains(txtI, 'ADiGator_LoadData')), ...
+                'mode i: runtime loader left in generated code');
+            tc.verifyFalse(any(contains(txtI, 'coder.load(')), ...
+                'mode i: coder.load present, data should be inlined');
+            matsI = dir(fullfile(modeDir.i, '*.mat'));
+            tc.verifyEmpty(matsI, 'mode i: .mat file left behind');
+
+            % ----------------------- numeric checks ---------------------- %
+            wv = [0.5; 1.2];
+            zv = [0.3; -0.7];
+            Gexp = wv + 2*zv; % analytic: d/dz [w'(H z - g) + z'z], H = eye
+
+            G = struct(); F = struct();
+            for k = 1:numel(modes)
+                mode = modes{k};
+                cleanupDir = cdInto(modeDir.(mode)); %#ok<NASGU>
+                clear('gapfun_Grd'); rehash;
+                if strcmp(mode, 'c')
+                    % force a fresh runtime load from this folder's .mat
+                    clear('global', 'ADiGator_gapfun_ADiGatorGrd');
+                end
+                try
+                    [G.(mode), F.(mode)] = gapfun_Grd(wv, zv);
+                catch e
+                    if strcmp(mode, 'c')
+                        rethrow(e); % classic mode must always run
+                    end
+                    if strcmp(e.identifier, 'MATLAB:UndefinedFunction') && ...
+                            contains(e.message, 'coder.')
+                        tc.assumeFail(sprintf(['mode %s needs the coder.* ', ...
+                            'namespace (MATLAB Coder) to run in MATLAB; ', ...
+                            'skipping numeric cross-mode check: %s'], mode, e.message));
+                    end
+                    rethrow(e);
+                end
+                clear cleanupDir
+            end
+
+            for k = 1:numel(modes)
+                mode = modes{k};
+                tc.verifySize(G.(mode), [2 1]);
+                tc.verifyEqual(G.(mode), Gexp, 'AbsTol', 1e-12, ...
+                    sprintf('mode %s: gradient differs from analytic value', mode));
+                tc.verifyEqual(F.(mode), gapfun(wv, zv), 'AbsTol', 1e-14, ...
+                    sprintf('mode %s: function value differs', mode));
+            end
+            % cross-mode equality must be exact: same arithmetic, same data
+            tc.verifyEqual(G.l, G.c, 'AbsTol', 0, 'coderload vs classic gradient');
+            tc.verifyEqual(G.i, G.c, 'AbsTol', 0, 'inline vs classic gradient');
+        end
+    end
+end
+
+function cleanupObj = cdInto(d)
+old = cd(d);
+cleanupObj = onCleanup(@() cd(old));
+end
