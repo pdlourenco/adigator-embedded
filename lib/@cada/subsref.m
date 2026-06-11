@@ -19,7 +19,7 @@ for scount = 1:ssize;
       if length(s.subs) > 2 && isfield(x.func,'ndsize')
         % N-D declared parameter (roadmap R2, issue #11 Level 2): rewrite
         % the trailing subscripts as the affine column window on the fold
-        s = NDRefTranslate(x,s);
+        s = NDRefTranslate(x,s,ADIGATOR.EMPTYFLAG);
       end
       if ADIGATOR.EMPTYFLAG
         if length(s.subs) == 2
@@ -261,7 +261,7 @@ for scount = 1:ssize;
 end
 end
 
-function s = NDRefTranslate(x,s)
+function s = NDRefTranslate(x,s,emptyflag)
 % Rewrites an N-D () reference on an N-D declared parameter (an internally
 % folded 2D cada carrying its declared shape in x.func.ndsize, see
 % adigatorCreateAuxInput) into the equivalent 2-subscript reference on the
@@ -271,8 +271,9 @@ function s = NDRefTranslate(x,s)
 %   cols = base + sum_j (v_j - 1)*F_j
 % built with the same overloaded arithmetic the manual folded-2D pattern
 % (Bf(:,(k-1)*n+(1:n))) would invoke, so everything downstream - including
-% the rolled-loop organizational-op machinery - is unchanged.
-global ADIGATOR
+% the rolled-loop organizational-op machinery - is unchanged. Under
+% emptyflag (dead-branch evaluation) validation is skipped but the same
+% overloaded operations run, keeping operation counts consistent.
 nds = x.func.ndsize;
 nd  = length(nds);
 d   = length(s.subs);
@@ -318,7 +319,7 @@ stride = r;
 for jj = js:d
   vj = s.subs{jj};
   if isa(vj,'cada')
-    if ~ADIGATOR.EMPTYFLAG
+    if ~emptyflag
       if prod(vj.func.size) ~= 1
         error('adigator:ndparam:slice',...
           ['subscript %1.0f of a reference into an N-D declared ',...
@@ -344,7 +345,7 @@ for jj = js:d
       ovroff = t;
       haveovr = true;
     end
-  elseif isnumeric(vj) && numel(vj) == 1
+  elseif isnumeric(vj) && isscalar(vj)
     if vj ~= floor(vj) || vj < 1 || vj > csz(jj)
       error('adigator:ndparam:subsOutOfRange',...
         ['subscript %1.0f of a reference into an N-D declared ',...
