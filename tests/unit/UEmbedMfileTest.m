@@ -65,6 +65,54 @@ classdef UEmbedMfileTest < matlab.unittest.TestCase
             tc.verifyTrue(any(contains(txt(1:k), "Helper file for ADiGator")));
         end
 
+        function dedupAliasesRepeatedSiblings(tc)
+            % ANALYSIS.md §2.1: identical sibling arrays emitted once,
+            % aliased thereafter; different class must NOT alias
+            big = uint32(7:3:7+3*29); % 30 elements, above dedup threshold
+            S.Gator1Data.Index1 = big;
+            S.Gator1Data.Index2 = big;          % identical -> alias
+            S.Gator1Data.Index3 = double(big);  % same values, other class
+            fpath = structure_to_embed_mfile('data_dedup_ut', S, pwd);
+            txt = readlines(fpath);
+            tc.verifyTrue(any(strtrim(txt) == ...
+                "S.Gator1Data.Index2 = S.Gator1Data.Index1;"), ...
+                'duplicate sibling array was not aliased');
+            tc.verifyFalse(any(contains(txt, ...
+                "Index3 = S.Gator1Data.Index1")), ...
+                'array of different class must not be aliased');
+            rehash;
+            S2 = data_dedup_ut();
+            tc.verifyEqual(S2, S);
+        end
+
+        function rangeCompression(tc)
+            % ANALYSIS.md §2.1: integer-valued arithmetic progressions are
+            % emitted as a:s:b (with class cast), constants as repmat;
+            % non-uniform data stays literal; singles are never compressed
+            S.Gator1Data.Index1 = uint32(1:100);
+            S.Gator1Data.Index2 = int32(50:-2:-50);
+            S.Gator1Data.Data1  = 5*ones(20,1);
+            S.Gator1Data.Data2  = [1 2 4 8 16 32 5 6 7 9 10 11 12 13 14 15 16 17]; % non-uniform
+            S.Gator1Data.Data3  = single(1:20); % integer-valued but single
+            fpath = structure_to_embed_mfile('data_range_ut', S, pwd);
+            txt = readlines(fpath);
+            tc.verifyTrue(any(contains(txt, "uint32(reshape(1:1:100")), ...
+                'ascending range not compressed');
+            tc.verifyTrue(any(contains(txt, "int32(reshape(50:-2:-50")), ...
+                'descending range not compressed');
+            tc.verifyTrue(any(contains(txt, "repmat(5, 20, 1)")), ...
+                'constant vector not compressed');
+            ln2 = txt(contains(txt, "Data2"));
+            tc.verifyTrue(any(contains(ln2, "reshape([")), ...
+                'non-uniform vector must stay a literal');
+            ln3 = txt(contains(txt, "Data3"));
+            tc.verifyFalse(any(contains(ln3, ":")), ...
+                'single-precision data must not be range-compressed');
+            rehash;
+            S2 = data_range_ut();
+            tc.verifyEqual(S2, S);
+        end
+
         function generatedFileHasNoErrors(tc)
             S.Gator1Data.Index1 = uint32([1 2 3]);
             S.Gator1Data.Data1 = eye(3);

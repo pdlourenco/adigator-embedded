@@ -1,20 +1,18 @@
-# CI plan Phase 3 — nightly suites (docs/CI_PLAN.md §3.1).
+# CI plan Phase 3 — extended suites (docs/CI_PLAN.md §3.1).
 #
-# NOTE: GitHub runs `schedule` triggers only from the repository's DEFAULT
-# branch. While development happens on 'embedded', the cron below is inert
-# unless this file also exists on the default branch (or 'embedded' is made
-# the default). Until then, run it manually via workflow_dispatch (any
-# branch) or rely on the push trigger after merges to 'embedded'.
-name: Nightly
+# Runs on every push to 'embedded' (i.e., every merge) and on manual
+# dispatch. A cron schedule was considered and dropped: its only unique
+# value over push triggers is drift detection on an idle repository (new
+# 'latest' MATLAB releases, runner-image changes, action deprecations),
+# and GitHub fires cron only from the default branch anyway. If idle-repo
+# drift detection becomes wanted, re-add a `schedule:` block once this
+# file lives on the default branch.
+name: Extended
 
 on:
-  schedule:
-    - cron: '17 3 * * *'
   workflow_dispatch:
   push:
     branches: [embedded]
-    paths:
-      - '.github/workflows/nightly.yml' # validate workflow edits on merge
 
 permissions:
   contents: read
@@ -48,7 +46,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: nightly-results-${{ matrix.release }}
+          name: extended-results-${{ matrix.release }}
           path: results
           if-no-files-found: ignore
 
@@ -80,6 +78,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: nightly-results-products
+          name: extended-results-products
           path: results
           if-no-files-found: ignore

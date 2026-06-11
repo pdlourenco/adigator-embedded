@@ -7,7 +7,7 @@ classdef SCodegenTest < matlab.unittest.TestCase
     % to prove embedded-C viability (no MEX-only constructs).
     %
     % Skips via assumption when MATLAB Coder is not licensed/installed
-    % (PR-gate runners); the nightly products job runs it.
+    % (PR-gate runners); the extended products job runs it.
 
     methods (TestClassSetup)
         function addPaths(tc)

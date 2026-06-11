@@ -15,7 +15,7 @@ classdef IEmbedModesTest < matlab.unittest.TestCase
     %
     % Note: evaluating 'l'/'i' outputs in MATLAB requires the coder.*
     % namespace (MATLAB Coder). On runners without it, the numeric
-    % cross-mode check is skipped via assumption (the nightly Coder job per
+    % cross-mode check is skipped via assumption (the extended-suite Coder job per
     % docs/CI_PLAN.md runs it fully); generation and static checks always run.
 
     methods (TestClassSetup)

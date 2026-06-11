@@ -40,6 +40,12 @@ jobs:
           select-by-folder: tests/integration
           test-results-junit: results/integration.xml
 
+      - name: Coverage report + ratchet (Phase 4)
+        if: success()
+        uses: matlab-actions/run-command@v2
+        with:
+          command: addpath('tests'); ci_coverage
+
       - name: Upload test results
         uses: actions/upload-artifact@v4
         if: always()

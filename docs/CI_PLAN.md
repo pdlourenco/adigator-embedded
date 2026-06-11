@@ -221,7 +221,19 @@ jobs:
 (`cache: true` additionally caches the MATLAB installation across runs of
 the same release, cutting the remaining setup time.)
 
-**`.github/workflows/nightly.yml`** — `schedule` (cron) + manual dispatch.
+**`.github/workflows/extended.yml`** — runs the heavy suites on every push
+to `embedded` (i.e., on merge) and on manual dispatch.
+
+*Implementation note (supersedes the cron design below):* the plan
+originally scheduled these suites nightly. The cron was dropped at
+implementation time: its only unique value over push triggers is drift
+detection on an *idle* repository (new `latest` MATLAB releases,
+runner-image changes, action deprecations), GitHub fires cron only from
+the default branch, and this repository's activity pattern makes
+push-on-merge coverage sufficient. Re-add a `schedule:` block on the
+default branch if idle-repo drift detection becomes wanted. References to
+"nightly" elsewhere in this plan should be read as "extended suite (per
+merge)".
 Jobs are split here only along axes that genuinely need separate installs:
 - release matrix `{R2022a, latest}` re-running unit+integration (TS-S-03) —
   different MATLAB versions cannot share an install;
