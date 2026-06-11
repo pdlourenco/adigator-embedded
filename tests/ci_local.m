@@ -10,7 +10,9 @@ addpath(thisDir);
 
 ci_lint();
 
-results = runtests({fullfile(thisDir,'unit'), fullfile(thisDir,'integration')});
+% system tests skip via assumption when licensed products are unavailable
+results = runtests({fullfile(thisDir,'unit'), fullfile(thisDir,'integration'), ...
+    fullfile(thisDir,'system')});
 disp(table(results));
 assertSuccess(results);
 end
