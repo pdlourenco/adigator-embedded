@@ -316,19 +316,18 @@ if n == 1
   % derivative wrt a scalar..
   if m == 1 % function is a scalar
     fprintf(Hfid,['Hes = ',dydxdx,';\n']);
-  elseif any(n == 1) % v1.5 - this is always true, as n is a scalar and equal to 1 ERROR
+  elseif any(ysize == 1) % v1.5 (B8 fix): vector function of scalar variable
+    % _location has one column (linear index into y)
     fprintf(Hfid,'Hes = zeros(%1.0f,%1.0f);\n',ysize);
     fprintf(Hfid,['Hes(',dydxdx,'_location) = ',dydxdx,';\n']);
-  elseif m>= 250 && dydxdxnnz/m <= 3/4 && opts.embed_mode == 'c' % v1.5 - only allow sparse matrices if in classic mode (no embed)
-    % Sparse projection..
-    rowind = [dydxdx,'_location(:,1)'];
-    colind = [dydxdx,'_location(:,2)'];
-    fprintf(Hfid,['Hes = sparse(',rowind,',',colind,',',dydxdx,',%1.0f,%1.0f);\n'],ysize);
-  else
-    rowind = [dydxdx,'_location(:,1)'];
-    colind = [dydxdx,'_location(:,2)'];
+  else % v1.5 (B8 fix): matrix function of scalar variable
+    % _location has two columns [row col]; the previous code branched on
+    % the always-true any(n == 1) and assigned with the subscript matrix
+    % as if it were linear indices. Convert to linear indices explicitly.
+    % (The unreachable sparse projection branch was removed: these are
+    % size(y) arrays and the embedded modes never want sparse output.)
     fprintf(Hfid,'Hes = zeros(%1.0f,%1.0f);\n',ysize);
-    ind = sprintf(['(',colind,'-1)*%1.0f + ',rowind],ysize(1));
+    ind = sprintf(['(',dydxdx,'_location(:,2)-1)*%1.0f + ',dydxdx,'_location(:,1)'],ysize(1));
     fprintf(Hfid,['Hes(',ind,') = ',dydxdx,';\n']);
   end
 else
@@ -454,7 +453,11 @@ for fid = [Gfid,Hfid]
     end
     if dydxnumel >= 250 && dydxnnz/dydxnumel <= 3/4 && opts.embed_mode == 'c' % v1.5 - only allow sparse matrices if in classic mode (no embed)
       % Project Sparse
-      fprintf(fid,['Grd = sparse(',rowstr,',',colstr,',',dydx,',%1.0f,%1.0f)'';\n'],dydxsize);
+      % v1.5 (B9 fix): no transpose -- this branch only fires for
+      % non-scalar outputs, where the Jacobian convention (m x n) applies;
+      % the transpose made the sparse branch disagree with the full branch
+      % below and with adigatorGenJacFile.
+      fprintf(fid,['Grd = sparse(',rowstr,',',colstr,',',dydx,',%1.0f,%1.0f);\n'],dydxsize);
     else
       % Project Full
       fprintf(fid,'Grd = zeros(%1.0f,%1.0f);\n',dydxsize);

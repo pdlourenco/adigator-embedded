@@ -237,7 +237,9 @@ referring to the nonexistent `RemoveUnneededIndices` (the function is
 | B15 (`OuterLoopMaxLenght` crash) | **Fixed** (see §1.3a). |
 | B7 (vector-output Hessian row multiplier) | **Fixed** — `(xind1-1)*m + yind` in `adigatorGenHesFile`, consistent with the documented `[m*n × n]` layout and `output.HessianStructure`. Covered by `hesVectorOutput*` in `tests/integration/IShapeMatrixTest.m`. |
 | B13 (`Gfid` never closed) | **Fixed** — both wrapper fids closed in `adigatorGenHesFile`. |
-| B8, B9, B10 | Open — pinned as auto-flipping `KnownIssue` cases in `tests/integration/IShapeMatrixTest.m` (the tests `assumeFail` while the documented behavior reproduces and become hard regression guards once fixed). |
+| B8 (matrix-of-scalar Hessian branch) | **Fixed** — branch on `any(ysize == 1)`, subscripts converted to linear indices, unreachable sparse branch removed. The `hesMatrixOfScalar` case in `IShapeMatrixTest` auto-flipped to a regression guard. |
+| B9 (sparse-branch gradient transpose) | **Fixed** — transpose removed; sparse and full branches now both emit the m×n Jacobian convention, consistent with `adigatorGenJacFile`. Guarded by `grdSparseBranchOfVectorOutput`. |
+| B10 (`JacobianStructure` vs remapped shapes) | **Fixed** — the remap is recorded and the unrolled `nzlocs` are decomposed with `ind2sub` into the displayed shape. Guarded by `jacScalarOfMatrix` / `jacMatrixOfScalar`. |
 | Pruner near-integer tolerance | **Fixed** — exact `isequal(A,round(A))` check (salvaged from PR #1). |
 | `coder.load` path override | Optional `mat_filepath` argument added to `adigator_patch_derivative` (salvaged from PR #1, but defaulting to the file *name* so generated code stays relocatable). |
 | Test hygiene | `adigator.m` now clears its transformation-state globals on exit; `updatestruct` warns on lossy type coercion (salvaged from PR #1). |
