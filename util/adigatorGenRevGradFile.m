@@ -273,9 +273,7 @@ function S = execAndClassify(S,Gator1Data,UserFunInputs,InNames,vodLoc,VodName)
 % every indexing/concatenation into constant linear maps, and classify
 % each statement. Tape statements are eval'd in THIS workspace; all
 % generator locals are cadaRG_-prefixed (names checked by the caller).
-if ~isstruct(Gator1Data)
-  Gator1Data = struct(); % also marks the (eval-referenced) input as used
-end
+assert(isstruct(Gator1Data)); % referenced by the eval'd tape statements
 for cadaRG_i = 1:numel(InNames)
   cadaRG_ui = UserFunInputs{cadaRG_i};
   if isa(cadaRG_ui,'adigatorInput')
