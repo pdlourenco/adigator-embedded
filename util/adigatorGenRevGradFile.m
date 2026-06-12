@@ -165,15 +165,30 @@ S = struct('text',stmts,'lhs',[],'lhsSubs',[],'rhs',[],'deps',[],...
 reserved = {'S','Gator1Data','UserFunInputs','InNames','vodLoc','VodName',...
   'OutName','stmts','reserved','FwdGator','fwddata'};
 for k = 1:n
+  % split at the first top-level '=' (the dialect has no '==' and no '='
+  % inside subscripts); parse the LHS manually rather than with optional
+  % regexp groups, whose tokens MATLAB drops when they do not participate
   ln = S(k).text;
-  tok = regexp(ln,'^([A-Za-z]\w*(?:\.\w+)?)\s*(\(([^=]*)\))?\s*=\s*(.*);$',...
-    'tokens','once');
-  if isempty(tok)
+  eq = strfind(ln,'=');
+  if isempty(eq) || ln(end) ~= ';'
     error('adigator:revgrad:parse','cannot parse generated statement: %s',ln);
   end
-  S(k).lhs     = tok{1};
-  S(k).lhsSubs = tok{3};
-  S(k).rhs     = strtrim(tok{4});
+  lhsfull = strtrim(ln(1:eq(1)-1));
+  S(k).rhs = strtrim(ln(eq(1)+1:end-1));
+  par = strfind(lhsfull,'(');
+  if isempty(par)
+    S(k).lhs     = lhsfull;
+    S(k).lhsSubs = '';
+  elseif lhsfull(end) == ')'
+    S(k).lhs     = strtrim(lhsfull(1:par(1)-1));
+    S(k).lhsSubs = lhsfull(par(1)+1:end-1);
+  else
+    error('adigator:revgrad:parse','cannot parse generated statement: %s',ln);
+  end
+  if isempty(regexp(S(k).lhs,'^[A-Za-z]\w*(\.\w+)?$','once')) || ...
+      isempty(S(k).rhs)
+    error('adigator:revgrad:parse','cannot parse generated statement: %s',ln);
+  end
   if ~isempty(regexp(ln,'\<cadaRG','once'))
     error('adigator:revgrad:parse','reserved name cadaRG* in generated code');
   end
