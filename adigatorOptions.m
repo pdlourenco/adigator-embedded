@@ -102,6 +102,16 @@ function options = adigatorOptions(varargin)
 %                  TRIP-COUNT VALUE: give each runtime-bound parameter a
 %                  distinct max value that no fixed loop in the code
 %                  shares. Not compatible with 'unroll'.
+% JAC_OUTPUT: 'matrix' - adigatorGenJacFile wrappers project the
+%                  derivative into a dense or sparse Jacobian/gradient
+%                  matrix on every call (default).
+%             'nonzeros' - the wrapper returns the nonzero VECTOR in the
+%                  fixed pattern order, with the pattern exported once
+%                  through output.JacobianLocs (value order) and
+%                  output.JacobianStructure. No per-call allocation or
+%                  scatter: embedded consumers assemble - or never form -
+%                  the matrix themselves (roadmap R5, ANALYSIS.md 2.3).
+%                  Applies to adigatorGenJacFile only.
 % ------------------------------------------------------------------------
 %
 % NOTES:    The default value of the OVERWRITE option changes depending
@@ -134,6 +144,9 @@ function options = adigatorOptions(varargin)
 %                                   bounds with the padded-program
 %                                   contract documented above (roadmap R3,
 %                                   issue #6 Tier 1, PR #15).
+%                                   Add the JAC_OUTPUT option: nonzero-
+%                                   vector wrapper output with the pattern
+%                                   exported once (roadmap R5).
 
 % Set Defaults
 options.embed_mode   = 'c'; % v1.5 - 'c(lassic)' | '(coder)l(oad)' | 'i(nline)'
@@ -147,6 +160,7 @@ options.optoutput    = 0;
 options.maxwhileiter = 10;
 options.complex      = 0;
 options.loopbound    = {}; % roadmap R3 (issue #6 Tier 1): runtime loop bounds
+options.jac_output   = 'matrix'; % roadmap R5: 'matrix' | 'nonzeros'
 
 if nargin/2 ~= floor(nargin/2)
   error('Inputs to adigatorOptions must come in field/value pairs')
@@ -173,6 +187,13 @@ for i = 1:nargin/2
           'input(s) of the differentiated function']);
       end
       options.loopbound = value;
+      case 'jac_output' % roadmap R5 (ANALYSIS.md 2.3)
+      value = lower(char(value));
+      if ~any(strcmp(value,{'matrix','nonzeros'}))
+        error('adigator:jacOutput',...
+          'jac_output must be ''matrix'' (default) or ''nonzeros''');
+      end
+      options.jac_output = value;
       case {'maxwhileiter','path'} % v1.5
       options.(field) = value;
     otherwise
