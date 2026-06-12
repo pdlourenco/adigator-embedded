@@ -220,9 +220,15 @@ if isempty(outStmt)
   error('adigator:revgrad:parse','could not find %s.f assignment',OutName);
 end
 need = false(n,1); need(outStmt) = true;
-wanted = union({strtok(S(outStmt).lhs,'.')},S(outStmt).deps);
+% the wanted set holds base names (dependencies are dot-stripped) plus the
+% full dotted output ('y.f'); matching on the FULL lhs keeps 'y.f' and
+% excludes 'y.dx' - the forward-derivative statements must NOT be sliced
+% in through the shared output base name
+wanted = union({S(outStmt).lhs},S(outStmt).deps);
 for k = outStmt-1:-1:1
-  if any(strcmp(strtok(S(k).lhs,'.'),wanted))
+  if any(strcmp(S(k).lhs,wanted)) || ...
+      (~strcmp(S(k).lhs,strtok(S(k).lhs,'.')) && ...
+      any(strcmp(strtok(S(k).lhs,'.'),wanted)))
     need(k) = true;
     wanted = union(wanted,S(k).deps);
   end
@@ -424,7 +430,7 @@ for cadaRG_k = 1:numel(S)
         cadaRG_info.dups = numel(unique(cadaRG_info.map)) < ...
           numel(cadaRG_info.map);
       case 'scatter'
-        cadaRG_old = eval(strtok(S(cadaRG_k).lhs,'.'));
+        cadaRG_old = eval(S(cadaRG_k).lhs); % full name incl. any .f field
         cadaRG_ref = zeros(size(cadaRG_old));
         cadaRG_ref(:) = 1:numel(cadaRG_old);
         assert(isnumeric(cadaRG_ref)); % consumed by the eval'd index text
@@ -589,7 +595,8 @@ vinit = false;
     for jn = k-1:-1:1 % own loop variable: the parent workspace is shared
       if strcmp(bases{jn},base)
         if snap(jn)
-          t = sprintf('cadaRGsv%d',jn);
+          % snapshots copy the base variable; keep any field suffix (.f)
+          t = [sprintf('cadaRGsv%d',jn),atom(numel(base)+1:end)];
         else
           t = atom;
         end
@@ -602,9 +609,11 @@ vinit = false;
   function t = selftext(k)
     % forward value of statement k's own result, as seen in reverse
     if snap(k)
-      t = sprintf('cadaRGsv%d',k);
+      t = [sprintf('cadaRGsv%d',k),S(k).lhs(numel(bases{k})+1:end)];
+    elseif strcmp(S(k).lhs,[OutName,'.f'])
+      t = OutName; % the output statement is emitted with its .f stripped
     else
-      t = strtok(S(k).lhs,'(');
+      t = S(k).lhs;
     end
   end
 
