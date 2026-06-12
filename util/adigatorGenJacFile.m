@@ -94,6 +94,11 @@ function output = adigatorGenJacFile(UserFunName,UserFunInputs,varargin)
 %                                   indices at generation time and emit
 %                                   them as literal vectors (ANALYSIS.md
 %                                   2.1, PR #9).
+%                                   Add jac_output='nonzeros': the wrapper
+%                                   returns the nonzero vector with the
+%                                   constant pattern exported once via
+%                                   output.JacobianLocs - no per-call
+%                                   dense projection (roadmap R5).
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ OPTIONS SETUP ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 opts = adigatorOptions(); % default options
@@ -327,7 +332,14 @@ else
   scatteridx = [dy,'_location']; % single-column cases only (see below)
 end
 %v1.5:	process this to output Jacobians and Gradients correctly, as shown above
-if dydxnnz == dydxnumel % all elements are nonzero
+if strcmp(opts.jac_output,'nonzeros')
+  % roadmap R5 (ANALYSIS.md 2.3): return the nonzero vector in nzlocs
+  % order; the constant sparsity pattern is exported once through
+  % output.JacobianLocs/JacobianStructure. No per-call dense allocation
+  % or scatter - embedded first-order solvers assemble (or never form)
+  % the Jacobian themselves.
+  fprintf(fid,['Jac = ',dy,'(:);\n']);
+elseif dydxnnz == dydxnumel % all elements are nonzero
     if dydxsize(1) == 1 % the function is a scalar, use the Gradient convention if user selected
         if strcmp(NameAppendix,'Jac') % Use Jacobian convention
             fprintf(fid,['Jac = reshape(',dy,',[%1.0f %1.0f]);\n'],[dydxsize(1) dydxsize(2)]);
@@ -415,5 +427,10 @@ else
 end
 output.JacobianStructure = sparse(strrows,strcols,...
   ones(dydxnnz,1),dydxsize(1),dydxsize(2));
+% roadmap R5: row/column pattern in VALUE order (matching the nonzero
+% vector returned by jac_output='nonzeros' and the y.d<vod> ordering);
+% note sparse() above reorders, so consumers scattering values themselves
+% should use JacobianLocs
+output.JacobianLocs = [strrows(:) strcols(:)];
 
 fprintf(['\n<strong>adigatorGenJacFile</strong> successfully generated Jacobian wrapper file: ''',JacFileName,''';\n\n']);
