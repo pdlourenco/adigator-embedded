@@ -453,6 +453,11 @@ for cadaRG_k = 1:numel(S)
         cadaRG_info.map   = cadaRG_map(:);
         cadaRG_info.srcsz = size(eval(cadaRG_info.src));
       case 'concat'
+        % resolve the per-source linear maps by SHADOWING each operand
+        % variable with its (offset) reference codes and evaluating the
+        % original bracket text unchanged - no textual substitution, so
+        % any operand form the printer emits (fields, indexing,
+        % transposes) is handled uniformly
         cadaRG_inner = S(cadaRG_k).rhs;
         if ~isempty(regexp(cadaRG_inner,'(?<![\w.])\d','once'))
           error('adigator:revgrad:unsupported',...
@@ -461,29 +466,30 @@ for cadaRG_k = 1:numel(S)
         end
         cadaRG_ops = unique(regexp(cadaRG_inner(2:end-1),...
           '[A-Za-z]\w*(?:\.\w+)?','match'),'stable');
-        cadaRG_expr = cadaRG_inner;
         cadaRG_off = 0;
         cadaRG_srcs = cell(numel(cadaRG_ops),1);
+        cadaRG_sav = cell(numel(cadaRG_ops),1);
         for cadaRG_j = 1:numel(cadaRG_ops)
-          cadaRG_v = eval(cadaRG_ops{cadaRG_j});
+          try
+            cadaRG_v = eval(cadaRG_ops{cadaRG_j});
+          catch
+            error('adigator:revgrad:unsupported',...
+              ['unsupported operand form inside an active ',...
+              'concatenation: %s'],S(cadaRG_k).text);
+          end
           cadaRG_r = zeros(size(cadaRG_v));
           cadaRG_r(:) = cadaRG_off + (1:numel(cadaRG_v));
           cadaRG_srcs{cadaRG_j} = struct('name',cadaRG_ops{cadaRG_j},...
             'off',cadaRG_off,'num',numel(cadaRG_v),'sz',size(cadaRG_v));
-          assert(isnumeric(cadaRG_r)); % consumed by the eval'd assignment
-          eval(sprintf('cadaRG_c%d = cadaRG_r;',cadaRG_j));
-          cadaRG_expr = regexprep(cadaRG_expr,...
-            ['(?<![\w.])',regexptranslate('escape',cadaRG_ops{cadaRG_j}),...
-            '(?![\w.(])'],sprintf('cadaRG_c%d',cadaRG_j));
+          cadaRG_sav{cadaRG_j} = cadaRG_v;
+          assert(isnumeric(cadaRG_r) && iscell(cadaRG_sav)); % eval'd below
+          eval([cadaRG_ops{cadaRG_j},' = cadaRG_r;']);
           cadaRG_off = cadaRG_off + numel(cadaRG_v);
         end
-        cadaRG_left = regexp(cadaRG_expr,'[A-Za-z]\w*','match');
-        if ~all(startsWith(cadaRG_left,'cadaRG_c'))
-          error('adigator:revgrad:unsupported',...
-            ['unsupported operand form inside an active concatenation: ',...
-            '%s'],S(cadaRG_k).text);
+        cadaRG_codes = eval(cadaRG_inner);
+        for cadaRG_j = 1:numel(cadaRG_ops)
+          eval([cadaRG_ops{cadaRG_j},' = cadaRG_sav{cadaRG_j};']);
         end
-        cadaRG_codes = eval(cadaRG_expr);
         cadaRG_info.srcs  = cadaRG_srcs;
         cadaRG_info.codes = cadaRG_codes(:);
     end
