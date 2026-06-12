@@ -236,12 +236,16 @@ fid = fopen(RevFile,'w');
 fprintf(fid,'%s\n',revtxt{:});
 fclose(fid);
 % .mat layout matches forward-generated files: <RevName>.Gator1Data
-eval([RevName,'.Gator1Data = RevGator;']);
-save(RevMat,RevName);
+revdata = struct();
+revdata.(RevName) = struct('Gator1Data',RevGator);
+if ~isfield(revdata,RevName)
+  error('adigator:revgrad:io','internal error assembling %s',RevMat);
+end
+save(RevMat,'-struct','revdata');
 % the reverse file is self-contained: remove the forward intermediate
 delete(FwdFile); delete(FwdMat);
-eval(['clear global ADiGator_',FwdName]);
-eval(['clear global ADiGator_',RevName]);
+clear('global',['ADiGator_',FwdName]);
+clear('global',['ADiGator_',RevName]);
 rehash;
 if opts.echo
   fprintf(['<strong>adigatorGenRevGradFile</strong> successfully ',...
@@ -278,13 +282,14 @@ for cadaRG_i = 1:numel(InNames)
     cadaRG_sz = cadaRG_ui.func.size;
     if cadaRG_i == vodLoc
       cadaRG_v = struct('f',0.1+rand(cadaRG_sz),'dx',ones(prod(cadaRG_sz),1));
-      eval([InNames{cadaRG_i},' = cadaRG_v;']);
     else
-      eval([InNames{cadaRG_i},' = 0.1 + rand(cadaRG_sz);']);
+      cadaRG_v = 0.1 + rand(cadaRG_sz);
     end
   else
-    eval([InNames{cadaRG_i},' = cadaRG_ui;']);
+    cadaRG_v = cadaRG_ui;
   end
+  assert(isstruct(cadaRG_v) || isnumeric(cadaRG_v)); % consumed by eval below
+  eval([InNames{cadaRG_i},' = cadaRG_v;']);
 end
 
 % atom: NAME | NAME.field | numeric literal
@@ -399,6 +404,7 @@ for cadaRG_k = 1:numel(S)
         cadaRG_src = eval(cadaRG_info.a);
         cadaRG_ref = zeros(size(cadaRG_src));
         cadaRG_ref(:) = 1:numel(cadaRG_src);
+        assert(isnumeric(cadaRG_ref)); % consumed by the eval'd index text
         cadaRG_map = eval(['cadaRG_ref(',cadaRG_info.subs,')']);
         cadaRG_info.map  = cadaRG_map(:);
         cadaRG_info.asz  = size(cadaRG_src);
@@ -408,6 +414,7 @@ for cadaRG_k = 1:numel(S)
         cadaRG_old = eval(strtok(S(cadaRG_k).lhs,'.'));
         cadaRG_ref = zeros(size(cadaRG_old));
         cadaRG_ref(:) = 1:numel(cadaRG_old);
+        assert(isnumeric(cadaRG_ref)); % consumed by the eval'd index text
         cadaRG_map = eval(['cadaRG_ref(',S(cadaRG_k).lhsSubs,')']);
         cadaRG_info.map   = cadaRG_map(:);
         cadaRG_info.srcsz = size(eval(cadaRG_info.src));
@@ -429,6 +436,7 @@ for cadaRG_k = 1:numel(S)
           cadaRG_r(:) = cadaRG_off + (1:numel(cadaRG_v));
           cadaRG_srcs{cadaRG_j} = struct('name',cadaRG_ops{cadaRG_j},...
             'off',cadaRG_off,'num',numel(cadaRG_v),'sz',size(cadaRG_v));
+          assert(isnumeric(cadaRG_r)); % consumed by the eval'd assignment
           eval(sprintf('cadaRG_c%d = cadaRG_r;',cadaRG_j));
           cadaRG_expr = regexprep(cadaRG_expr,...
             ['(?<![\w.])',regexptranslate('escape',cadaRG_ops{cadaRG_j}),...
@@ -543,10 +551,10 @@ vinit = false;
       src = 0;
       return
     end
-    for j = k-1:-1:1
-      if strcmp(bases{j},base)
-        if S(j).active
-          src = j;
+    for jn = k-1:-1:1 % own loop variable: the parent workspace is shared
+      if strcmp(bases{jn},base)
+        if S(jn).active
+          src = jn;
         else
           isconst = true;
         end
@@ -565,10 +573,10 @@ vinit = false;
       t = VodName; % inputs are never reassigned by generated code
       return
     end
-    for j = k-1:-1:1
-      if strcmp(bases{j},base)
-        if snap(j)
-          t = sprintf('cadaRGsv%d',j);
+    for jn = k-1:-1:1 % own loop variable: the parent workspace is shared
+      if strcmp(bases{jn},base)
+        if snap(jn)
+          t = sprintf('cadaRGsv%d',jn);
         else
           t = atom;
         end
