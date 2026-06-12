@@ -79,10 +79,11 @@ classdef IOutputModesTest < matlab.unittest.TestCase
                 'y = x(1)^2 + exp(x(3));', ...
                 'end'});
             gx = @() adigatorCreateDerivInput([3 1],'x');
+            % the 'Grd' name appendix selects the gradient convention
             adigatorGenJacFile('om_sca',{gx()}, ...
-                struct('overwrite',1,'echo',0));
+                struct('overwrite',1,'echo',0),'Grd');
             outN = adigatorGenJacFile('om_sca2',{gx()}, ...
-                struct('overwrite',1,'echo',0,'jac_output','nonzeros'));
+                struct('overwrite',1,'echo',0,'jac_output','nonzeros'),'Grd');
             rehash;
 
             xv = randn(3,1);
