@@ -222,10 +222,16 @@ end
 need = false(n,1); need(outStmt) = true;
 % the wanted set holds base names (dependencies are dot-stripped) plus the
 % full dotted output ('y.f'); matching on the FULL lhs keeps 'y.f' and
-% excludes 'y.dx' - the forward-derivative statements must NOT be sliced
-% in through the shared output base name
+% excludes 'y.dx'. The dotted-base fallback (for struct-field writers like
+% 'r.f' matched through their base) must NEVER admit derivative fields
+% ('r.dx' shares the base with 'r.f' but writes d<vod> data), or the
+% forward-derivative temp chain gets sliced back in through them.
+dxfield = ['.d',VodName];
 wanted = union({S(outStmt).lhs},S(outStmt).deps);
 for k = outStmt-1:-1:1
+  if endsWith(S(k).lhs,dxfield)
+    continue % derivative statement: never part of the value slice
+  end
   if any(strcmp(S(k).lhs,wanted)) || ...
       (~strcmp(S(k).lhs,strtok(S(k).lhs,'.')) && ...
       any(strcmp(strtok(S(k).lhs,'.'),wanted)))
@@ -235,6 +241,15 @@ for k = outStmt-1:-1:1
 end
 S = S(need);
 n = numel(S);
+for k = 1:n
+  % safety net: a leaked derivative reference would mean a silently wrong
+  % gradient, so refuse loudly instead
+  if ~isempty(regexp(S(k).text,['\.d',VodName,'\>'],'once'))
+    error('adigator:revgrad:parse',...
+      'internal: derivative statement leaked into the value slice: %s',...
+      S(k).text);
+  end
+end
 
 % ------------------ execute the tape; classify; resolve ---------------- %
 S = execAndClassify(S,FwdGator,UserFunInputs,InNames,vodLoc,VodName);
