@@ -27,7 +27,7 @@ indices, data dedup/range compression in the inline emitter.
 | R4 | **Reverse mode, prototype path** (`docs/ANALYSIS.md` §3.4): `adigatorGenRevGradFile`, a standalone reverse transformer over the generated forward dialect — slices the function-value tape, executes it once at generation time to resolve sizes and index maps, and emits a self-contained adjoint gradient file; scoped to gradients of scalar costs with reductions. Example `examples/gradients/logsumexp`, test `tests/integration/IRevGradTest.m`. | ANALYSIS §3 | done (PR #19) |
 | R5 | **Output-form optimizations** (re-scoped per ANALYSIS §2.3(5)): `jac_output='nonzeros'` wrapper mode (nonzero vector with the constant pattern exported once via `output.JacobianLocs`, no per-call dense projection) and `adigatorGenJtVFile` (`J'·v` in one forward+adjoint sweep on the R4 reverse engine, runtime `v`). Dead-code slicing re-scoped into R7 (issue #21). Test `tests/integration/IOutputModesTest.m`. | ANALYSIS §2 | done (PR #20) |
 | R6 | **Go/no-go on the deep extensions**: #6 Tier 2 (symbolic N) and #11 Level 3 (full N-D `cada`), decided on R1–R4 evidence. Expectation: fold + veneer + Tier 1 + reverse mode covers most practical demand; the shape-matrix suite is the regression net if Level 3 is attempted. | #6 T2, #11 L3 | decision gate |
-| R7 | **Generated-code slimming for embedded use** (issue #21): (a) output-level selection - wrappers return only requested derivative levels, and `_location`/`_size` output metadata is not emitted where the consumer provably never reads it (embed modes since PR #9, `jac_output='nonzeros'`), shrinking the pruned `.mat`/inline data; (b) backward slice of the final generated file against the requested outputs (R4 parser + block-level rolled-loop extension); (c) peephole no-op union-copy elimination (ANALYSIS §2.3(6)). Lower-order *values* stay where derivative rules consume them - only output assembly, unread metadata, and dead chains go. | issue #21, ANALYSIS §2 | planned |
+| R7 | **Generated-code slimming for embedded use** (issue #21), three increments (a)→(c): **(a) output-level selection + metadata gating** — a level vector selects which derivative levels the wrapper returns, and the printer does not emit `_location`/`_size` (or unrequested-level output assembly) where the mode provably never reads it. In embed `'l'`/`'i'` and `jac_output='nonzeros'` this is an *efficiency* lever (the slice in (b) removes the same statements anyway); for classic mode, which scatters through `_location` at runtime, it is a correctness boundary. Applied only to the final file of a Grd→Hes chain so intermediates stay re-differentiable (B6). **(b) Interprocedural backward field-slice** over the assembled single embedded file — a worklist fixpoint over `(function, demanded-output-field-set)` across the stored function list (`AdigatorGeneratedFiles`: `.name` wrapper → `.dername` → `.func`), seeded by the wrapper's declared returns; per function an intra-function slice (reusing the R4 parser; rolled `for…end` blocks handled conservatively as a unit) yields its live statements and the input fields it actually consumes, whose demand is pushed back to the producing function/struct. Field-granular and interprocedural, so it removes dead value chains *and* unread output fields (e.g. `_location`/`_size` in embed modes) and subsumes the per-variable `checkcode`/flatten idea. **Runs before `prune_adigator_mat`** so the now-unreferenced `Gator*Data.Index*` constants drop from the `.mat`/inline data. **(c) Peephole no-op union-copy elimination** (`cada1td1 = zeros(k,1); cada1td1(1:k) = src;`, ANALYSIS §2.3(6)). Lower-order *values* stay where derivative rules consume them. Every increment is gated by a generation-time numeric round-trip check (original vs. slimmed on staged inputs, the R4 harness). | issue #21, ANALYSIS §2 | planned |
 
 Rationale for the order: each step de-risks the next. R1 proves the use
 case decomposes with zero core risk and creates the shared fixture; R2 is
@@ -35,3 +35,18 @@ the smallest core touch and produces the parameter-side evidence for the
 Tier-2 decision; R3 delivers reconfiguration; R4 covers the
 reduction-shaped remainder; R6 spends the big effort only if the residual
 need survives R1–R4.
+
+R7 design note (issue #21): the embedded pipeline already appends the
+wrapper, the `_ADiGator*` function, and (inline mode) the data function
+into one file (`adigatorGenDerFile_embedded.m`, the
+`writelines(...,'WriteMode','append')` block), so the slice runs on the
+fully-assembled file with no cross-file boundary — the only
+live-by-contract outputs are the entry wrapper's declared returns
+(`Jac`/`Hes`/`Grd`/`Fun`). `checkcode` alone is per-function and cannot
+link a caller's `dydt.dy_location` read to the subfunction's field
+assignment, which is why R7b is the interprocedural field-slice over the
+stored function list rather than a single-file lint pass; the
+flatten/`checkcode` trick is at most an optional mop-up. The slice-before-
+prune ordering (vs. today's prune-first at the top of the per-derivative
+loop) is what turns deleted `_location` writes into `.mat`/inline-data
+savings.
