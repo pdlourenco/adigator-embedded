@@ -117,25 +117,12 @@ if ~iscell(UserFunInputs)
     'the function described by first input string']);
 end
 
-% Find derivative input
-derflag = 0;
-for I = 1:numel(UserFunInputs)
-  x = UserFunInputs{I};
-  if isa(x,'adigatorInput')
-    if ~isempty(x.deriv)
-      if derflag > 0
-        error('adigatorGenJacFile is only used for single derivative variable input')
-      end
-      derflag = I;
-    end
-    if any(isinf(x.func.size))
-      error('adigatorGenJacFile not written for vectorized functions')
-    end
-  end
-end
-if derflag == 0
-  error('derivative input of user function not found - possibly embedded within a cell/structure, use adigator function if this is the case');
-end
+% Find derivative input (searches top-level inputs and, recursively,
+% struct/cell fields, so the derivative variable may be a struct field -
+% issue #24, scope A). derpathStr/derpathSubs give its access path within
+% UserFunInputs{derflag}; both are empty when the input is itself the
+% derivative variable, in which case behaviour is identical to before.
+[derflag, derpathStr, derpathSubs, x] = adigatorFindDerivInput(UserFunInputs,'adigatorGenJacFile'); %#ok<ASGLU>
 
 % File checks
 if isempty(opts.path) % v1.5 - allow user to specify the path
@@ -217,13 +204,22 @@ fprintf(fid,'%% provided ''AS IS'' with NO WARRANTIES OF ANY KIND and no merchan
 fprintf(fid,'%% or fitness for any purpose or application.\n\n');
 
 fprintf(fid,functionstr);
-% Change the derivative input..
-x = UserFunInputs{derflag};
+% Change the derivative input.. (x is the located derivative object)
 vodname = x.deriv.vodname;
-xfunstr = ['gator_',xstr,'.f'];
-xderstr = ['gator_',xstr,'.d',vodname];
-fprintf(fid,[xfunstr,' = ',xstr,';\n']);
-fprintf(fid,[xderstr,' = ones(%1.0f,1);\n'],prod(x.func.size));
+if isempty(derpathStr)
+  % derivative variable is the input itself - unchanged behaviour
+  fprintf(fid,['gator_',xstr,'.f = ',xstr,';\n']);
+  fprintf(fid,['gator_',xstr,'.d',vodname,' = ones(%1.0f,1);\n'],prod(x.func.size));
+else
+  % derivative variable is carried inside a struct/cell input: copy the
+  % container through and overwrite only the derivative field with its
+  % {.f,.d<vod>} seed (issue #24, scope A)
+  seedvar = ['gator_',xstr,'_seed'];
+  fprintf(fid,['gator_',xstr,' = ',xstr,';\n']);
+  fprintf(fid,[seedvar,'.f = ',xstr,derpathStr,';\n']);
+  fprintf(fid,[seedvar,'.d',vodname,' = ones(%1.0f,1);\n'],prod(x.func.size));
+  fprintf(fid,['gator_',xstr,derpathStr,' = ',seedvar,';\n']);
+end
 
 InputStrs{derflag} = ['gator_',xstr,','];
 InputStr2 = cell2mat(InputStrs);
