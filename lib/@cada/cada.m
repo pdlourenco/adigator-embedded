@@ -406,6 +406,19 @@ classdef cada
       % CADA overloaded version of function NOT
       y = cadaunarylogical(x,'not',0);
     end
+    function y = isnan(x)
+      % CADA overloaded ISNAN - derivative-free elementwise predicate,
+      % evaluated on the function value at runtime (issue #28)
+      y = cadaunarylogical(x,'isnan',0);
+    end
+    function y = isinf(x)
+      % CADA overloaded ISINF - derivative-free elementwise predicate
+      y = cadaunarylogical(x,'isinf',0);
+    end
+    function y = isfinite(x)
+      % CADA overloaded ISFINITE - derivative-free elementwise predicate
+      y = cadaunarylogical(x,'isfinite',0);
+    end
   end
   
   % Overloaded binary math array operations
@@ -578,6 +591,66 @@ classdef cada
         z = sum(x.*y);
       else
         z = sum(x.*y,varargin{1});
+      end
+    end
+    function y = norm(x,p)
+      % CADA overloaded NORM (issue #28). Rewrites vector p-norms and the
+      % Frobenius norm to already-overloaded primitives (sum/abs/sqrt/
+      % power/max/min). The induced matrix norms - norm(A), norm(A,1),
+      % norm(A,2) (spectral, an SVD), norm(A,inf) - have no elementary
+      % closed form and are NOT supported; use norm(A,'fro') or reshape A
+      % to a vector.
+      global ADIGATOR
+      if nargin < 2
+        p = 2;
+      end
+      xsize = x.func.size;
+      isvec = any(xsize == 1) || any(isinf(xsize));
+      if ischar(p)
+        switch lower(p)
+          case 'fro'
+            % Frobenius norm: elementwise, valid for matrices too
+            if ADIGATOR.OPTIONS.COMPLEX
+              y = sqrt(sum(sum(abs(x).^2)));
+            else
+              y = sqrt(sum(sum(x.^2)));
+            end
+          case 'inf'
+            y = max(max(abs(x)));
+          otherwise
+            error('adigator:norm:badp',...
+              'norm(x,''%s'') is not supported; use 2, 1, inf, -inf or ''fro''.',p);
+        end
+        return
+      end
+      if ~isscalar(p)
+        error('adigator:norm:badp','norm p-argument must be a scalar or ''fro''.');
+      end
+      if isinf(p)
+        if p > 0
+          y = max(max(abs(x)));
+        else
+          y = min(min(abs(x)));
+        end
+        return
+      end
+      if ~isvec
+        error('adigator:norm:matrixNorm',...
+          ['norm of a matrix with p = %g is not supported (induced/spectral ',...
+           'norms need an SVD); use norm(X,''fro'') or reshape X to a vector.'],p);
+      end
+      switch p
+        case 2
+          % real uses x.^2 (avoids an abs kink); complex uses |x|^2
+          if ADIGATOR.OPTIONS.COMPLEX
+            y = sqrt(sum(sum(abs(x).^2)));
+          else
+            y = sqrt(sum(sum(x.^2)));
+          end
+        case 1
+          y = sum(sum(abs(x)));
+        otherwise
+          y = sum(sum(abs(x).^p)).^(1/p);
       end
     end
     z = cross(x,y,varargin)

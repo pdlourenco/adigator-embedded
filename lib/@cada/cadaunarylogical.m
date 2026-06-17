@@ -62,6 +62,12 @@ switch callerstr
       ytemp = all(xtemp,dim);
       y.func.zerolocs = find(~ytemp(:));
     end
+  case {'isnan','isinf','isfinite'}
+    % elementwise value predicates (issue #28): derivative-free, the
+    % predicate is evaluated on the function value at runtime
+    if ~isempty(x.func.value)
+      y.func.value = feval(callerstr,x.func.value);
+    end
   otherwise
     error(['case not coded: ',callerstr])
 end
