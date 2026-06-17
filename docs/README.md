@@ -33,11 +33,59 @@ Please cite the most recent ACM-TOMS CALGO article. BibTex is here:
 
 # Release Notes:
 
-V 1.5 - embedded
+V 1.5 - embedded  (GMV / Pedro Lourenço, 2025-2026; unreleased)
 
-- Added the option to set the path for the generated files
+This fork adds embeddable (C-code-generation-ready) derivative file
+generation plus a range of correctness, performance and capability
+improvements over upstream 1.5. See docs/ROADMAP.md and docs/ANALYSIS.md
+for the full development log; highlights:
 
-- Added the option to generated the derivatives in embedded MATLAB functions, suitable for C code generation.
+Embeddable generation
+- `adigatorGenDerFile_embedded` produces self-contained derivative files for
+  Jacobians, gradients and Hessians in three modes: 'c' (classic), 'l'
+  (coderload - static data loaded via coder.load) and 'i' (inline - static
+  data emitted as a function: no .mat, no globals, no runtime load). The
+  three modes are numerically identical and MATLAB Coder compatible. Static
+  index data is pruned, deduplicated and range-compressed, and scatter
+  indices are precomputed at generation time.
+- Option to set the output path for all generated files.
+
+Output forms (issue #21 / roadmap R5)
+- `jac_output='nonzeros'`: the wrapper returns the nonzero vector with the
+  constant sparsity pattern exported once (`output.JacobianLocs`), with no
+  per-call dense projection.
+- `adigatorGenJtVFile`: computes J'*v in a single forward+adjoint sweep.
+
+Reverse mode (roadmap R4)
+- `adigatorGenRevGradFile`: a standalone reverse-mode gradient generator for
+  scalar costs with reductions.
+
+Runtime-free growth dimensions
+- `loopbound` option (roadmap R3, issue #6): generate at (Nmax, Kmax) with
+  runtime trip counts, so one file serves any size up to the bound.
+- N-D auxiliary inputs (roadmap R2, issue #11): `adigatorCreateAuxInput([m n
+  ...])` declares N-D parameters, folded internally to 2D with affine
+  trailing-subscript slice references (e.g. `B(:,:,a,k)`).
+
+Operators and inputs
+- Struct inputs (issue #24): the variable of differentiation and auxiliary
+  inputs may be carried as fields of a (scalar) struct, nested struct/cell
+  fields supported; the generated wrappers accept the same struct shape.
+- `norm` (issue #28): vector p-norms (2, 1, Inf, -Inf, general p) and the
+  Frobenius norm are differentiable; the induced/spectral matrix norms
+  (which would require an SVD) raise a clear error instead of
+  mis-differentiating.
+- `isnan`/`isinf`/`isfinite` (issue #28): derivative-free predicates,
+  evaluated on the value at run time, usable in conditionals and masks.
+- Numerous correctness fixes to the derivative-output conventions, the
+  Jacobian/Hessian dimension handling, the unary derivative rules, option
+  parsing and file-handle hygiene (catalogued as B1-B14 in
+  docs/ANALYSIS.md).
+
+Testing / CI
+- GitHub Actions pipeline (unit + integration PR gate; extended example and
+  codegen suites) backed by a `tests/` suite with finite-difference and
+  cross-mode equivalence checks.
 
 V 1.5 6/02/19
 
