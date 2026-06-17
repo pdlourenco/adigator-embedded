@@ -65,25 +65,61 @@ for k = 1:numel(ps)
   end
 end
 
-% --- the induced/spectral matrix norm must error cleanly, not mis-diff --- %
-fid = fopen(fullfile('tmp','test_norm_mat.m'),'w+');
-fprintf(fid,'function y = test_norm_mat(X)\ny = norm(X);\nend\n'); fclose(fid);
-rehash;
-try
-  aX = adigatorCreateDerivInput([3 3],'X');
-  adigator('test_norm_mat',{aX},'test_norm_mat_dx',adigatorOptions('overwrite',1));
-  violations = violations + 1;
-  fprintf('matrix norm(A) did NOT error as expected\n');
-catch ME
-  if ~(strcmp(ME.identifier,'adigator:norm:matrixNorm') || ...
-       contains(lower(ME.message),'matrix'))
+% --- the induced/spectral matrix norms must error cleanly, not mis-diff -- %
+% Covers p = 2 (default), 1, Inf and -Inf: every induced matrix norm must
+% raise adigator:norm:matrixNorm. (Inf/-Inf previously slipped past the
+% matrix guard and returned the max element.)
+matp = {'', '2', '1', 'Inf', '-Inf'};
+for k = 1:numel(matp)
+  fn = 'test_norm_mat';
+  fid = fopen(fullfile('tmp',[fn,'.m']),'w+');
+  if isempty(matp{k})
+    fprintf(fid,'function y = %s(X)\ny = norm(X);\nend\n',fn);
+    plabel = '(default)';
+  else
+    fprintf(fid,'function y = %s(X)\ny = norm(X,%s);\nend\n',fn,matp{k});
+    plabel = matp{k};
+  end
+  fclose(fid); rehash;
+  try
+    aX = adigatorCreateDerivInput([3 3],'X');
+    adigator(fn,{aX},[fn,'_dx'],adigatorOptions('overwrite',1));
     violations = violations + 1;
-    fprintf('matrix norm errored with an unexpected identifier: %s\n',ME.identifier);
+    fprintf('matrix norm(A,%s) did NOT error as expected\n',plabel);
+  catch ME
+    if ~(strcmp(ME.identifier,'adigator:norm:matrixNorm') || ...
+         contains(lower(ME.message),'matrix'))
+      violations = violations + 1;
+      fprintf('matrix norm(A,%s) errored with unexpected id: %s\n',plabel,ME.identifier);
+    end
+  end
+  if exist(fullfile('tmp',[fn,'_dx.m']),'file')
+    delete(fullfile('tmp',[fn,'_dx.*']));
   end
 end
-if exist(fullfile('tmp','test_norm_mat_dx.m'),'file')
-  delete(fullfile('tmp','test_norm_mat_dx.*'));
+
+% --- row-vector orientation: norm of a 1-by-n vector must still work ----- %
+fid = fopen(fullfile('tmp','test_norm_row.m'),'w+');
+fprintf(fid,'function y = test_norm_row(x)\ny = norm(x,2);\nend\n'); fclose(fid);
+rehash;
+arow  = adigatorCreateDerivInput([1 n],'x');
+adigator('test_norm_row',{arow},'test_norm_row_dx',adigatorOptions('overwrite',1));
+movefile('test_norm_row_dx.*','tmp'); rehash;
+xv = sign(randn(1,n)).*(abs(randn(1,n))+0.5);
+xx = struct('f',xv,'dx',ones(n,1));
+yy = feval('test_norm_row_dx',xx);
+g_ad = zeros(n,1);
+if isfield(yy,'dx_location') && ~isempty(yy.dx_location)
+  g_ad(yy.dx_location(:,1)) = yy.dx;
+else
+  g_ad(:) = yy.dx;
 end
+g_fd = (xv(:))/norm(xv);    % d/dx ||x||_2 = x/||x||
+if norm(g_ad - g_fd)/(1+norm(g_fd)) > 1e-4
+  violations = violations + 1;
+  fprintf('row-vector norm(x,2): gradient mismatch (err %.3g)\n',norm(g_ad-g_fd));
+end
+
 
 % --- isnan/isinf/isfinite: derivative-free predicate, generation smoke --- %
 fid = fopen(fullfile('tmp','test_pred.m'),'w+');

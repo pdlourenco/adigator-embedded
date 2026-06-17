@@ -597,7 +597,7 @@ classdef cada
       % CADA overloaded NORM (issue #28). Rewrites vector p-norms and the
       % Frobenius norm to already-overloaded primitives (sum/abs/sqrt/
       % power/max/min). The induced matrix norms - norm(A), norm(A,1),
-      % norm(A,2) (spectral, an SVD), norm(A,inf) - have no elementary
+      % norm(A,2) (spectral, an SVD), norm(A,Inf) - have no elementary
       % closed form and are NOT supported; use norm(A,'fro') or reshape A
       % to a vector.
       global ADIGATOR
@@ -606,22 +606,29 @@ classdef cada
       end
       xsize = x.func.size;
       isvec = any(xsize == 1) || any(isinf(xsize));
-      if ischar(p)
-        switch lower(p)
-          case 'fro'
-            % Frobenius norm: elementwise, valid for matrices too
-            if ADIGATOR.OPTIONS.COMPLEX
-              y = sqrt(sum(sum(abs(x).^2)));
-            else
-              y = sqrt(sum(sum(x.^2)));
-            end
-          case 'inf'
-            y = max(max(abs(x)));
-          otherwise
-            error('adigator:norm:badp',...
-              'norm(x,''%s'') is not supported; use 2, 1, inf, -inf or ''fro''.',p);
+      % Frobenius norm is elementwise and valid for any shape
+      if ischar(p) && strcmpi(p,'fro')
+        if ADIGATOR.OPTIONS.COMPLEX
+          y = sqrt(sum(sum(abs(x).^2)));
+        else
+          y = sqrt(sum(sum(x.^2)));
         end
         return
+      end
+      % Everything else is a vector norm. A matrix has no elementary
+      % induced/spectral norm, so error rather than silently return the
+      % wrong value (this also covers Inf/-Inf, which must not fall through
+      % to the elementwise max/min below).
+      if ~isvec
+        if ischar(p); pstr = ['''',p,'''']; else; pstr = num2str(p); end
+        error('adigator:norm:matrixNorm',...
+          ['norm of a matrix with p = %s is not supported (induced/spectral ',...
+           'norms need an SVD); use norm(X,''fro'') or reshape X to a vector.'],pstr);
+      end
+      if ischar(p)
+        % only 'fro' (handled above) is a valid string norm, as in base MATLAB
+        error('adigator:norm:badp',...
+          'norm(x,''%s'') is not supported; use numeric 2, 1, Inf, -Inf or ''fro''.',p);
       end
       if ~isscalar(p)
         error('adigator:norm:badp','norm p-argument must be a scalar or ''fro''.');
@@ -633,11 +640,6 @@ classdef cada
           y = min(min(abs(x)));
         end
         return
-      end
-      if ~isvec
-        error('adigator:norm:matrixNorm',...
-          ['norm of a matrix with p = %g is not supported (induced/spectral ',...
-           'norms need an SVD); use norm(X,''fro'') or reshape X to a vector.'],p);
       end
       switch p
         case 2
