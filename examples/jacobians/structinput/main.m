@@ -77,8 +77,19 @@ gine.c = adigatorCreateAuxInput([n 1]);
 adigatorGenDerFile_embedded('hessian','structobj',{gine},o);
 % drop the classic-mode structobj_Hes (case 1) so the inline one is picked
 clear structobj_Hes structobj_ADiGatorHes structobj_Grd structobj_ADiGatorGrd
-[Fe,Ge,He] = runHes('structobj_Hes', o.path, in);
-checkder('inline embed (in.x)', Fe,Ge,He, Fref,Gref,Href);
+% Evaluating inline ('i') output uses coder.const, which needs the coder.*
+% namespace (MATLAB Coder) to run in plain MATLAB; generation always runs,
+% the evaluation is skipped (not failed) when Coder is unavailable.
+try
+  [Fe,Ge,He] = runHes('structobj_Hes', o.path, in);
+  checkder('inline embed (in.x)', Fe,Ge,He, Fref,Gref,Href);
+catch e
+  if strcmp(e.identifier,'MATLAB:UndefinedFunction') && contains(e.message,'coder.')
+    fprintf('%-28s skipped (MATLAB Coder coder.* namespace unavailable)\n', 'inline embed (in.x)');
+  else
+    rethrow(e);
+  end
+end
 
 fprintf('structinput example passed.\n');
 
