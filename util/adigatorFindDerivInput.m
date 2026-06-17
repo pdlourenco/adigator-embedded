@@ -69,7 +69,7 @@ if isa(val,'adigatorInput')
   L(1).pathStr  = pathStr;
   L(1).pathSubs = pathSubs;
   L(1).obj      = val;
-elseif isstruct(val) && numel(val) == 1
+elseif isstruct(val) && isscalar(val)
   % only scalar structs are descended into; struct arrays are left alone
   % (as before, they cannot carry the single derivative variable here)
   fn = fieldnames(val);

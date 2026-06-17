@@ -122,7 +122,7 @@ end
 % issue #24, scope A). derpathStr/derpathSubs give its access path within
 % UserFunInputs{derflag}; both are empty when the input is itself the
 % derivative variable, in which case behaviour is identical to before.
-[derflag, derpathStr, derpathSubs, x] = adigatorFindDerivInput(UserFunInputs,'adigatorGenJacFile'); %#ok<ASGLU>
+[derflag, derpathStr, ~, x] = adigatorFindDerivInput(UserFunInputs,'adigatorGenJacFile');
 
 % File checks
 if isempty(opts.path) % v1.5 - allow user to specify the path
