@@ -48,10 +48,14 @@ Constraints that shape the plan (verified against the codebase):
 - Core transformation tests need base MATLAB only. The optimization
   examples need the Optimization Toolbox; code-generation validation needs
   MATLAB Coder. These are isolated in separate, individually skippable jobs.
-- Known bugs documented in `docs/ANALYSIS.md` (B1-B14) must be *pinned* by
-  tests from day one. Tests for unfixed bugs are tagged `KnownIssue` and
-  reported as expected failures, so the pipeline is green at introduction
-  and each bug fix flips its test to a hard assertion.
+- Known bugs documented in `docs/ANALYSIS.md` (B1-B15) must be *pinned* by
+  tests. The `KnownIssue` tag + `assumeFail` mechanism (a test that detects the
+  buggy behaviour and reports as filtered until the fix lands, then runs its
+  trailing assertions as a regression guard) is the policy for *future* bugs.
+  As of `docs/ANALYSIS.md` §1.5, **all of B1–B15 are fixed / mitigated / won't-
+  fix**, so the only remaining `KnownIssue`-tagged tests are the self-healing
+  B7–B10 cases in `IShapeMatrixTest`, which already run as guards (the tag
+  removal is a verified-cleanup follow-up, not an open bug).
 
 ---
 
@@ -99,11 +103,11 @@ push and pull request.
 | TS-U-01 | `URulesUnaryTest` — port of `unit_tests/test_unarymath_rules.m` to `matlab.unittest`, FD sweep per rule with singularity exclusion. | REQ-C-01 |
 | TS-U-02 | `URulesBinaryTest` — same harness over binary ops with operand-shape matrix {scalar, row, col, matrix} × {scalar, row, col, matrix}. | REQ-C-02 |
 | TS-U-03 | `UStructuralOpsTest` — small fixed functions exercising each structural op; assert `y.dX`, `y.dX_location`, `y.dX_size` against dense FD Jacobians. | REQ-C-03 |
-| TS-U-04 | `UPruneMatTest` — synthetic Gator structs (Index*, integer-valued Data*, sparse, empty fields) → prune → assert retained fields, classes (`Data*` stays double), values. Tagged `KnownIssue` until B1 fixed. | REQ-C-05 |
+| TS-U-04 | `UPruneMatTest` — synthetic Gator structs (Index*, integer-valued Data*, sparse, empty fields) → prune → assert retained fields, classes (`Data*` stays double), values. B1 fixed → hard-assertion guard (`dataFieldsStayDouble`); no longer tagged. | REQ-C-05 |
 | TS-U-05 | `UEmbedMfileTest` — property-style round-trip of randomized structs (doubles, logicals, chars, cells, n-d arrays, empties, complex) through `structure_to_embed_mfile`; `isequaln` + class checks; `checkcode` on emitted file. | REQ-C-06 |
-| TS-U-06 | `UPatchTest` — golden-file tests: checked-in fixture inputs (representative generated files, incl. one with two loader guards and nested subfunction names) → patch → compare to checked-in expected outputs for modes 'l' and 'i'. Tagged `KnownIssue` for the multi-match cases until B3/B4 fixed. | REQ-C-07 |
-| TS-U-07 | `UOptionsTest` — option spelling/validation matrix. Tagged `KnownIssue` until B11/B12 fixed. | REQ-C-08 |
-| TS-U-08 | `UHygieneTest` — wrap generator calls (incl. injected failures via invalid user function) and assert path/fid/global invariants. Tagged `KnownIssue` until B13 fixed. | REQ-C-09, REQ-T-07 |
+| TS-U-06 | `UPatchTest` — golden-file tests: checked-in fixture inputs (representative generated files, incl. one with two loader guards and nested subfunction names) → patch → compare to checked-in expected outputs for modes 'l' and 'i'. B3/B4 fixed → hard-assertion guard; no longer tagged. | REQ-C-07 |
+| TS-U-07 | `UOptionsTest` — option spelling/validation matrix. B11/B12 fixed → hard-assertion guard; no longer tagged. | REQ-C-08 |
+| TS-U-08 | `UHygieneTest` — wrap generator calls (incl. injected failures via invalid user function) and assert path/fid/global invariants. B13 fixed; this hygiene test is not yet implemented as a separate file (planned). | REQ-C-09, REQ-T-07 |
 | TS-U-09 | `ULintTest` — `checkcode` over `lib/`, `util/`, `embedding/` with error-level gating and warning ratchet file. | REQ-C-10 |
 
 ### 2.2 Integration tests — `tests/integration` (TS-I)
@@ -113,7 +117,7 @@ and compare. Run on every pull request (slower, still base MATLAB).
 
 | ID | Test | Verifies |
 |----|------|----------|
-| TS-I-01 | `IShapeMatrixTest` — the central dimension test. Parameterized over input shape {1×1, n×1, 1×n, n×m} × output shape {1×1, m×1, 1×m, r×c} × density {dense, structurally sparse} × derivative {jacobian, gradient, hessian} × size regime {small, ≥250-element sparse-branch trigger}. Asserts (a) output shape per the conventions table, (b) every element against dense FD, (c) `JacobianStructure`/`HessianStructure` consistency. Cases hitting B7/B8/B9/B10 tagged `KnownIssue` with the bug ID. | REQ-C-04, REQ-T-01, REQ-T-02, REQ-T-03 |
+| TS-I-01 | `IShapeMatrixTest` — the central dimension test. Parameterized over input shape {1×1, n×1, 1×n, n×m} × output shape {1×1, m×1, 1×m, r×c} × density {dense, structurally sparse} × derivative {jacobian, gradient, hessian} × size regime {small, ≥250-element sparse-branch trigger}. Asserts (a) output shape per the conventions table, (b) every element against dense FD, (c) `JacobianStructure`/`HessianStructure` consistency. The B7/B8/B9/B10 cases are `KnownIssue`-tagged and self-healing (detect the buggy outcome → `assumeFail`; otherwise run the trailing assertions as guards); B7–B10 are now fixed (`ANALYSIS.md` §1.5), so they run as guards — the tag is retained pending a verified-cleanup pass. | REQ-C-04, REQ-T-01, REQ-T-02, REQ-T-03 |
 | TS-I-02 | `IEmbedModesTest` — for each fixture function (incl. one with an integer-valued constant matrix, one with subfunctions, one with a rolled loop): generate with `embed_mode` 'c', 'l', 'i'; assert numeric equality across modes, absence of `global`/`load(` in 'l'/'i' text, absence of `.mat` for 'i'. | REQ-T-04, REQ-C-05/06/07 end-to-end |
 | TS-I-03 | `IReproTest` — regenerate twice, compare modulo timestamp lines; `overwrite=0` refusal; `opts.path` placement and calling-dir cleanliness. | REQ-T-06 |
 | TS-I-04 | `ISecondDerivTest` — gradient+Hessian through `adigatorGenHesFile` for the `logsumexp` and `gapfun` fixtures, checked against analytic Hessians. | REQ-T-01, REQ-C-04 |
@@ -152,8 +156,10 @@ merges; license-gated jobs skip cleanly when products are unavailable.
 | REQ-C-09 | TS-U-08 |
 | REQ-C-10 | TS-U-09 |
 
-Known-issue mapping (test ↔ `docs/ANALYSIS.md`): B1→TS-U-04, B2→TS-U-05,
-B3/B4→TS-U-06, B7/B8/B9/B10→TS-I-01, B11/B12→TS-U-07, B13→TS-U-08.
+Bug-to-test mapping (test ↔ `docs/ANALYSIS.md`): B1→TS-U-04, B2→TS-U-05,
+B3/B4→TS-U-06, B7/B8/B9/B10→TS-I-01, B11/B12→TS-U-07, B13→TS-U-08. All of these
+are now fixed (`ANALYSIS.md` §1.5); the tests are the regression guards rather
+than known-issue tripwires (TS-I-01's B7–B10 cases self-heal — see above).
 
 ### 2.4a Reuse of existing validation assets
 
@@ -271,10 +277,15 @@ Jobs are split here only along axes that genuinely need separate installs:
   via `opts.path` so the repo tree stays clean.
 - **Known-issue policy:** tests for documented unfixed bugs carry the tag
   `KnownIssue` and call `assumeFail("Known issue Bn, see docs/ANALYSIS.md")`
-  so they appear as *filtered* (visible, counted, non-blocking). A bug fix
-  must delete the `assumeFail` in the same PR — the test then becomes the
-  regression guard. CI fails if a `KnownIssue` test unexpectedly *passes*
-  (stale tag detector in `ci_lint`), keeping the list honest.
+  so they appear as *filtered* (visible, counted, non-blocking). When the fix
+  lands the test becomes the regression guard — either by deleting the
+  `assumeFail` in the fix PR, or via the self-healing pattern (the `assumeFail`
+  fires only on the buggy outcome, so it stops firing once fixed and the
+  trailing assertions run; see `IShapeMatrixTest`). A stale-tag detector that
+  fails CI when a `KnownIssue` test unexpectedly *passes* is **planned, not yet
+  implemented** in `ci_lint`; until it lands, dropping the tag after a fix is a
+  manual cleanup step (the self-healing tests are the current example awaiting
+  that pass).
 - **Gating:** `lint` + `unit` + `integration` are required checks for PRs.
   Nightly jobs (`examples`, `codegen`, release matrix) are informational
   for the first month, then promoted to required-on-master once stable.
@@ -297,6 +308,14 @@ Jobs are split here only along axes that genuinely need separate installs:
 | 2 | Bug-fix PRs flip their `KnownIssue` tests to hard assertions (B1, B7 first — highest severity). TS-I-02/03, TS-U-02/03/06 golden files. | No remaining `KnownIssue` tags for fixed bugs; integration required check enabled. |
 | 3 | `nightly.yml`: examples, codegen, release matrix. | One week of green nightlies; promote to required-on-master. |
 | 4 | Coverage ratchet (fail if coverage of `embedding/` + `util/` drops), warning-count ratchet in lint. | Ratchet files committed and enforced. |
+
+**Status:** Phases 1–2 and 4 are substantially landed — the documented bugs
+B1–B15 are fixed/mitigated (`docs/ANALYSIS.md` §1.5) and their tests are
+regression guards, and the lint/coverage ratchets are implemented
+(`tests/ci_lint.m`, `tests/ci_coverage.m`). Phase 2's exit criterion ("no
+remaining `KnownIssue` tags for fixed bugs") is met except for the self-healing
+B7–B10 cases in `IShapeMatrixTest`, whose tag removal is a verified-cleanup
+follow-up.
 
 ### 3.5 Out of scope (explicitly)
 
