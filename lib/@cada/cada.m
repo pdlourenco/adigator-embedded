@@ -627,7 +627,16 @@ classdef cada
         p = 2;
       end
       xsize = x.func.size;
-      isvec = any(xsize == 1) || any(isinf(xsize));
+      % Classify the operand. A "vector" (for which the p-norm rewrites
+      % below are valid) is anything with a singleton or zero/empty
+      % dimension (size <= 1) OR an unknown/variable-length dimension
+      % (ADiGator marks those Inf). The zero case matters: ADiGator assigns
+      % size [0 0] both to a genuinely empty array and, as a constructor
+      % default, to a variable whose size it could not pin down - in
+      % neither reading is the induced/spectral MATRIX norm intended, so
+      % route empties through the vector formulas (norm of an empty is 0)
+      % rather than raising adigator:norm:matrixNorm. (issue #28)
+      isvec = any(xsize <= 1) || any(isinf(xsize));
       % Frobenius norm is elementwise and valid for any shape
       if ischar(p) && strcmpi(p,'fro')
         if ADIGATOR.OPTIONS.COMPLEX
