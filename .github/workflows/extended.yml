@@ -1,0 +1,83 @@
+# CI plan Phase 3 — extended suites (docs/CI_PLAN.md §3.1).
+#
+# Runs on every push to 'embedded' (i.e., every merge) and on manual
+# dispatch. A cron schedule was considered and dropped: its only unique
+# value over push triggers is drift detection on an idle repository (new
+# 'latest' MATLAB releases, runner-image changes, action deprecations),
+# and GitHub fires cron only from the default branch anyway. If idle-repo
+# drift detection becomes wanted, re-add a `schedule:` block once this
+# file lives on the default branch.
+name: Extended
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [embedded]
+
+permissions:
+  contents: read
+
+jobs:
+  # TS-S-03: full unit+integration suites on the supported-release floor
+  # and the latest release. Separate jobs: releases cannot share an install.
+  release-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        release: [R2022a, latest]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: matlab-actions/setup-matlab@v2
+        with:
+          release: ${{ matrix.release }}
+          cache: true
+      - name: Unit tests
+        uses: matlab-actions/run-tests@v2
+        with:
+          select-by-folder: tests/unit
+          test-results-junit: results/unit-${{ matrix.release }}.xml
+      - name: Integration tests
+        if: success()
+        uses: matlab-actions/run-tests@v2
+        with:
+          select-by-folder: tests/integration
+          test-results-junit: results/integration-${{ matrix.release }}.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: extended-results-${{ matrix.release }}
+          path: results
+          if-no-files-found: ignore
+
+  # TS-S-01 (examples) + TS-S-02 (codegen) + the Coder-gated numeric checks
+  # of TS-I-02. One job, one install, with the licensed products; the tests
+  # themselves skip via assumption if a product is missing from the license.
+  full-products:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: matlab-actions/setup-matlab@v2
+        with:
+          release: latest
+          cache: true
+          products: >-
+            Optimization_Toolbox
+            MATLAB_Coder
+      - name: Integration tests (Coder-enabled, runs TS-I-02 numeric l/i checks)
+        uses: matlab-actions/run-tests@v2
+        with:
+          select-by-folder: tests/integration
+          test-results-junit: results/integration-products.xml
+      - name: System tests (examples + codegen)
+        if: success()
+        uses: matlab-actions/run-tests@v2
+        with:
+          select-by-folder: tests/system
+          test-results-junit: results/system.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: extended-results-products
+          path: results
+          if-no-files-found: ignore

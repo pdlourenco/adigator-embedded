@@ -80,8 +80,25 @@ function output = adigatorGenJacFile(UserFunName,UserFunInputs,varargin)
 %                                   functions and files (.mat and .m)
 %                                   Modify output gradients to be in column
 %                                   form, i.e. f = df/dx'*x+x'*d2f/dx2*x;
-%                                   when computing gradients. Maintaining 
+%                                   when computing gradients. Maintaining
 %                                   numerator form when computing Hessians and Jacobians
+%   2026-06                         Read user option fields with the name
+%                                   as given, lower-casing only the
+%                                   destination (B12), and normalize
+%                                   EMBED_MODE aliases (B11) (PR #8).
+%                                   JacobianStructure decomposes unrolled
+%                                   nzlocs into the displayed shape when
+%                                   the scalar-of-matrix/matrix-of-scalar
+%                                   remap fires (B10, PR #5).
+%                                   In embed modes, precompute the scatter
+%                                   indices at generation time and emit
+%                                   them as literal vectors (ANALYSIS.md
+%                                   2.1, PR #9).
+%                                   Add jac_output='nonzeros': the wrapper
+%                                   returns the nonzero vector with the
+%                                   constant pattern exported once via
+%                                   output.JacobianLocs - no per-call
+%                                   dense projection (roadmap R5).
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ OPTIONS SETUP ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 opts = adigatorOptions(); % default options
@@ -92,9 +109,11 @@ else
     % parse options
     optfields = fieldnames(varargin{1});
     for Fcount = 1:length(optfields)
-        opts.(lower(optfields{Fcount})) = varargin{1}.(lower(optfields{Fcount}));
+        % v1.5 (B12 fix): lower-case only the destination field; the user's
+        % struct must be read with the field name they actually used
+        opts.(lower(optfields{Fcount})) = varargin{1}.(optfields{Fcount});
     end
-    if ~isfield(varargin{1},'overwrite')
+    if ~any(strcmpi(optfields,'overwrite'))
         opts.overwrite = 1;
     end
     % parse names
@@ -102,6 +121,7 @@ else
         NameAppendix = varargin{2};
     end
 end
+opts.embed_mode = adigatorNormalizeEmbedMode(opts.embed_mode); % v1.5 (B11 fix)
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ INPUTS PARSING ~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 if ~ischar(UserFunName)
@@ -271,11 +291,14 @@ xsize = x.func.size;
 ysize = adiout.func.size;
 dydxsize = [prod(ysize), prod(xsize)];
 dydxnumel  = dydxsize(1)*dydxsize(2);
+remapcase = 0; % v1.5 (B10 fix): remember the shape remap for JacobianStructure
 if dydxsize(1) == 1 && all(xsize>1) % scalar function of matrix variable
+  remapcase = 1;
   dydxsize = xsize;
   ysize = [xsize(1) 1];
   xsize = [xsize(2) 1];
 elseif dydxsize(2) == 1 && all(ysize>1) % matrix function of scalar variable
+  remapcase = 2;
   dydxsize = ysize;
   xsize = [ysize(2) 1];
   ysize = [ysize(1) 1];
@@ -284,8 +307,35 @@ dydxnnz  = size(adiout.deriv.nzlocs,1);
 % If dydx has => 250 elements and has <= 75% nonzeros, project into sparse
 % matrix, otherwise project into full matrix.
 dy = [ystr,'.d',vodname];
+% v1.5 (ANALYSIS.md §2.1): in embed modes, precompute the scatter indices
+% at generation time and emit them as a literal vector. This removes the
+% per-call _location index arithmetic from the wrapper, and the indices
+% become compile-time constants in the generated C code. nzlocs columns are
+% linear indices into the unrolled [prod(ysize) x prod(xsize)] Jacobian, so
+% the displayed-shape linear index is direct (remap cases) or the standard
+% column-major combination.
+embedscatter = opts.embed_mode ~= 'c';
+if embedscatter
+  if remapcase == 1      % scalar function of matrix variable: index is x
+    linidx = adiout.deriv.nzlocs(:,2);
+  elseif remapcase == 2  % matrix function of scalar variable: index is y
+    linidx = adiout.deriv.nzlocs(:,1);
+  else
+    linidx = (adiout.deriv.nzlocs(:,2)-1)*dydxsize(1) + adiout.deriv.nzlocs(:,1);
+  end
+  scatteridx = mat2str(linidx(:).');
+else
+  scatteridx = [dy,'_location']; % single-column cases only (see below)
+end
 %v1.5:	process this to output Jacobians and Gradients correctly, as shown above
-if dydxnnz == dydxnumel % all elements are nonzero
+if strcmp(opts.jac_output,'nonzeros')
+  % roadmap R5 (ANALYSIS.md 2.3): return the nonzero vector in nzlocs
+  % order; the constant sparsity pattern is exported once through
+  % output.JacobianLocs/JacobianStructure. No per-call dense allocation
+  % or scatter - embedded first-order solvers assemble (or never form)
+  % the Jacobian themselves.
+  fprintf(fid,['Jac = ',dy,'(:);\n']);
+elseif dydxnnz == dydxnumel % all elements are nonzero
     if dydxsize(1) == 1 % the function is a scalar, use the Gradient convention if user selected
         if strcmp(NameAppendix,'Jac') % Use Jacobian convention
             fprintf(fid,['Jac = reshape(',dy,',[%1.0f %1.0f]);\n'],[dydxsize(1) dydxsize(2)]);
@@ -303,11 +353,14 @@ elseif dydxsize(1) == 1 % function is scalar -> use Gradient convention if user 
     else
         fprintf(fid,'Jac = zeros(%1.0f,1);',dydxsize(2));
     end
-    fprintf(fid,['Jac(',dy,'_location) = ',dy,';\n']);
+    fprintf(fid,['Jac(',scatteridx,') = ',dy,';\n']);
 elseif dydxsize(2) == 1 % variable is scalar -> use Jacobian convention
   fprintf(fid,'Jac = zeros(%1.0f,1);',dydxsize(1));
-  fprintf(fid,['Jac(',dy,'_location) = ',dy,';\n']);
-else % Jacobian is a matrix -> Jacobian convention
+  fprintf(fid,['Jac(',scatteridx,') = ',dy,';\n']);
+elseif embedscatter % matrix Jacobian, embed modes: literal linear scatter
+  fprintf(fid,'Jac = zeros(%1.0f,%1.0f);\n',dydxsize);
+  fprintf(fid,['Jac(',scatteridx,') = ',dy,';\n']);
+else % Jacobian is a matrix -> Jacobian convention (classic runtime indexing)
   dyloc = [dy,'_location'];
   if ~any(ysize == 1)
     % Output is matrix
@@ -354,7 +407,26 @@ output.GenFiles(1).main = ADiGator_GeneratedFiles.Jac;
 output.GenFiles(1).name = JacFileName;
 output.GenFiles(1).func = ADi_DerivFuns;
 
-output.JacobianStructure = sparse(adiout.deriv.nzlocs(:,1),...
-  adiout.deriv.nzlocs(:,2),ones(dydxnnz,1),dydxsize(1),dydxsize(2));
+% v1.5 (B10 fix): nzlocs index the unrolled [prod(ysize) x prod(xsize)]
+% Jacobian. When the displayed shape was remapped above (scalar function of
+% matrix variable / matrix function of scalar variable), decompose the
+% unrolled linear indices into subscripts of the displayed shape; the old
+% code passed the unrolled indices to sparse() with the remapped size,
+% which errored or produced a wrong pattern.
+if remapcase == 1 % scalar function of matrix variable: column index is x
+  [strrows,strcols] = ind2sub(dydxsize, adiout.deriv.nzlocs(:,2));
+elseif remapcase == 2 % matrix function of scalar variable: row index is y
+  [strrows,strcols] = ind2sub(dydxsize, adiout.deriv.nzlocs(:,1));
+else
+  strrows = adiout.deriv.nzlocs(:,1);
+  strcols = adiout.deriv.nzlocs(:,2);
+end
+output.JacobianStructure = sparse(strrows,strcols,...
+  ones(dydxnnz,1),dydxsize(1),dydxsize(2));
+% roadmap R5: row/column pattern in VALUE order (matching the nonzero
+% vector returned by jac_output='nonzeros' and the y.d<vod> ordering);
+% note sparse() above reorders, so consumers scattering values themselves
+% should use JacobianLocs
+output.JacobianLocs = [strrows(:) strcols(:)];
 
 fprintf(['\n<strong>adigatorGenJacFile</strong> successfully generated Jacobian wrapper file: ''',JacFileName,''';\n\n']);

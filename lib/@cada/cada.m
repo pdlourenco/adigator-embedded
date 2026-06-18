@@ -7,6 +7,12 @@ classdef cada
   %
   % Copyright 2011-2014 Matthew J. Weinstein and Anil V. Rao
   % Distributed under the GNU General Public License version 3.0
+  %
+  % Modifications as described below are Copyright GMV.
+  % Changelog:
+  %   2026-06    'end' in subscript position 3+ of an N-D declared
+  %              parameter resolves against the declared shape (roadmap
+  %              R2, issue #11 Level 2, PR #14).
   properties
     % Unique integer identifier
     id
@@ -516,7 +522,23 @@ classdef cada
   methods
     function out = end(x,dim,ndim)
       % CADA overloaded END
-      if ndim == 1
+      if isfield(x.func,'ndsize') && ndim > 2
+        % N-D declared parameter referenced in slice form (issue #11
+        % Level 2): resolve from the declared shape; the last subscript
+        % position spans the fold of the remaining declared dimensions
+        nds = x.func.ndsize;
+        if dim < ndim
+          if dim <= length(nds)
+            out = nds(dim);
+          else
+            out = 1;
+          end
+        elseif dim <= length(nds)
+          out = prod(nds(dim:end));
+        else
+          out = 1;
+        end
+      elseif ndim == 1
         out = length(x);
       else
         out = size(x,dim);

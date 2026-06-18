@@ -3,6 +3,12 @@ function z = cadaUnionVars(x,y)
 %
 % Copyright 2011-2014 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
+%
+% Modifications as described below are Copyright GMV.
+% Changelog:
+%   2026-06    Preserve the declared shape (func.ndsize) of an N-D
+%              declared parameter through self-unions (roadmap R2,
+%              issue #11 Level 2, PR #14).
 global ADIGATOR
 if ~isa(x,'cada')
   z = y;
@@ -46,7 +52,12 @@ if xMrow > yMrow; zMrow = xMrow; else zMrow = yMrow; end
 if xNcol > yNcol; zNcol = xNcol; else zNcol = yNcol; end
 
 z.func = struct('name',[],'size',[zMrow zNcol],'zerolocs',[],'value',[]);
-if zvec == 1; 
+if isfield(x.func,'ndsize') && isfield(y.func,'ndsize') && ...
+    isequal(x.func.ndsize,y.func.ndsize)
+  % an N-D declared parameter unioned with itself keeps its declared shape
+  z.func.ndsize = x.func.ndsize;
+end
+if zvec == 1;
   xMrow = 1; yMrow = 1; zMrow = 1; 
 elseif zvec == 2; 
   xNcol = 1; yNcol = 1; zNcol = 1; 

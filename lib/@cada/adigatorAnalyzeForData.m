@@ -22,7 +22,7 @@ function adigatorAnalyzeForData(FORCOUNT,dummyVar) %#ok<INUSD>
 % GetDataDependencies: given a set of indices and/or sizes collected over
 %    multiple embedded FOR loops, this routine recursively calls itself to
 %    find which loops the data is dependent upon
-% RemoveUnnneededIndices: given the dependency map from
+% RemoveUnneededData: given the dependency map from
 %    GetDataDependencies, this routine removes the ones which are repeated
 %    (i.e. independent)
 % GetSubsrefInds:   obtains the derivative index mapping for subsref
@@ -39,7 +39,12 @@ function adigatorAnalyzeForData(FORCOUNT,dummyVar) %#ok<INUSD>
 %
 % Copyright 2011-2014 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
-
+%
+% Modifications as described below are Copyright GMV.
+% Changelog:
+%   2026-06    Fix the OuterLoopMaxLenght/OuterLoopMaxLength typo that
+%              crashed the analysis of nested rolled loops with an
+%              undefined-variable error (B15, PR #3).
 
 global ADIGATOR ADIGATORDATA ADIGATORFORDATA ADIGATORVARIABLESTORAGE
 DataNameCount = 0;
@@ -59,7 +64,7 @@ for Fcount = 2:length(ADIGATORFORDATA(FORCOUNT).FOR)
   ForLengths  = ADIGATORFORDATA(FORCOUNT).FOR(Fcount).LENGTHS;
   FORLOCS     = ADIGATORFORDATA(FORCOUNT).FOR(Fcount).LOCS;
   if size(ForLengths,2) < OuterLoopMaxLength
-    ForLengths(end,OuterLoopMaxLenght) = 0;
+    ForLengths(end,OuterLoopMaxLength) = 0;
   end
   % Set MAXLENGTH field of ADIGATORFORDATA
   ADIGATORFORDATA(FORLOCS(1,end)).MAXLENGTH = max(ForLengths(:));
@@ -455,7 +460,7 @@ for Scount   = 1:length(ADIGATORFORDATA(FORCOUNT).SUBSASGN)
       % This dimension changes - put it into same form as indice
       % array.
       % Zeros in bSize mean there was an empty assignment, make these into
-      % Inf so that GetDataDependencies and RemoveUnneededIndices doesnt
+      % Inf so that GetDataDependencies and RemoveUnneededData doesnt
       % think that they are cases which subsasgn just didnt fire.
       bSizeTemp = zeros(1,prod(FORLENGTHS));
       bSizeTemp(logical(sum(reshape(ASGNINDS,NUMinds,prod(FORLENGTHS)),1)))...

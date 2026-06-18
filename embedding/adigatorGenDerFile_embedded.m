@@ -41,14 +41,24 @@ function info = adigatorGenDerFile_embedded(DerType,UserFunName,UserFunInputs,va
 %   Output:
 %       info            information about the differentiation process
 %
+%   Note: 'gradient' and 'hessian' modes both produce myfun_Grd /
+%   myfun_ADiGatorGrd files. The files are functionally equivalent (same
+%   first derivative, same column-gradient convention), so generating one
+%   mode after the other harmlessly overwrites them.
+%
 %	Dependencies:
-%		adigatorGenJacFile, adigatorGenHesFile, structure_to_embed_mfile, adigator_patch_derivative
+%		adigatorGenJacFile, adigatorGenHesFile, structure_to_embed_mfile, adigator_patch_derivative, prune_adigator_mat
 %
 %   Copyright GMV, S.A.
 %   Property of GMV, S.A.; all rights reserved
 %   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %
 %   Changelog:
+%       2026-06    Extract the .mat pruner to prune_adigator_mat for
+%                  testability (fixes B5) with integer down-casting
+%                  restricted to Index* fields (B1) (PR #3).
+%                  Print an explicit notice that a pruned .mat no longer
+%                  supports re-differentiation (B6, PR #8).
 %
 %   TODO:
 %       - Remove the computation of unnecessary variables by running CHECKCODE on each file.
@@ -63,11 +73,14 @@ opts = adigatorOptions();
 if nargin>3
     optfields = fieldnames(varargin{1});
     for Fcount = 1:length(optfields)
-        opts.(lower(optfields{Fcount})) = varargin{1}.(lower(optfields{Fcount}));
+        % v1.5 (B12 fix): lower-case only the destination field; the user's
+        % struct must be read with the field name they actually used
+        opts.(lower(optfields{Fcount})) = varargin{1}.(optfields{Fcount});
     end
 else
     varargin = {opts};
 end
+opts.embed_mode = adigatorNormalizeEmbedMode(opts.embed_mode); % v1.5 (B11 fix)
 
 %% --------------------- Call the ADiGator wrappers ---------------------%%
 switch DerType
@@ -119,6 +132,11 @@ for derf = 1:N_derivs
     tmp_adigator_struct = prune_adigator_mat(tmp_adigator_struct,AdigatorGeneratedFiles(derf).func); % remove unnecessary fields
     save(AdigatorGeneratedFiles(derf).mat,'-struct','tmp_adigator_struct'); % replace existing mat file with the relevant fields only
     fprintf('done.\n');
+    % v1.5 (B6): pruning strips the re-differentiation metadata that
+    % adigator stores for higher-order passes; make that explicit
+    fprintf(['\t\t NOTE: the pruned %s keeps runtime data only and can no ',...
+        'longer be used as input to another adigator differentiation.\n'],...
+        AdigatorGeneratedFiles(derf).mat);
 
     %%% if user requests inline option, the data is loaded from a function
     if inline
@@ -174,66 +192,6 @@ end
 
 end
 
-%% ---------------- PRUNE ADIGATOR_DERIVATIVE DATA ------------------%%
-function structout = prune_adigator_mat(structin,funnames)
-% PRUNE_ADIGATOR_MAT
-% Keep only <funcName>.Gator*Data.Index* per derivative function.
-% Downcast integer-valued arrays to int32/uint32 to shrink embedded consts.
-
-for jj = 1:numel(funnames) % go through each of the functions
-    if isfield(structin,funnames{jj}) % if field exists, save it
-        fn = fieldnames(structin.(funnames{jj}));
-        keepTop = fn(startsWith(fn, "Gator") & endsWith(fn,"Data"));
-        auxstruct = struct();
-
-        for ii = 1:numel(keepTop)
-            gname = keepTop{ii};
-            G = structin.(funnames{jj}).(gname);
-            if ~isstruct(G), continue; end
-            fG = fieldnames(G);
-
-            % Keep the only subfields that are not empty
-            keepIdx = check_adigator_mat_empty(G,fG);
-
-            % Keep Index* subfields
-            keepIdx = startsWith(fG, "Index") | keepIdx;
-            if ~any(keepIdx), continue; end
-
-            G2 = struct();
-            idxNames = fG(keepIdx);
-            for k = 1:numel(idxNames)
-                idxName = idxNames{k};
-                A = G.(idxName);
-
-                % Down-cast numeric integer arrays to save memory
-                if ~issparse(A) && isnumeric(A) && isreal(A) && all(isfinite(A(:))) && all(abs(A(:) - round(A(:))) < 1e-12)
-                    % Nonnegative? prefer uint32; otherwise int32
-                    if all(A(:) >= 0)
-                        A = uint32(A);
-                    else
-                        A = int32(A);
-                    end
-                end
-                % Logical stays logical; other types left as-is (doubles etc.)
-                G2.(idxName) = A;
-            end
-
-            if ~isempty(fieldnames(G2))
-                auxstruct.(gname) = G2;
-            end
-        end
-        structout.(funnames{jj}) = auxstruct;
-    end
-end
-end
-
-
-function keepIdx = check_adigator_mat_empty(structin,fields)
-
-keepIdx = false(size(fields));
-
-for ii = 1:numel(fields)
-    keepIdx(ii) = ~isempty(structin.(fields{ii}));
-end
-end
+% prune_adigator_mat was extracted to embedding/prune_adigator_mat.m so it
+% can be unit-tested (see tests/unit/UPruneMatTest.m).
 

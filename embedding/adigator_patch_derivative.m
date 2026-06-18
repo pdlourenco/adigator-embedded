@@ -1,4 +1,4 @@
-function txt = adigator_patch_derivative(deriv_filepath, deriv_filename, subfun_list,apply_codegen_only,data_functions)
+function txt = adigator_patch_derivative(deriv_filepath, deriv_filename, subfun_list,apply_codegen_only,data_functions,mat_filepath)
 %PATCH_ADIGATOR_FILE    Patch an ADiGator-generated function for Embedded Coder
 %                       assuming a coder.load option
 %
@@ -19,10 +19,24 @@ function txt = adigator_patch_derivative(deriv_filepath, deriv_filename, subfun_
 %   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %
 %   Changelog:
-%
+%       2026-06    Delete the loader-guard lines in a single operation; the
+%                  old loop re-indexed with the full match vector while
+%                  shifting offsets and could delete arbitrary lines (B3).
+%                  Locate function headers with a regexp anchored on the
+%                  definition line (MATLAB \> end-of-word anchor), so
+%                  lookalike names cannot match, and error clearly on a
+%                  missing header (B4) (PR #8).
+%                  Optional mat_filepath for the coder.load reference,
+%                  defaulting to the file name for relocatability (PR #3).
 
 if nargin<5 % codeload option selected
     data_functions = {};
+end
+if nargin<6
+    % default .mat reference: file name only, resolved via the MATLAB path at
+    % compile time (keeps the generated code relocatable). Callers may pass an
+    % explicit path when the .mat cannot be on the path.
+    mat_filepath = [deriv_filename,'.mat'];
 end
 
 txt = readlines(deriv_filepath);
@@ -40,11 +54,10 @@ if ~isempty(idx); txt(idx:end) = []; end
 % ------------------------------------------------------------------------
 patterns = {'if isempty', deriv_filename, 'ADiGator_LoadData();'};
 idx = find_in_file(txt,patterns,1,0,[]);
-inc = 0;
-for ii=1:length(idx)
-    txt(idx+inc) = [];
-    inc = inc - 1;
-end
+% v1.5 (B3 fix): delete all matched lines at once. The previous loop
+% indexed with the whole idx vector on every iteration while shifting an
+% offset, deleting arbitrary lines whenever more than one guard matched.
+txt(idx) = [];
 
 % create global variable name
 globalName = ['ADiGator_',deriv_filename];
@@ -53,8 +66,17 @@ for fun = 1:length(subfun_list)
     % ------------------------------------------------------------------------
     % 3) Insert %#codegen on the *next* line after all function headers
     % ------------------------------------------------------------------------
-    patterns = {'function',subfun_list{fun}};
-    fidx = find_in_file(txt,patterns,1,0,'%');
+    % v1.5 (B4 fix): anchor on an actual function-definition line for this
+    % exact name. The previous substring search matched any line containing
+    % both 'function' and the name (e.g. headers of functions whose names
+    % contain this one as a substring), and a multi-line match crashed the
+    % insertion below.
+    fidx = find_function_header(txt,subfun_list{fun});
+    if isempty(fidx)
+        error('adigator_patch_derivative:headerNotFound',...
+            'function header for ''%s'' not found in %s',subfun_list{fun},deriv_filepath);
+    end
+    fidx = fidx(1);
     txt = [txt(1:(fidx));
         "%#codegen";
         txt((fidx+1):end)];
@@ -86,7 +108,7 @@ for fun = 1:length(subfun_list)
         % ------------------------------------------------------------------------
         txt(gidx) = strrep(txt(gidx),'global','persistent'); % declare persistent
         % add the loading call
-        loading_call = "if isempty(" +globalName+"); "+globalName+" = coder.load('"+deriv_filename+".mat','"+subfun_list{fun}+"'); end";
+        loading_call = "if isempty(" +globalName+"); "+globalName+" = coder.load('"+mat_filepath+"','"+subfun_list{fun}+"'); end";
     end
     txt = [txt(1:(gidx));
            loading_call;
@@ -121,6 +143,17 @@ end
 end
 
 % ================= helpers =================
+% v1.5 (B4 fix): find the line defining function <fname> (not calls, not
+% comments, not names merely containing <fname> as a substring)
+function idx = find_function_header(txt,fname)
+% NOTE: MATLAB regexp has no \b word boundary (\b is backspace); the
+% MATLAB-specific end-of-word anchor is \>
+pat = ['^\s*function\>[^%]*[\s=\],]',regexptranslate('escape',fname),'\s*\('];
+matches = regexp(txt,pat,'once');
+idx = find(~cellfun(@isempty,matches));
+idx = idx(:).'; % row, consistent with find_in_file
+end
+
 % find all the elements in a string array that contain all the patterns
 function idx = find_in_file(txt,patterns,start,once,avoid_start)
 idx = [];

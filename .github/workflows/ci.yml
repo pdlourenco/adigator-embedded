@@ -1,0 +1,55 @@
+# CI Phase 0 — see docs/CI_PLAN.md §3.
+# Single job so MATLAB is installed once; lint fails fast before tests.
+name: CI
+
+on:
+  push:
+    branches: [master, embedded]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MATLAB
+        uses: matlab-actions/setup-matlab@v2
+        with:
+          release: latest
+          cache: true
+
+      - name: Lint (TS-U-09, parse-error gate)
+        uses: matlab-actions/run-command@v2
+        with:
+          command: addpath('tests'); ci_lint
+
+      - name: Unit tests (TS-U)
+        uses: matlab-actions/run-tests@v2
+        with:
+          select-by-folder: tests/unit
+          test-results-junit: results/unit.xml
+
+      - name: Integration tests (TS-I)
+        if: success()
+        uses: matlab-actions/run-tests@v2
+        with:
+          select-by-folder: tests/integration
+          test-results-junit: results/integration.xml
+
+      - name: Coverage report + ratchet (Phase 4)
+        if: success()
+        uses: matlab-actions/run-command@v2
+        with:
+          command: addpath('tests'); ci_coverage
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-results
+          path: results
+          if-no-files-found: ignore
