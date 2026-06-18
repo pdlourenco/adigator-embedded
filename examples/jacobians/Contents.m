@@ -7,3 +7,5 @@
 % DIRECTORIES:
 % arrowhead       - Jacobian of arrowhead function
 % polydatafit     - Jacobian of polynomial data fitting function
+% structinput     - struct inputs (derivative variable carried as a struct
+%                   field); gradient/Hessian/Jacobian and embed-mode checks

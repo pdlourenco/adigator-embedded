@@ -135,24 +135,12 @@ if ~iscell(UserFunInputs)
   error(['Second input to adigator must be cell array of inputs to ',...
     'the function described by first input string']);
 end
-derflag = 0;
-for I = 1:numel(UserFunInputs)
-  x = UserFunInputs{I};
-  if isa(x,'adigatorInput')
-    if ~isempty(x.deriv)
-      if derflag > 0
-        error('adigatorGenHesFile is only used for single derivative variable input')
-      end
-      derflag = I;
-    end
-    if any(isinf(x.func.size))
-      error('adigatorGenHesFile not written for vectorized functions')
-    end
-  end
-end
-if derflag == 0
-  error('derivative input of user function not found - possibly embedded within a cell/structure, use adigator function if this is the case');
-end
+% Find derivative input (searches top-level inputs and, recursively,
+% struct/cell fields - issue #24, scope A). derpathStr/derpathSubs give the
+% access path of the derivative variable within UserFunInputs{derflag};
+% both are empty when the input is itself the derivative variable, in which
+% case behaviour is identical to before.
+[derflag, derpathStr, derpathSubs, x] = adigatorFindDerivInput(UserFunInputs,'adigatorGenHesFile');
 
 % File checks
 if isempty(opts.path) % v1.5 - allow user to specify the path
@@ -209,11 +197,20 @@ catch ME
     rethrow(ME);
 end
 adiout = adiout{1};
-% Change derivative input
-x = UserFunInputs{derflag};
+% Change derivative input for the second (Hessian) pass: wrap the
+% derivative variable as a {.f,.d<vod>} struct so adigator differentiates
+% its .f field. x is the located derivative object; when it sits inside a
+% struct/cell input the wrapper struct is injected at its path, otherwise
+% it replaces the whole input (unchanged behaviour).
 xsize = x.func.size;
 vodname = x.deriv.vodname;
-UserFunInputs{derflag} = struct('f',x,['d',vodname],ones(prod(xsize),1));
+wrapped = struct('f',x);
+wrapped.(['d',vodname]) = ones(prod(xsize),1);
+if isempty(derpathStr)
+  UserFunInputs{derflag} = wrapped;
+else
+  UserFunInputs{derflag} = subsasgn(UserFunInputs{derflag},derpathSubs,wrapped);
+end
 
 try % v1.5 - add try-catch to avoid leaving unnecessary changes to path active
 [adiout2,FunctionInfo2,ADi_DerivFiles2,ADi_DerivFuns2] = adigator(AdiGrdFileName,UserFunInputs,AdiHesFileName,opts); % v1.5 - add new output with list of files/functions
@@ -260,13 +257,22 @@ end
 
 fprintf(Gfid,Gfuncstr);
 fprintf(Hfid,Hfuncstr);
-% Change the derivative input..
-
-xfunstr = ['gator_',xstr,'.f'];
-xderstr = ['gator_',xstr,'.d',vodname];
+% Change the derivative input.. (x is the located derivative object)
+seedvar = ['gator_',xstr,'_seed'];
 for fid = [Gfid Hfid]
-  fprintf(fid,[xfunstr,' = ',xstr,';\n']);
-  fprintf(fid,[xderstr,' = ones(%1.0f,1);\n'],prod(x.func.size));
+  if isempty(derpathStr)
+    % derivative variable is the input itself - unchanged behaviour
+    fprintf(fid,['gator_',xstr,'.f = ',xstr,';\n']);
+    fprintf(fid,['gator_',xstr,'.d',vodname,' = ones(%1.0f,1);\n'],prod(x.func.size));
+  else
+    % derivative variable carried inside a struct/cell input: copy the
+    % container through and overwrite only the derivative field with its
+    % {.f,.d<vod>} seed (issue #24, scope A)
+    fprintf(fid,['gator_',xstr,' = ',xstr,';\n']);
+    fprintf(fid,[seedvar,'.f = ',xstr,derpathStr,';\n']);
+    fprintf(fid,[seedvar,'.d',vodname,' = ones(%1.0f,1);\n'],prod(x.func.size));
+    fprintf(fid,['gator_',xstr,derpathStr,' = ',seedvar,';\n']);
+  end
 end
 
 InputStrs{derflag} = ['gator_',xstr,','];

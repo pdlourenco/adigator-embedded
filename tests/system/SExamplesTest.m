@@ -89,6 +89,15 @@ classdef SExamplesTest < matlab.unittest.TestCase
                 rethrow(e);
             end
         end
+
+        function structinputExample(tc)
+            % struct inputs (issue #24): the main asserts gradient/Hessian/
+            % Jacobian against closed-form references for flat and nested
+            % struct inputs and a Jacobian; its inline ('i') evaluation
+            % self-skips when MATLAB Coder is absent. Completing without
+            % error is the assertion.
+            runExample(tc, fullfile('examples','jacobians','structinput'));
+        end
     end
 end
 
