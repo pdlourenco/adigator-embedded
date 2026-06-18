@@ -18,6 +18,14 @@ constants used in arithmetic** (`cadamatprint.m`).
 
 ## 1. Bugs
 
+> **Status (read first).** The bug descriptions in §1.1–1.3 are the original
+> analysis and are written in the present tense of when they were found. Their
+> **current disposition is tracked in [§1.5 Fix disposition log](#15-fix-disposition-log)**:
+> every bug below (B1–B15) is now **Fixed**, **Mitigated**, or **Won't-fix
+> (benign)** — none remain open. Where a description below names a file/line
+> (e.g. B1's old `adigatorGenDerFile_embedded.m` location), §1.5 records where
+> the code actually lives now (`embedding/prune_adigator_mat.m`).
+
 ### 1.1 Embedded pipeline (new code)
 
 **B1 — `Data*` constants are down-cast to integers (high severity).**
