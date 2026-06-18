@@ -87,12 +87,6 @@ Testing / CI
   codegen suites) backed by a `tests/` suite with finite-difference and
   cross-mode equivalence checks.
 
-- Struct inputs: the variable of differentiation and auxiliary inputs may be carried as fields of a (scalar) struct and used internally by the function; the generated Jacobian/Hessian wrappers accept the same struct shape (nested struct/cell fields supported). (issue #24)
-
-- `norm` is now differentiable: vector p-norms (`2`, `1`, `Inf`, `-Inf`, general `p`) and the Frobenius norm (`'fro'`) are rewritten to elementary operations; the induced/spectral matrix norms (which would require an SVD) raise a clear error instead of mis-differentiating. (issue #28)
-
-- `isnan`, `isinf` and `isfinite` are overloaded as derivative-free predicates, evaluated on the function value at run time, so they may be used in conditionals and logical masks. (issue #28)
-
 V 1.5 6/02/19
 
 * A bit of repo re-organization, moved everything to github: https://github.com/matt-weinstein/adigator
