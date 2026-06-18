@@ -95,6 +95,24 @@ classdef UNormTest < matlab.unittest.TestCase
             tc.verifyLessThan(norm(g_ad - 2*xv)/(1+norm(2*xv)), 1e-8, ...
                 'isnan/isinf/isfinite mask changed the derivative of x.^2');
         end
+
+        function emptyNormIsNotAMatrix(tc)
+            % An empty operand (func.size == [0 0]) must NOT be treated as a
+            % matrix: norm of an empty is 0, so generation must succeed (no
+            % adigator:norm:matrixNorm) and the value must drop out of the
+            % gradient. Here norm(x([])) == 0, so y == x(1) and dy/dx == e_1.
+            n = 4;
+            writeFun('adigator_norm_empty','y = x(1) + norm(x([]));');
+            ax = adigatorCreateDerivInput([n 1],'x');
+            adigator('adigator_norm_empty',{ax},'adigator_norm_empty_dx', ...
+                adigatorOptions('overwrite',1,'echo',0));   % must not raise matrixNorm
+            rehash;
+            xv = randn(n,1);
+            g_ad = adGrad('adigator_norm_empty_dx', xv, n);
+            g_fd = fdGrad('adigator_norm_empty', xv, n);
+            tc.verifyLessThan(norm(g_ad-g_fd)/(1+norm(g_fd)), 1e-4, ...
+                'empty-operand norm should contribute 0 and leave the gradient unchanged');
+        end
     end
 end
 
