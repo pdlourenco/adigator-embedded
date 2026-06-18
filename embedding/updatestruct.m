@@ -21,6 +21,8 @@ function out=updatestruct(default,in,addfields)
 %   Changelog:
 %       2025-10 PADL    Add option to add new fields if the input structure
 %                       has fields that the default one does not
+%       2026-06         Warn when a field assignment lossily coerces the
+%                       class of the default value (PR #3).
 
 if nargin<3
     addfields = false;
@@ -37,7 +39,13 @@ for ii=1:length(input_fields)
         if isstruct(out.(input_fields{ii})) % if it is a struct check nested field
             out.(input_fields{ii}) = updatestruct(default.(input_fields{ii}),in.(input_fields{ii}),addfields);
         else % if it is a simple field, copy it using the same variable type
-            out.(input_fields{ii}) = feval(class(out.(input_fields{ii})),in.(input_fields{ii}));
+            cast_val = feval(class(out.(input_fields{ii})),in.(input_fields{ii}));
+            if ~isequal(cast_val, in.(input_fields{ii}))
+                warning('updatestruct:typeCoercion', ...
+                    'Field ''%s'' value changed when coerced from %s to %s.', ...
+                    input_fields{ii}, class(in.(input_fields{ii})), class(out.(input_fields{ii})));
+            end
+            out.(input_fields{ii}) = cast_val;
         end
     elseif addfields % add field to default structure if it does not exist
         out.(input_fields{ii}) = in.(input_fields{ii});

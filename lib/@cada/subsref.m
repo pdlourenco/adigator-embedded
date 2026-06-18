@@ -3,6 +3,14 @@ function y = subsref(x,s)
 %
 % Copyright 2011-2014 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
+%
+% Modifications as described below are Copyright GMV.
+% Changelog:
+%   2026-06    References with 3+ subscripts into an N-D declared
+%              parameter are rewritten by NDRefTranslate as the affine
+%              column window on the internal 2D fold, supporting loop
+%              counters in any trailing position (roadmap R2, issue #11
+%              Level 2, PR #14).
 global ADIGATOR
 ssize = length(s);
 for scount = 1:ssize;
@@ -15,6 +23,11 @@ for scount = 1:ssize;
       indent  =   ADIGATOR.PRINT.INDENT;
       if ADIGATOR.FORINFO.FLAG
         IncreaseForRefCount();
+      end
+      if length(s.subs) > 2 && isfield(x.func,'ndsize')
+        % N-D declared parameter (roadmap R2, issue #11 Level 2): rewrite
+        % the trailing subscripts as the affine column window on the fold
+        s = NDRefTranslate(x,s,ADIGATOR.EMPTYFLAG);
       end
       if ADIGATOR.EMPTYFLAG
         if length(s.subs) == 2
@@ -254,6 +267,121 @@ for scount = 1:ssize;
     error('invalid index reference for CADA')
   end
 end
+end
+
+function s = NDRefTranslate(x,s,emptyflag)
+% Rewrites an N-D () reference on an N-D declared parameter (an internally
+% folded 2D cada carrying its declared shape in x.func.ndsize, see
+% adigatorCreateAuxInput) into the equivalent 2-subscript reference on the
+% fold. Slice forms only: a leading block of ':' subscripts followed by
+% scalar subscripts (numeric, or overloaded such as loop counters). The
+% rewritten column subscript is the affine window
+%   cols = base + sum_j (v_j - 1)*F_j
+% built with the same overloaded arithmetic the manual folded-2D pattern
+% (Bf(:,(k-1)*n+(1:n))) would invoke, so everything downstream - including
+% the rolled-loop organizational-op machinery - is unchanged. Under
+% emptyflag (dead-branch evaluation) validation is skipped but the same
+% overloaded operations run, keeping operation counts consistent.
+nds = x.func.ndsize;
+nd  = length(nds);
+d   = length(s.subs);
+% Extent spanned by each column subscript position; per MATLAB partial
+% indexing the last subscript spans the fold of all remaining declared
+% dimensions, and positions beyond the declared rank span extent 1
+csz = ones(1,d);
+for jj = 2:d
+  if jj < d && jj <= nd
+    csz(jj) = nds(jj);
+  elseif jj == d && jj <= nd
+    csz(jj) = prod(nds(jj:end));
+  end
+end
+% Leading-colon block: subscript positions 2..p are ':'
+p = 1;
+while p < d && ischar(s.subs{p+1}) && strcmp(s.subs{p+1},':')
+  p = p+1;
+end
+if p == d
+  % every column subscript is ':' - reference the entire fold
+  s.subs = [s.subs(1), {':'}];
+  return
+end
+if p > 1
+  % window spanning declared dimensions 2..p
+  r    = prod(csz(2:p));
+  base = 1:r;
+  js   = p+1;
+else
+  % no colon block: position 2 is the base subscript (may be a vector)
+  base = s.subs{2};
+  r    = csz(2);
+  js   = 3;
+end
+% Subscripts past the leading block must be scalars; accumulate the affine
+% window offset, folding numeric terms into a constant and building
+% overloaded terms (loop counters etc.) with overloaded arithmetic
+numoff = 0;
+ovroff = [];
+haveovr = false;
+stride = r;
+for jj = js:d
+  vj = s.subs{jj};
+  if isa(vj,'cada')
+    if ~emptyflag
+      if prod(vj.func.size) ~= 1
+        error('adigator:ndparam:slice',...
+          ['subscript %1.0f of a reference into an N-D declared ',...
+          'parameter must be a scalar: only the leading block of '':'' ',...
+          'subscripts may be non-scalar; reference the 2D fold for ',...
+          'general N-D references'],jj);
+      end
+      vval = vj.func.value;
+      if ~isempty(vval) && (vval ~= floor(vval) || vval < 1 || vval > csz(jj))
+        error('adigator:ndparam:subsOutOfRange',...
+          ['subscript %1.0f of a reference into an N-D declared ',...
+          'parameter is out of range (declared extent %1.0f)'],jj,csz(jj));
+      end
+    end
+    if stride == 1
+      t = vj - 1;
+    else
+      t = (vj - 1)*stride;
+    end
+    if haveovr
+      ovroff = ovroff + t;
+    else
+      ovroff = t;
+      haveovr = true;
+    end
+  elseif isnumeric(vj) && isscalar(vj)
+    if vj ~= floor(vj) || vj < 1 || vj > csz(jj)
+      error('adigator:ndparam:subsOutOfRange',...
+        ['subscript %1.0f of a reference into an N-D declared ',...
+        'parameter is out of range (declared extent %1.0f)'],jj,csz(jj));
+    end
+    numoff = numoff + (vj - 1)*stride;
+  else
+    error('adigator:ndparam:slice',...
+      ['subscript %1.0f of a reference into an N-D declared parameter ',...
+      'must be a scalar (numeric or overloaded): only the leading block ',...
+      'of '':'' subscripts may be non-scalar; reference the 2D fold for ',...
+      'general N-D references'],jj);
+  end
+  stride = stride*csz(jj);
+end
+if ~haveovr
+  if numoff == 0
+    cols = base;
+  else
+    cols = base + numoff;
+  end
+else
+  if numoff ~= 0
+    ovroff = ovroff + numoff;
+  end
+  cols = ovroff + base;
+end
+s.subs = [s.subs(1), {cols}];
 end
 
 function [numeric, overloaded, logicflag] = parseIndex(index)

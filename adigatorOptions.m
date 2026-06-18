@@ -70,8 +70,48 @@ function options = adigatorOptions(varargin)
 %                  external binary files or persistent variables.
 %       PATH: [] - if empty the generate files with the derivative functions
 %                  are placed in the current calling directory. DEFAULT
-%             '' - the user can provide the directory for storing the 
+%             '' - the user can provide the directory for storing the
 %                  generated functions in this field.
+%  LOOPBOUND: {} - all loop bounds are fixed at their generation-time trip
+%                  counts (default).
+%             '' - char/string/cellstr naming input(s) of the
+%                  differentiated function which act as RUNTIME loop
+%                  bounds (roadmap R3; issue #6 Tier 1). Each named input
+%                  must be passed to adigator as a plain numeric positive
+%                  integer scalar: its value is the MAXIMUM trip count,
+%                  used for the analysis. Every outermost rolled loop in
+%                  the main differentiated function (and every inner
+%                  rolled loop with a constant analyzed bound) whose trip
+%                  count equals that value is then printed with the named
+%                  input as its bound, guarded by assert(name <= max), and
+%                  its exit variables take the union over all iterations.
+%                  The generated file may be called with any 1 <= n <= max.
+%                  PADDED-PROGRAM SEMANTICS: the file differentiates the
+%                  max-padded program. Generated code references the named
+%                  input BY NAME, so arrays the user code sizes directly
+%                  by it (e.g. zeros(N,1)) are allocated at the runtime
+%                  value; arrays with literal analyzed sizes keep the max
+%                  size, with exact structural zeros beyond the executed
+%                  prefix; derivative buffers and the output sparsity
+%                  pattern always use the fixed max-trip-count pattern.
+%                  Results agree with the true n-sized program iff
+%                  post-loop code is padding-benign (sums, dot products,
+%                  scatter/gather over the loop-written entries: yes;
+%                  length/end/mean/max over a FIXED-size buffer's padded
+%                  tail: no - they see max). Loops are matched BY
+%                  TRIP-COUNT VALUE: give each runtime-bound parameter a
+%                  distinct max value that no fixed loop in the code
+%                  shares. Not compatible with 'unroll'.
+% JAC_OUTPUT: 'matrix' - adigatorGenJacFile wrappers project the
+%                  derivative into a dense or sparse Jacobian/gradient
+%                  matrix on every call (default).
+%             'nonzeros' - the wrapper returns the nonzero VECTOR in the
+%                  fixed pattern order, with the pattern exported once
+%                  through output.JacobianLocs (value order) and
+%                  output.JacobianStructure. No per-call allocation or
+%                  scatter: embedded consumers assemble - or never form -
+%                  the matrix themselves (roadmap R5, ANALYSIS.md 2.3).
+%                  Applies to adigatorGenJacFile only.
 % ------------------------------------------------------------------------
 %
 % NOTES:    The default value of the OVERWRITE option changes depending
@@ -94,9 +134,19 @@ function options = adigatorOptions(varargin)
 %                                   that can be accepted for embedded code
 %                                   use, e.g., without runtime loading of 
 %                                   files/data/options.
-%                                   Add option for user to provide the path 
-%                                   to the directory where the generated 
+%                                   Add option for user to provide the path
+%                                   to the directory where the generated
 %                                   files should be stored
+%   2026-06                         Normalize EMBED_MODE aliases
+%                                   (c/classic, l/coderload, i/inline) at
+%                                   parse time (B11, PR #8).
+%                                   Add the LOOPBOUND option: runtime loop
+%                                   bounds with the padded-program
+%                                   contract documented above (roadmap R3,
+%                                   issue #6 Tier 1, PR #15).
+%                                   Add the JAC_OUTPUT option: nonzero-
+%                                   vector wrapper output with the pattern
+%                                   exported once (roadmap R5).
 
 % Set Defaults
 options.embed_mode   = 'c'; % v1.5 - 'c(lassic)' | '(coder)l(oad)' | 'i(nline)'
@@ -109,6 +159,8 @@ options.overwrite    = 0;
 options.optoutput    = 0;
 options.maxwhileiter = 10;
 options.complex      = 0;
+options.loopbound    = {}; % roadmap R3 (issue #6 Tier 1): runtime loop bounds
+options.jac_output   = 'matrix'; % roadmap R5: 'matrix' | 'nonzeros'
 
 if nargin/2 ~= floor(nargin/2)
   error('Inputs to adigatorOptions must come in field/value pairs')
@@ -122,7 +174,27 @@ for i = 1:nargin/2
     case {'auxdata','echo','unroll','comments','overwrite','genpat',...
         'optoutput','complex'}
       options.(field) = logical(value);
-      case {'maxwhileiter','embed_mode','path'} % v1.5
+      case 'embed_mode' % v1.5 (B11 fix): accept c/classic, l/coderload, i/inline
+      options.embed_mode = adigatorNormalizeEmbedMode(value);
+      case 'loopbound' % roadmap R3 (issue #6 Tier 1)
+      if ischar(value)
+        value = {value};
+      elseif isstring(value)
+        value = cellstr(value);
+      elseif ~iscell(value) || ~all(cellfun(@ischar,value(:)))
+        error('adigator:loopbound:option',...
+          ['loopbound must be a char, string, or cellstr naming ',...
+          'input(s) of the differentiated function']);
+      end
+      options.loopbound = value;
+      case 'jac_output' % roadmap R5 (ANALYSIS.md 2.3)
+      value = lower(char(value));
+      if ~any(strcmp(value,{'matrix','nonzeros'}))
+        error('adigator:jacOutput',...
+          'jac_output must be ''matrix'' (default) or ''nonzeros''');
+      end
+      options.jac_output = value;
+      case {'maxwhileiter','path'} % v1.5
       options.(field) = value;
     otherwise
       warning(['Invalid option field: ',field])

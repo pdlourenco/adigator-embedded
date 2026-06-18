@@ -200,6 +200,18 @@ itself and the implementation:
   existing callers worth documenting prominently (fminunc/fmincon accept
   both, but user code doing `g*d` will break).
 
+### 1.3a Core-library bug found via PR #1
+
+**B15 — `OuterLoopMaxLenght` undefined-variable crash.**
+`lib/@cada/adigatorAnalyzeForData.m:62` referenced the misspelled (and
+therefore undefined) variable `OuterLoopMaxLenght` inside
+`if size(ForLengths,2) < OuterLoopMaxLength`, so any transformation with
+nested rolled `for` loops whose inner-loop length table is shorter than the
+outer loop's maximum crashed with "Unrecognized function or variable".
+Identified in (now closed) PR #1. **Fixed** along with two comment typos
+referring to the nonexistent `RemoveUnneededIndices` (the function is
+`RemoveUnneededData`).
+
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
 - `cadaunarymath.m` derivative-rule corrections (`asec`, `acsc`, `asecd`,
@@ -214,6 +226,34 @@ itself and the implementation:
 - `any(ysize) == 1` → `any(ysize == 1)` (two occurrences) in
   `adigatorGenHesFile` — upstream always took the vector branch even for
   matrix-valued operands.
+
+### 1.5 Fix disposition log
+
+| Item | Status |
+|------|--------|
+| B1 (`Data*` down-cast) | **Fixed** — down-cast restricted to `Index*`; pruner extracted to `embedding/prune_adigator_mat.m`; pinned by `tests/unit/UPruneMatTest.m`. The fix landed together with integer/logical class preservation in `structure_to_embed_mfile.m` (salvaged from PR #1) — the two are coupled: preserving integer classes in the inline emitter without restricting the down-cast would have *extended* the corruption to inline mode. |
+| B2 (format string) | **Fixed** — pinned by `tests/unit/UEmbedMfileTest.m`. |
+| B5 (`structout` undefined) | **Fixed** in the extracted pruner. |
+| B15 (`OuterLoopMaxLenght` crash) | **Fixed** (see §1.3a). |
+| B7 (vector-output Hessian row multiplier) | **Fixed** — `(xind1-1)*m + yind` in `adigatorGenHesFile`, consistent with the documented `[m*n × n]` layout and `output.HessianStructure`. Covered by `hesVectorOutput*` in `tests/integration/IShapeMatrixTest.m`. |
+| B13 (`Gfid` never closed) | **Fixed** — both wrapper fids closed in `adigatorGenHesFile`. |
+| B8 (matrix-of-scalar Hessian branch) | **Fixed** — branch on `any(ysize == 1)`, subscripts converted to linear indices, unreachable sparse branch removed. The `hesMatrixOfScalar` case in `IShapeMatrixTest` auto-flipped to a regression guard. |
+| B9 (sparse-branch gradient transpose) | **Fixed** — transpose removed; sparse and full branches now both emit the m×n Jacobian convention, consistent with `adigatorGenJacFile`. Guarded by `grdSparseBranchOfVectorOutput`. |
+| B10 (`JacobianStructure` vs remapped shapes) | **Fixed** — the remap is recorded and the unrolled `nzlocs` are decomposed with `ind2sub` into the displayed shape. Guarded by `jacScalarOfMatrix` / `jacMatrixOfScalar`. |
+| Pruner near-integer tolerance | **Fixed** — exact `isequal(A,round(A))` check (salvaged from PR #1). |
+| `coder.load` path override | Optional `mat_filepath` argument added to `adigator_patch_derivative` (salvaged from PR #1, but defaulting to the file *name* so generated code stays relocatable). |
+| Test hygiene | `adigator.m` now clears its transformation-state globals on exit; `updatestruct` warns on lossy type coercion (salvaged from PR #1). |
+| B3 (patcher multi-match deletion) | **Fixed** — matched guard lines deleted in one operation; pinned by `tests/unit/UPatchTest.m` (synthetic file with two loader guards and sentinel lines). |
+| B4 (patcher header matching) | **Fixed** — function headers located by an anchored regexp on the definition line; a lookalike subfunction whose name contains the target as a substring is exercised in `UPatchTest`. |
+| B6 (pruned `.mat` re-differentiation) | **Mitigated** — explicit notice printed when pruning strips the higher-order metadata. |
+| B11 (`embed_mode` comparisons) | **Fixed** — `adigatorNormalizeEmbedMode` validates and normalizes (`classic`/`coderload`/`inline`, any case) at option-parse time in `adigatorOptions` and all three generators; pinned by `tests/unit/UOptionsTest.m`. |
+| B12 (option-field case folding) | **Fixed** — parsers read the user's struct with the field name as given and lower-case only the destination; end-to-end upper-case-spelling case in `UOptionsTest`. |
+| B14 (gradient/Hessian `_Grd` collision) | **Won't fix (documented as benign)** — `adigatorGenJacFile(...,'Grd')` and `adigatorGenHesFile` generate *equivalent* `myfun_Grd`/`myfun_ADiGatorGrd` files (same first derivative, same column-gradient convention), so the overwrite cannot change results. Noted in `adigatorGenDerFile_embedded` help. |
+| §2.1 item 1 (precomputed linear indices) | **Implemented for the wrappers** — in embed modes (`l`/`i`) the Jacobian/gradient/Hessian wrappers emit literal generation-time scatter-index vectors instead of runtime `_location` arithmetic (classic mode unchanged). This is the corrected re-implementation of closed PR #1's "Level 1": the index derivation matches `output.HessianStructure`/the conventions exactly, and the `sparse*LiteralScatter` cases in `IEmbedModesTest` verify cross-mode numeric equality. |
+| §2.1 items 3–4 (index dedup, range compression) | **Implemented in the inline emitter** — `structure_to_embed_mfile` aliases identical sibling arrays (`S.Index7 = S.Index3;`) instead of repeating literals, and emits integer-valued arithmetic progressions as `a:s:b` (constants as `repmat`), with class casts preserved (single-precision class preservation fixed along the way). Pinned by `dedupAliasesRepeatedSiblings`/`rangeCompression` in `UEmbedMfileTest`. |
+| §2.1 item 2 (`uint16` narrowing) | **Rejected** — `uint16` saturates at 65535, which index *arithmetic* in generated code can plausibly reach for moderate problem sizes (a 300-variable Jacobian already has unrolled indices near 10⁵), turning overflow into silent saturation. `uint32` (range ~4·10⁹) is kept as the narrowing floor. |
+| CI plan Phase 4 (ratchets) | **Implemented** — `ci_lint` gains a findings-count ratchet against `tests/lint_baseline.txt`, and a new `ci_coverage` step reports the aggregate line rate of `lib`/`util`/`embedding` (Cobertura artifact) and gates against `tests/coverage_baseline.txt`. Both baselines self-bootstrap: absent file → report-only; the first CI run supplies the numbers to commit. |
+| PR #1 architectural commits (direct emission + literal linidx) | Discarded — right direction (§2.1) but defective: `compute_wrapper_linidx` called with swapped size arguments at both call sites, second differentiation cannot parse `persistent`/`coder.*` statements, inline mode references a nonexistent struct level, and classic mode was left inconsistent with embed modes. To be reimplemented once TS-I-01 exists. |
 
 ---
 
