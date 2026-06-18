@@ -7,9 +7,9 @@ Accepted — 2026-06-18. Back-filled from the fix for `ANALYSIS.md` bug B1.
 ## Context
 
 To shrink the constant tables a generated derivative file carries (relevant for
-embedded targets), `prune_adigator_mat` in
-`embedding/adigatorGenDerFile_embedded.m` down-casts integer-valued, non-sparse
-numeric fields to a narrow integer class. The Gator data struct holds two
+embedded targets), `prune_adigator_mat` (`embedding/prune_adigator_mat.m`, since
+extracted from `adigatorGenDerFile_embedded.m`) down-casts integer-valued,
+non-sparse numeric fields to a narrow integer class. The Gator data struct holds two
 distinct kinds of field (see [`../DESIGN.md`](../DESIGN.md) §C-3): `Index*`
 fields are index vectors, while `Data*` fields are **numeric value constants
 printed into arithmetic** (e.g. `cada1f1 = Gator1Data.Data1*x.f;` for `y = A*x`
@@ -33,8 +33,10 @@ to their generated value.
 - Constant index tables still shrink; arithmetic constants stay correct.
 - `Data*` is the binding contract C-3 in `DESIGN.md`; this ADR is the rationale
   reviewers cite when a future change touches `prune_adigator_mat`.
-- Pinned by `CI_PLAN.md` TS-U-04 (tagged `KnownIssue` until the fix lands, then
-  a hard regression assertion).
+- The fix has landed: the down-cast is gated on `startsWith(idxName, "Index")`
+  in `embedding/prune_adigator_mat.m` and pinned by `tests/unit/UPruneMatTest.m`
+  (`CI_PLAN.md` TS-U-04) — `Data*` staying `double` is a hard assertion
+  (`dataFieldsStayDouble`), not a `KnownIssue`.
 - **Revisit** if a measured size win justifies narrowing `Data*` too — which
   would require emitting an explicit cast back to `double` at every arithmetic
   use site, a much larger change.

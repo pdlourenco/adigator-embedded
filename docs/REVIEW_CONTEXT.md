@@ -83,9 +83,10 @@ A bundled review covers both. Narrow with "review in verification mode" /
   Those artifacts are authoritative; when code and contract disagree, *stop and
   ask* (don't pick a side).
 - **Dimension-branch changes in `adigatorGenJacFile.m` / `adigatorGenHesFile.m`**
-  — this is exactly where B7–B10 live. Any edit here needs the shape-matrix test
-  (TS-I-01) exercised, including the `m ≠ n` vector-output Hessian and the
-  remapped matrix-of-scalar / scalar-of-matrix cases.
+  — this is exactly where B7–B10 lived. Any edit here needs the shape-matrix
+  test (`tests/integration/IShapeMatrixTest.m`, TS-I-01) exercised, including the
+  `m ≠ n` vector-output Hessian and the remapped matrix-of-scalar /
+  scalar-of-matrix cases.
 - **Path / file-handle / global leaks** in the generators — `path()` must be
   restored on success *and* failure, all `fopen` handles closed (B13), no stray
   globals.

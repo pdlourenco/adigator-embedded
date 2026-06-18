@@ -30,11 +30,11 @@ The ceremony costs more than the signal. Note the outcome in the PR description:
 
 The code requires real MATLAB (R2022a+, [ADR-0003](decisions/ADR-0003-r2022a-minimum-release.md)).
 The license-free way to get the CI verdict before pushing is to run the suites
-in your existing MATLAB session — `CI_PLAN.md` §3.3 specifies a `ci_local.m`
-entry point (lint + unit + integration) for exactly this, optionally wired as a
-git pre-push hook. Today the finite-difference rule tests live in
-`unit_tests/` (`test_unarymath_rules.m`, `test_norm_rules.m`); run those at
-minimum.
+in your existing MATLAB session — `tests/ci_local.m` is the entry point (lint +
+unit + integration) for exactly this, optionally wired as a git pre-push hook
+(see `CI_PLAN.md` §3.3). The `matlab.unittest` suite lives under
+`tests/{unit,integration,system}`; `unit_tests/test_unarymath_rules.m` remains
+as the legacy finite-difference rule harness it was built from.
 
 Note: the MATLAB suite **cannot** run in a Claude-Code-on-the-web container
 (MATLAB is licensed and not provisioned there) — it runs in GitHub Actions

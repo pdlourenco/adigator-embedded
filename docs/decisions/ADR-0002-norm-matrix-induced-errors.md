@@ -31,7 +31,7 @@ wrong derivative.
   "warnings/errors are actionable" and the C-5 contract in `DESIGN.md`.
 - The guard must cover the `Inf`/`-Inf` matrix cases too, not just the default
   2-norm (a matrix `Inf`-norm must not slip past into the vector path).
-- Pinned by `unit_tests/test_norm_rules.m`.
+- Pinned by `tests/unit/UNormTest.m`.
 - **Revisit** if an SVD derivative rule is added to `@cada`; the error becomes a
   real rule at that point.
 

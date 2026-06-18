@@ -37,8 +37,8 @@ stripped of its runtime dependencies and handed to MATLAB Coder.
 | `adigator.m`, `adigatorOptions.m`, `adigatorCreate*Input.m` | Entry points: drive the overloaded evaluation pass and emit the derivative file. |
 | `lib/@cada`, `lib/@cadastruct`, `lib/cadaUtils`, `lib/adigatorInput.m` | The transformation engine. `@cada` is the overloaded numeric class (one `classdef` carrying value size, sparsity, and derivative metadata); `@cadastruct` overloads structs/cells; `adigatorInput` (a single-file `classdef`) defines derivative/auxiliary inputs. The overloaded methods (`cadaunarymath`, `cadabinaryarraymath`, `mtimes`, `sum`, `subsref`/`subsasgn`, `horzcat`/`vertcat`, …) hold the derivative rules. |
 | `util/` | User-facing generators that wrap `adigator`: `adigatorGenJacFile`, `adigatorGenHesFile`, the `adigatorGenFiles4{Fmincon,Fminunc,Fsolve,Ipopt,gpops2}` black-box helpers, and the compression utilities `adigatorColor` / `adigatorUncompressJac`. |
-| `embedding/` | The embedded fork: `adigatorGenDerFile_embedded` (orchestrates pruning + emission), `structure_to_embed_mfile` (emits a data function from the Gator data struct), `adigator_patch_derivative` (rewrites the generated file for codegen), `updatestruct`. |
-| `examples/`, `unit_tests/` | Worked examples (jacobians, hessians, stiff ODEs, optimization) and the finite-difference rule tests reused by the test plan. |
+| `embedding/` | The embedded fork: `adigatorGenDerFile_embedded` (orchestrates pruning + emission), `prune_adigator_mat` (prunes/down-casts the Gator data struct), `structure_to_embed_mfile` (emits a data function from the Gator data struct), `adigator_patch_derivative` (rewrites the generated file for codegen), `updatestruct`. |
+| `tests/`, `examples/`, `unit_tests/` | The `matlab.unittest` suite (`tests/{unit,integration,system}`, driven by `tests/ci_local.m`); worked examples (jacobians, hessians, stiff ODEs, optimization); and `unit_tests/test_unarymath_rules.m`, the legacy finite-difference rule harness the suite was built from. |
 
 ## The static tape
 
@@ -98,9 +98,9 @@ For a function `f: Rⁿ → Rᵐ` evaluated through the wrappers:
 - Generalized matrix-input / matrix-output shapes follow the table in
   `adigatorDerivativeConventions.m`.
 
-*Verified by:* `CI_PLAN.md` TS-I-01 (shape matrix), TS-I-04. *Note:* several
-branches here are currently wrong (`ANALYSIS.md` B7–B10) and pinned as
-`KnownIssue` until fixed.
+*Verified by:* `tests/integration/IShapeMatrixTest.m` (shape matrix; `CI_PLAN.md`
+TS-I-01), `ISecondDerivTest` (TS-I-04). *Note:* several branches here had
+dimension bugs (`ANALYSIS.md` B7–B10); see `ANALYSIS.md` for current status.
 
 ### C-2 — Generated-file evaluation interface
 
@@ -119,9 +119,10 @@ In the generated data (`.mat` for `'c'`/`'l'`, source for `'i'`):
 hold **numeric value constants used in arithmetic**. The two are *not*
 interchangeable — integer down-casting applies to `Index*` only; `Data*` stays
 `double` (see [ADR-0001](decisions/ADR-0001-downcast-index-fields-only.md), and
-`ANALYSIS.md` B1).
+`ANALYSIS.md` B1, now fixed in `embedding/prune_adigator_mat.m`).
 
-*Verified by:* `CI_PLAN.md` TS-U-04 (`KnownIssue` until B1 fixed).
+*Verified by:* `tests/unit/UPruneMatTest.m` (`CI_PLAN.md` TS-U-04) — `Data*`
+stays `double` is a hard assertion (`dataFieldsStayDouble`).
 
 ### C-4 — Embed-mode invariants
 
@@ -139,7 +140,7 @@ Vector p-norms (`2`, `1`, `Inf`, `-Inf`, general `p`) and the Frobenius norm
 induced/spectral matrix norms (which would require an SVD) raise a clear error
 rather than returning a wrong derivative.
 
-*Verified by:* `unit_tests/test_norm_rules.m`;
+*Verified by:* `tests/unit/UNormTest.m`;
 [ADR-0002](decisions/ADR-0002-norm-matrix-induced-errors.md).
 
 ## Constraints

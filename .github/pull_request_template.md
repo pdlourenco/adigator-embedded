@@ -19,6 +19,6 @@
 ## Checklist
 
 - [ ] Pre-push review: <!-- "no findings" or "flagged X, fixed in <sha>" — docs/CONTRIBUTING.md §Pre-push self-review -->
-- [ ] Local CI / relevant `unit_tests/` run: <!-- result, or N/A for docs-only -->
+- [ ] Local CI (`tests/ci_local.m`) / relevant `tests/` run: <!-- result, or N/A for docs-only -->
 - [ ] Contract change (if any) updated DESIGN.md §Contracts + every implementation side
 - [ ] ADR added/linked if a non-obvious decision sticks
