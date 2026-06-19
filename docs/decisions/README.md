@@ -44,3 +44,5 @@ Contracts section (binding conventions), or for purely mechanical choices
   R2022a.
 - [ADR-0004](ADR-0004-single-install-ci-pipeline.md) — PR CI is a single MATLAB
   install with sequential steps.
+- [ADR-0005](ADR-0005-der-levels-output-selection.md) — `DER_LEVELS` selects
+  which derivative levels a generated wrapper returns (roadmap R7a, issue #21).

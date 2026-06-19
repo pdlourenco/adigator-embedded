@@ -112,6 +112,19 @@ function options = adigatorOptions(varargin)
 %                  scatter: embedded consumers assemble - or never form -
 %                  the matrix themselves (roadmap R5, ANALYSIS.md 2.3).
 %                  Applies to adigatorGenJacFile only.
+% DER_LEVELS: []  - (default) the wrapper returns every derivative level its
+%                  generator produces, reproducing the historical
+%                  signatures exactly ([Jac,Fun] for Jacobian/gradient,
+%                  [Hes,Grd,Fun] for Hessian).
+%             vector of integers from {0,1,2} - select which levels the
+%                  wrapper returns: 0 = function value, 1 = first derivative
+%                  (gradient/Jacobian), 2 = Hessian. The top level the
+%                  generator is named for is always returned, so DER_LEVELS
+%                  chooses which LOWER-order outputs accompany it, e.g.
+%                  [2] = Hessian only, [1 2] = Hessian + gradient. Trims the
+%                  wrapper output assembly accordingly; the Grd intermediate
+%                  of a Grd->Hes chain keeps its full [Grd,Fun] form so it
+%                  stays re-differentiable. (Roadmap R7a, issue #21.)
 % ------------------------------------------------------------------------
 %
 % NOTES:    The default value of the OVERWRITE option changes depending
@@ -147,6 +160,9 @@ function options = adigatorOptions(varargin)
 %                                   Add the JAC_OUTPUT option: nonzero-
 %                                   vector wrapper output with the pattern
 %                                   exported once (roadmap R5).
+%                                   Add the DER_LEVELS option: select which
+%                                   derivative levels the wrapper returns
+%                                   (roadmap R7a, issue #21).
 
 % Set Defaults
 options.embed_mode   = 'c'; % v1.5 - 'c(lassic)' | '(coder)l(oad)' | 'i(nline)'
@@ -161,6 +177,7 @@ options.maxwhileiter = 10;
 options.complex      = 0;
 options.loopbound    = {}; % roadmap R3 (issue #6 Tier 1): runtime loop bounds
 options.jac_output   = 'matrix'; % roadmap R5: 'matrix' | 'nonzeros'
+options.der_levels   = []; % roadmap R7a: [] (all) | vector subset of {0,1,2}
 
 if nargin/2 ~= floor(nargin/2)
   error('Inputs to adigatorOptions must come in field/value pairs')
@@ -194,6 +211,22 @@ for i = 1:nargin/2
           'jac_output must be ''matrix'' (default) or ''nonzeros''');
       end
       options.jac_output = value;
+      case 'der_levels' % roadmap R7a (issue #21)
+      % shape/range check only; the level-vs-maxlevel and mandatory-top-level
+      % checks need the derivative type, so they live in the generators'
+      % call to adigatorResolveDerLevels - do not move them here
+      if ~isempty(value)
+        if ~isnumeric(value) || ~isvector(value) ...
+            || any(value(:) ~= round(value(:))) ...
+            || any(value(:) < 0) || any(value(:) > 2)
+          error('adigator:derLevels',...
+            ['der_levels must be empty (all levels) or a vector of ',...
+             'integers from {0,1,2} (0=function, 1=first derivative, ',...
+             '2=Hessian)']);
+        end
+        value = unique(value(:).');
+      end
+      options.der_levels = value;
       case {'maxwhileiter','path'} % v1.5
       options.(field) = value;
     otherwise

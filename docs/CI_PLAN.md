@@ -121,6 +121,7 @@ and compare. Run on every pull request (slower, still base MATLAB).
 | TS-I-02 | `IEmbedModesTest` — for each fixture function (incl. one with an integer-valued constant matrix, one with subfunctions, one with a rolled loop): generate with `embed_mode` 'c', 'l', 'i'; assert numeric equality across modes, absence of `global`/`load(` in 'l'/'i' text, absence of `.mat` for 'i'. | REQ-T-04, REQ-C-05/06/07 end-to-end |
 | TS-I-03 | `IReproTest` — regenerate twice, compare modulo timestamp lines; `overwrite=0` refusal; `opts.path` placement and calling-dir cleanliness. | REQ-T-06 |
 | TS-I-04 | `ISecondDerivTest` — gradient+Hessian through `adigatorGenHesFile` for the `logsumexp` and `gapfun` fixtures, checked against analytic Hessians. | REQ-T-01, REQ-C-04 |
+| TS-I-05 | `ILevelSelectTest` — the `DER_LEVELS` output-selection option (roadmap R7a, issue #21; ADR-0005): wrapper signature trimmed to the requested levels (`nargout`), each emitted output numerically identical to the full-generation counterpart, the gradient intermediate of a Grd→Hes chain stays `[Grd,Fun]`, the type/range/top-level validation guards, and composition with the embedded pipeline (mode `l`). | REQ-T-02 |
 
 ### 2.3 System / validation tests — `tests/system` (TS-S)
 
