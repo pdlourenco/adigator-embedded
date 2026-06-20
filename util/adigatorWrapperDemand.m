@@ -23,9 +23,10 @@ function [resvar, fields] = adigatorWrapperDemand(wrapperLines, dername)
 %   fields - cellstr (row) of the distinct field names read from <resvar>
 %            (e.g. {'f','dx'} or {'f','dx','dx_location'}); {} when resvar=''.
 %
-% Conservative by design: if the single 'X = dername(...)' call cannot be
-% located unambiguously, resvar is returned empty so the driver bails (leaves
-% the derivative file unsliced).
+% Conservative by design: resvar is returned empty (so the driver leaves the
+% derivative file unsliced) if the single 'X = dername(...)' call cannot be
+% located unambiguously, OR if the result struct is used WHOLE anywhere (a
+% bare 'X' token), since the per-field demand would then be incomplete.
 %
 % Copyright GMV.
 %   2026-06  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
@@ -41,6 +42,7 @@ fields = {};
 % locate the call '<resvar> = <dername>(' (ignoring commented lines)
 callpat = ['^\s*([A-Za-z]\w*)\s*=\s*',regexptranslate('escape',char(dername)),'\s*\('];
 hits = cell(0,1);
+callidx = zeros(0,1);
 for i = 1:numel(wrapperLines)
   ln = strtrim(char(wrapperLines(i)));
   if isempty(ln) || ln(1) == '%'
@@ -48,13 +50,33 @@ for i = 1:numel(wrapperLines)
   end
   tok = regexp(ln,callpat,'tokens','once');
   if ~isempty(tok)
-    hits{end+1,1} = tok{1}; %#ok<AGROW> collect every call-site result name
+    hits{end+1,1} = tok{1};   %#ok<AGROW> collect every call-site result name
+    callidx(end+1,1) = i;     %#ok<AGROW> and its line, to skip in the bare scan
   end
 end
 if numel(hits) ~= 1
   return % no call, or more than one - bail (resvar stays '')
 end
 resvar = hits{1};
+
+% defensive bail: if the result struct is used WHOLE anywhere (a bare
+% <resvar> token not followed by '.', other than the call's own LHS), the
+% demand seeded from <resvar>.<field> reads would be incomplete - so refuse
+% to slice rather than under-demand. Today's generated wrappers only ever
+% field-access the result, so this never fires in practice.
+barepat = ['\<',regexptranslate('escape',resvar),'\>(?!\.)'];
+for i = 1:numel(wrapperLines)
+  if i == callidx(1)
+    continue % the call's own LHS assignment, not a use
+  end
+  ln = strtrim(char(wrapperLines(i)));
+  if isempty(ln) || ln(1) == '%'
+    continue
+  end
+  if ~isempty(regexp(ln,barepat,'once'))
+    resvar = ''; return % whole-struct use - bail (resvar/fields stay empty)
+  end
+end
 
 % collect every '<resvar>.<field>' read across the wrapper
 fpat = ['\<',regexptranslate('escape',resvar),'\.([A-Za-z]\w*)'];

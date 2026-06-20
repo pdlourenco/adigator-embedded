@@ -37,6 +37,21 @@ classdef USlimEngineTest < matlab.unittest.TestCase
             tc.verifyEmpty(fields);
         end
 
+        function wrapperBailsOnWholeStructUse(tc)
+            % the result struct is passed WHOLE somewhere (bare 'y'): demand
+            % seeded from y.<field> reads would be incomplete -> bail
+            w = [ ...
+                "function [Jac,Fun] = mf_Jac(x)"; ...
+                "gator_x.f = x;"; ...
+                "y = mf_ADiGatorJac(gator_x);"; ...
+                "otherfun(y);"; ...
+                "Jac = y.dx;"; ...
+                "end"];
+            [res, fields] = adigatorWrapperDemand(w, 'mf_ADiGatorJac');
+            tc.verifyEmpty(res);
+            tc.verifyEmpty(fields);
+        end
+
         % ---------------------- adigatorSlimDerivBody ------------------- %
         function dropsUnreadMetadataFields(tc)
             % embed demand {f,dx}: the .dx_location / .dx_size writers and the
