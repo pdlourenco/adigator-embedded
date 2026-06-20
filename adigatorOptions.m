@@ -125,6 +125,20 @@ function options = adigatorOptions(varargin)
 %                  wrapper output assembly accordingly; the Grd intermediate
 %                  of a Grd->Hes chain keeps its full [Grd,Fun] form so it
 %                  stays re-differentiable. (Roadmap R7a, issue #21.)
+% SLIM_EMBED: 0   - (default) no slimming.
+%             1   - in the embedded pipeline (embed_mode 'l'/'i'), slice the
+%                  generated derivative code, removing the statements that
+%                  feed only output-struct fields the wrapper never reads
+%                  (the '..._location'/'..._size' metadata) so the constant
+%                  index tables they reference drop in the prune. Each slim is
+%                  guarded by an eval-free dependency-closure check (a numeric
+%                  equivalence guarantee for this straight-line dialect) plus
+%                  a best-effort generation-time numeric round-trip
+%                  cross-check; on any uncertainty (rolled loops, an
+%                  unrecognised file, a check mismatch) the file is left
+%                  unsliced. Classic mode is a
+%                  no-op (its wrapper reads _location at runtime). Roadmap
+%                  R7b, issue #21; see ADR-0006.
 % ------------------------------------------------------------------------
 %
 % NOTES:    The default value of the OVERWRITE option changes depending
@@ -163,6 +177,9 @@ function options = adigatorOptions(varargin)
 %                                   Add the DER_LEVELS option: select which
 %                                   derivative levels the wrapper returns
 %                                   (roadmap R7a, issue #21).
+%                                   Add the SLIM_EMBED option: slice unread
+%                                   output-field chains from embedded
+%                                   derivative code (roadmap R7b, issue #21).
 
 % Set Defaults
 options.embed_mode   = 'c'; % v1.5 - 'c(lassic)' | '(coder)l(oad)' | 'i(nline)'
@@ -178,6 +195,7 @@ options.complex      = 0;
 options.loopbound    = {}; % roadmap R3 (issue #6 Tier 1): runtime loop bounds
 options.jac_output   = 'matrix'; % roadmap R5: 'matrix' | 'nonzeros'
 options.der_levels   = []; % roadmap R7a: [] (all) | vector subset of {0,1,2}
+options.slim_embed   = 0; % roadmap R7b (issue #21): slice unread output-field chains in embed modes
 
 if nargin/2 ~= floor(nargin/2)
   error('Inputs to adigatorOptions must come in field/value pairs')
@@ -189,6 +207,7 @@ for i = 1:nargin/2
   value = varargin{2*i};
   switch field
     case {'auxdata','echo','unroll','comments','overwrite','genpat',...
+        'slim_embed',...
         'optoutput','complex'}
       options.(field) = logical(value);
       case 'embed_mode' % v1.5 (B11 fix): accept c/classic, l/coderload, i/inline
