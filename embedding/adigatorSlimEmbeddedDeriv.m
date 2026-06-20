@@ -96,7 +96,10 @@ end
 
 savedPath = path;
 addpath(genfile.path);
-cleaner = onCleanup(@() restoreEnv(savedPath, genfile, origLines)); %#ok<NASGU>
+% `cleaner` must stay a named variable so its destructor (restoreEnv) fires
+% when this function exits - including on error. (Modern checkcode recognises
+% the onCleanup pattern and does not flag the assignment as unused.)
+cleaner = onCleanup(@() restoreEnv(savedPath, genfile, origLines));
 
 nout = abs(nargout(genfile.name));
 if nout < 1
