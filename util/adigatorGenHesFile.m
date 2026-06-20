@@ -222,7 +222,7 @@ else
 end
 
 try % v1.5 - add try-catch to avoid leaving unnecessary changes to path active
-[adiout2,FunctionInfo2,ADi_DerivFiles2,ADi_DerivFuns2] = adigator(AdiGrdFileName,UserFunInputs,AdiHesFileName,opts); % v1.5 - add new output with list of files/functions
+[adiout2,~,ADi_DerivFiles2,ADi_DerivFuns2] = adigator(AdiGrdFileName,UserFunInputs,AdiHesFileName,opts); % v1.5 - add new output with list of files/functions (FunctionInfo2 unused -> ~)
 catch ME
     path(original_path);
     rethrow(ME);

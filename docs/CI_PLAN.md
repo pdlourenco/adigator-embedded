@@ -139,7 +139,7 @@ merges; license-gated jobs skip cleanly when products are unavailable.
 | Requirement | Verified / validated by |
 |-------------|-------------------------|
 | REQ-T-01 | TS-I-01, TS-I-04, TS-S-01 |
-| REQ-T-02 | TS-I-01 |
+| REQ-T-02 | TS-I-01, TS-I-05 |
 | REQ-T-03 | TS-I-01 |
 | REQ-T-04 | TS-I-02 |
 | REQ-T-05 | TS-S-02 |
