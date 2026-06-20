@@ -98,9 +98,16 @@ For a function `f: Rⁿ → Rᵐ` evaluated through the wrappers:
 - Generalized matrix-input / matrix-output shapes follow the table in
   `adigatorDerivativeConventions.m`.
 
+The `DER_LEVELS` option (additive, default `[]` = all levels) selects *which*
+of these outputs a wrapper returns (`0` = function value, `1` = first
+derivative, `2` = Hessian; the top level is always returned) — it never changes
+the *shape* of an emitted output, so this contract is unaffected by default
+(roadmap R7a, issue #21; [ADR-0005](decisions/ADR-0005-der-levels-output-selection.md)).
+
 *Verified by:* `tests/integration/IShapeMatrixTest.m` (shape matrix; `CI_PLAN.md`
-TS-I-01), `ISecondDerivTest` (TS-I-04). *Note:* several branches here had
-dimension bugs (`ANALYSIS.md` B7–B10); see `ANALYSIS.md` for current status.
+TS-I-01), `ISecondDerivTest` (TS-I-04), `ILevelSelectTest` (TS-I-05, output
+selection). *Note:* several branches here had dimension bugs (`ANALYSIS.md`
+B7–B10); see `ANALYSIS.md` for current status.
 
 ### C-2 — Generated-file evaluation interface
 

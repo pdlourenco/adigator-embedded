@@ -99,6 +99,10 @@ function output = adigatorGenJacFile(UserFunName,UserFunInputs,varargin)
 %                                   constant pattern exported once via
 %                                   output.JacobianLocs - no per-call
 %                                   dense projection (roadmap R5).
+%                                   Honour der_levels: emit the function
+%                                   value Fun only when level 0 is requested
+%                                   (the first derivative is always
+%                                   returned) (roadmap R7a, issue #21).
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ OPTIONS SETUP ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 opts = adigatorOptions(); % default options
@@ -204,7 +208,17 @@ end
 InputStr1 = cell2mat(InputStrs);
 InputStr1(end) = [];
 
-functionstr = ['function [Jac,Fun] = ',JacFileName,'(',InputStr1,')\n'];
+% roadmap R7a (issue #21): DER_LEVELS selects which derivative levels the
+% wrapper returns. This generator produces level 1 (the first derivative,
+% named Jac here for both the Jacobian and gradient appendices) and level 0
+% (the function value Fun). The first derivative is always returned, so
+% DER_LEVELS only toggles whether Fun accompanies it; the default ([]) keeps
+% the historical [Jac,Fun] signature.
+jacLevels = adigatorResolveDerLevels(opts.der_levels, 1, 'adigatorGenJacFile');
+wantFun   = ismember(0, jacLevels);
+jacOut    = {'Jac'};
+if wantFun; jacOut{end+1} = 'Fun'; end
+functionstr = ['function [',strjoin(jacOut,','),'] = ',JacFileName,'(',InputStr1,')\n'];
 
 fprintf(fid,['%% ',functionstr,]);
 fprintf(fid,'%% \n');
@@ -392,7 +406,9 @@ else % Jacobian is a matrix -> Jacobian convention (classic runtime indexing)
     fprintf(fid,['Jac((',colstr,'-1)*%1.0f+',rowstr,') = ',dy,';\n'],dydxsize(1));
   end
 end
-fprintf(fid,['Fun = ',ystr,'.f;\n']);
+if wantFun % roadmap R7a (issue #21): emit Fun only when level 0 is requested
+  fprintf(fid,['Fun = ',ystr,'.f;\n']);
+end
 fprintf(fid,'end');
 fclose(fid);
 rehash

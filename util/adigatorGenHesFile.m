@@ -47,6 +47,10 @@ function output = adigatorGenHesFile(UserFunName,UserFunInputs,varargin)
 % The generated Hessian/gradient files have the same input structure as the
 % original user function. The output of Hessian file is [Hes, Grd, Fun].
 % The output of gradient file is [Grd, Fun].
+% The DER_LEVELS option (adigatorOptions) trims the Hessian file's outputs
+% to a requested subset - 2=Hessian (always returned), 1=gradient,
+% 0=function value - e.g. [2] yields a Hessian file returning only Hes. The
+% gradient file is unaffected (it stays [Grd, Fun] and re-differentiable).
 %
 % ----------------------- Additional Information -------------------------
 % The Hessian is built as a sparse matrix under the condition that
@@ -101,6 +105,11 @@ function output = adigatorGenHesFile(UserFunName,UserFunInputs,varargin)
 %                                   indices at generation time and emit
 %                                   them as literal vectors (ANALYSIS.md
 %                                   2.1, PR #9).
+%                                   Honour der_levels: the Hessian wrapper
+%                                   returns only the requested subset of
+%                                   {Hes,Grd,Fun} (Hes always); the gradient
+%                                   wrapper stays [Grd,Fun] (roadmap R7a,
+%                                   issue #21).
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ OPTIONS SETUP ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 opts = adigatorOptions();
@@ -213,7 +222,7 @@ else
 end
 
 try % v1.5 - add try-catch to avoid leaving unnecessary changes to path active
-[adiout2,FunctionInfo2,ADi_DerivFiles2,ADi_DerivFuns2] = adigator(AdiGrdFileName,UserFunInputs,AdiHesFileName,opts); % v1.5 - add new output with list of files/functions
+[adiout2,~,ADi_DerivFiles2,ADi_DerivFuns2] = adigator(AdiGrdFileName,UserFunInputs,AdiHesFileName,opts); % v1.5 - add new output with list of files/functions (FunctionInfo2 unused -> ~)
 catch ME
     path(original_path);
     rethrow(ME);
@@ -234,8 +243,20 @@ end
 InputStr1 = cell2mat(InputStrs);
 InputStr1(end) = [];
 
+% roadmap R7a (issue #21): DER_LEVELS selects which levels the FINAL
+% (Hessian) wrapper returns - 2=Hessian, 1=gradient, 0=function value. The
+% Hessian is always returned. The gradient wrapper (Grd file) is an
+% intermediate of the Grd->Hes chain and keeps its full [Grd,Fun] signature
+% so the pruned artefacts stay re-differentiable (ANALYSIS.md B6).
+hesLevels  = adigatorResolveDerLevels(opts.der_levels, 2, 'adigatorGenHesFile');
+hesWantGrd = ismember(1, hesLevels);
+hesWantFun = ismember(0, hesLevels);
+hesOut = {'Hes'};
+if hesWantGrd; hesOut{end+1} = 'Grd'; end
+if hesWantFun; hesOut{end+1} = 'Fun'; end
+
 Gfuncstr = ['function [Grd,Fun] = ',GrdFileName,'(',InputStr1,')\n'];
-Hfuncstr = ['function [Hes,Grd,Fun] = ',HesFileName,'(',InputStr1,')\n'];
+Hfuncstr = ['function [',strjoin(hesOut,','),'] = ',HesFileName,'(',InputStr1,')\n'];
 
   % Print Function Header
 for fid = [Gfid Hfid]
@@ -476,7 +497,14 @@ else
   scatteridx = [dydx,'_location']; % single-column cases only (see below)
 end
 %v1.5:	process this to output Jacobians correctly, i.e., in [m n] form ( m = numel(y), n = numel(x))
-for fid = [Gfid,Hfid]
+% roadmap R7a (issue #21): the gradient wrapper (Gfid) always returns
+% [Grd,Fun]; the Hessian wrapper (Hfid) receives Grd / Fun only when
+% DER_LEVELS requests level 1 / level 0. The terminating 'end' goes to both.
+gradfids = Gfid;
+if hesWantGrd; gradfids = [gradfids, Hfid]; end
+funfids = Gfid;
+if hesWantFun; funfids = [funfids, Hfid]; end
+for fid = gradfids
   if dydxnnz == dydxnumel % all elements are nonzero
     if dydxsize(1) == 1 % the function is a scalar, use the Gradient convention if user selected
         if strcmp(NameAppendix,'Jac') % Use Jacobian convention
@@ -538,7 +566,11 @@ for fid = [Gfid,Hfid]
       fprintf(fid,['Grd((',colstr,'-1)*%1.0f+',rowstr,') = ',dydx,';\n'],dydxsize(1));
     end
   end
+end
+for fid = funfids
   fprintf(fid,['Fun = ',ystr,'.f;\n']);
+end
+for fid = [Gfid,Hfid]
   fprintf(fid,'end');
 end
 % v1.5 (B13 fix): close both wrapper files, not just the loop's last fid;
