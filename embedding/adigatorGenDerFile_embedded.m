@@ -126,6 +126,21 @@ N_derivs = length(AdigatorGeneratedFiles);
 for derf = 1:N_derivs
     fprintf('Processing derivative #%d...\n',derf);
 
+    %%% R7b (issue #21): slim the derivative code BEFORE pruning so the
+    %%% now-unreferenced Gator*Data index tables drop in the prune below.
+    %%% Opt-in; conservative (leaves the file unsliced on any uncertainty).
+    if opts.slim_embed
+        fprintf('\t Slimming derivative code (slim_embed)... ');
+        slim = adigatorSlimEmbeddedDeriv(AdigatorGeneratedFiles(derf),UserFunInputs);
+        if slim.sliced
+            chk = '';
+            if slim.checked; chk = ' (round-trip verified)'; end
+            fprintf('removed %d statement(s)%s.\n',slim.dropped,chk);
+        else
+            fprintf('no slimming (%s).\n',slim.reason);
+        end
+    end
+
     %%% process the data file to prune it of unnecessary data for derivative evaluation
     fprintf('\t Processing static data file (cleaning up unnecessary data)... ');
     tmp_adigator_struct = load(AdigatorGeneratedFiles(derf).mat); % load data
