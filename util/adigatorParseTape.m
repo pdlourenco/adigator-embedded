@@ -21,6 +21,8 @@ function S = adigatorParseTape(body, InNames)
 %         .rhs     - right-hand-side expression text (without trailing ';')
 %         .deps    - cellstr of the base names this statement reads (dotted
 %                    field tails stripped; a scatter also reads its own base)
+%         .line    - 1-based index of the statement within `body` (so a slice
+%                    can be re-emitted by dropping the corresponding lines)
 %         .active/.kind/.info - left empty for a downstream classify/execute
 %                    pass (adigatorGenRevGradFile's execAndClassify)
 %
@@ -41,6 +43,7 @@ body = string(body);
 
 % ------------------------- collect statements -------------------------- %
 stmts = cell(0,1);
+srcline = zeros(0,1);
 for Lcount = 1:numel(body)
   ln = strtrim(char(body(Lcount)));
   if isempty(ln) || ln(1) == '%'
@@ -54,13 +57,17 @@ for Lcount = 1:numel(body)
       ['the generated file contains rolled control flow (''%s''); ',...
       'generate with adigatorOptions(''unroll'',1) or remove loops'],ln);
   end
-  stmts{end+1,1} = ln; %#ok<AGROW> statement list is built line by line
+  stmts{end+1,1} = ln;       %#ok<AGROW> statement list is built line by line
+  srcline(end+1,1) = Lcount; %#ok<AGROW> 1-based index of ln within body
 end
 
 % parse: lhs base name (with optional .f), scatter subscript text, rhs
 n = numel(stmts);
 S = struct('text',stmts,'lhs',[],'lhsSubs',[],'rhs',[],'deps',[],...
-  'active',[],'kind',[],'info',[]);
+  'line',[],'active',[],'kind',[],'info',[]);
+for k = 1:n
+  S(k).line = srcline(k); % source line within body (for re-emission)
+end
 reserved = {'S','Gator1Data','UserFunInputs','InNames','vodLoc','VodName',...
   'OutName','stmts','reserved','FwdGator','fwddata'};
 for k = 1:n

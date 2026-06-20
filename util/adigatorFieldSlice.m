@@ -1,4 +1,4 @@
-function [S, keep] = adigatorFieldSlice(body, InNames, demanded)
+function [S, keep, Sall] = adigatorFieldSlice(body, InNames, demanded)
 % adigatorFieldSlice  Field-granular backward slice of a generated forward
 % derivative-file body: keep only the statements needed to produce a given
 % set of demanded outputs, where an output may be an individual struct field
@@ -23,6 +23,8 @@ function [S, keep] = adigatorFieldSlice(body, InNames, demanded)
 %   keep - logical column vector over the PARSED statements (before slicing),
 %          true where the statement is live - so a caller can map the slice
 %          back onto the parsed tape.
+%   Sall - the full parsed statement array BEFORE slicing (keep indexes it),
+%          for a downstream dependency-closure check.
 %
 % Correctness model. The slice is the standard monotone backward reachability
 % with one refinement at struct boundaries: a field write 'v.fld = ...' is
@@ -57,7 +59,8 @@ demanded = cellstr(string(demanded));
 demanded = demanded(:).';
 
 % ------------------------- parse the tape ------------------------------ %
-S = adigatorParseTape(body, InNames);
+Sall = adigatorParseTape(body, InNames);
+S = Sall;
 n = numel(S);
 
 % ----------------------- seed the demand sets -------------------------- %
@@ -90,5 +93,5 @@ for k = n:-1:1
   end
 end
 
-S = S(keep);
+S = Sall(keep);
 end
