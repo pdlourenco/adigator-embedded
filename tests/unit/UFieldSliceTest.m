@@ -1,0 +1,111 @@
+classdef UFieldSliceTest < matlab.unittest.TestCase
+    % UFieldSliceTest  Unit tests for adigatorFieldSlice (and the shared
+    % adigatorParseTape), the field-granular backward slicer that is the core
+    % of the R7b interprocedural field-slice (issue #21). Exercises the
+    % headline behaviour - dropping UNdemanded sibling fields of an output
+    % struct (e.g. '.dy_location'/'.dy_size') and the constant index tables
+    % they reference, while keeping demanded fields and their value chains -
+    % plus whole-vs-field demand, value-only demand, scatter, and the
+    % inherited control-flow guard. Hand-written tape snippets, no toolbox.
+
+    methods (TestClassSetup)
+        function addPaths(tc)
+            import matlab.unittest.fixtures.PathFixture
+            testDir = fileparts(mfilename('fullpath'));
+            root = fileparts(fileparts(testDir));
+            tc.applyFixture(PathFixture(fullfile(root,'util')));
+        end
+    end
+
+    methods (Test)
+        function dropsUndemandedSiblingFields(tc)
+            % only '.f' and '.dy' are demanded: the '.dy_location' / '.dy_size'
+            % writers (and the Gator1Data index they reference) must drop
+            body = [ ...
+                "cada1f1 = w.*x;"; ...
+                "cadaoutput1.f = cada1f1;"; ...
+                "cadaoutput1.dy = cada1f1;"; ...
+                "cadaoutput1.dy_location = Gator1Data.Index7;"; ...
+                "cadaoutput1.dy_size = 5;"];
+            [S,keep] = adigatorFieldSlice(body, {'x','w'}, ...
+                {'cadaoutput1.f','cadaoutput1.dy'});
+
+            tc.verifyEqual(keep, [true;true;true;false;false]);
+            tc.verifyEqual({S.lhs}, ...
+                {'cada1f1','cadaoutput1.f','cadaoutput1.dy'});
+            tc.verifyFalse(any(strcmp({S.lhs},'cadaoutput1.dy_location')));
+            tc.verifyFalse(any(strcmp({S.lhs},'cadaoutput1.dy_size')));
+            % the dropped index reference is gone, so the .mat prune can shed it
+            tc.verifyFalse(any(contains({S.text},'Index7')));
+        end
+
+        function wholeDemandKeepsEveryField(tc)
+            % demanding the struct as a whole keeps all of its field writers
+            body = [ ...
+                "cada1f1 = w.*x;"; ...
+                "cadaoutput1.f = cada1f1;"; ...
+                "cadaoutput1.dy = cada1f1;"; ...
+                "cadaoutput1.dy_location = Gator1Data.Index7;"; ...
+                "cadaoutput1.dy_size = 5;"];
+            S = adigatorFieldSlice(body, {'x','w'}, {'cadaoutput1'});
+            tc.verifyEqual(numel(S), 5);
+            tc.verifyTrue(any(strcmp({S.lhs},'cadaoutput1.dy_location')));
+        end
+
+        function valueOnlyDemandDropsDerivative(tc)
+            % demanding only '.f' drops the entire derivative chain
+            body = [ ...
+                "cada1f1 = w.*x;"; ...
+                "cadad1 = cada1f1.*w;"; ...
+                "cadaoutput1.f = cada1f1;"; ...
+                "cadaoutput1.dy = cadad1;"; ...
+                "cadaoutput1.dy_location = Gator1Data.Index7;"];
+            S = adigatorFieldSlice(body, {'x','w'}, {'cadaoutput1.f'});
+            tc.verifyEqual({S.lhs}, {'cada1f1','cadaoutput1.f'});
+            tc.verifyFalse(any(strcmp({S.lhs},'cadad1'))); % derivative temp gone
+            tc.verifyFalse(any(strcmp({S.lhs},'cadaoutput1.dy')));
+        end
+
+        function keepsScatterIntoDemandedChain(tc)
+            % a scatter into an intermediate that feeds a demanded field stays
+            body = [ ...
+                "Jac = zeros(2,1);"; ...
+                "Jac(1) = x;"; ...
+                "cadaoutput1.dy = Jac;"];
+            S = adigatorFieldSlice(body, {'x'}, {'cadaoutput1.dy'});
+            tc.verifyEqual(numel(S), 3);
+            tc.verifyEqual({S.lhs}, {'Jac','Jac','cadaoutput1.dy'});
+            tc.verifyEqual(S(2).lhsSubs, '1'); % the scatter survived
+        end
+
+        function acceptsStringArrayDemand(tc)
+            body = [ ...
+                "cadaoutput1.f = x;"; ...
+                "cadaoutput1.dy_size = 3;"];
+            S = adigatorFieldSlice(body, {'x'}, "cadaoutput1.f");
+            tc.verifyEqual({S.lhs}, {'cadaoutput1.f'});
+        end
+
+        function rejectsRolledControlFlow(tc)
+            body = [ ...
+                "cadaoutput1.f = x;"; ...
+                "for cadaforcount1 = 1:3"; ...
+                "  a = cadaforcount1;"; ...
+                "end"];
+            tc.verifyError(@() adigatorFieldSlice(body, {'x'}, {'cadaoutput1.f'}), ...
+                'adigator:fwdtape:controlflow');
+        end
+
+        function parseTapeComputesDeps(tc)
+            % direct check of the shared parser's dependency extraction
+            S = adigatorParseTape([ ...
+                "cada1f1 = w.*x;"; ...
+                "y.f = sum(cada1f1);"], {'x','w'});
+            tc.verifyEqual(numel(S), 2);
+            tc.verifyEqual(S(1).lhs, 'cada1f1');
+            tc.verifyEqual(sort(S(1).deps(:)), {'w';'x'}); % column, orientation-safe
+            tc.verifyEqual(S(2).deps(:), {'cada1f1'});
+            tc.verifyTrue(all(cellfun(@isempty,{S.active})));
+        end
+    end
+end

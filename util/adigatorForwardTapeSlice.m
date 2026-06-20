@@ -4,12 +4,11 @@ function S = adigatorForwardTapeSlice(body, InNames, OutName, VodName)
 % <OutName>.f, with the derivative chain (the '.d<VodName>' field writers)
 % excluded.
 %
-% This is the parser/slicer shared by the reverse-mode generator
-% (adigatorGenRevGradFile, roadmap R4) and - in a later increment - the R7b
-% interprocedural field-slice (issue #21). It was extracted verbatim from
-% adigatorGenRevGradFile so the parsing/slicing logic lives in one tested
-% place; the only externally visible change is the error identifier prefix
-% (adigator:fwdtape:* instead of adigator:revgrad:*).
+% This is the value-tape slicer used by the reverse-mode generator
+% (adigatorGenRevGradFile, roadmap R4). Parsing is shared with the
+% field-granular slicer (adigatorFieldSlice) through adigatorParseTape; this
+% function adds the backward slice from <OutName>.f, excluding the
+% '.d<VodName>' derivative chain.
 %
 % ------------------------------ Inputs --------------------------------- %
 %   body    - string array (or cellstr) of the generated function-body lines
@@ -33,87 +32,16 @@ function S = adigatorForwardTapeSlice(body, InNames, OutName, VodName)
 %   2026-06  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %            Extracted from adigatorGenRevGradFile for reuse (roadmap R7a
 %            follow-up; foundation for the R7b field-slice, issue #21).
+%            Parsing later split out to adigatorParseTape (R7b).
 % Distributed under the GNU General Public License version 3.0
 %
-% see also adigatorGenRevGradFile, adigatorGenDerFile_embedded
+% see also adigatorParseTape, adigatorFieldSlice, adigatorGenRevGradFile
 
-body = string(body);
+% ------------------------- parse the tape ------------------------------ %
+S = adigatorParseTape(body, InNames);
+n = numel(S);
 
-% ------------------------- collect statements -------------------------- %
-stmts = cell(0,1);
-for Lcount = 1:numel(body)
-  ln = strtrim(char(body(Lcount)));
-  if isempty(ln) || ln(1) == '%'
-    continue
-  end
-  if strcmp(ln,'end') || strcmp(ln,'return')
-    break % closing of the generated main function
-  end
-  if ~isempty(regexp(ln,'^(for|while|if|elseif|else|switch)\>','once'))
-    error('adigator:fwdtape:controlflow',...
-      ['the generated file contains rolled control flow (''%s''); ',...
-      'generate with adigatorOptions(''unroll'',1) or remove loops'],ln);
-  end
-  stmts{end+1,1} = ln; %#ok<AGROW> statement list is built line by line
-end
-
-% parse: lhs base name (with optional .f), scatter subscript text, rhs
-n = numel(stmts);
-S = struct('text',stmts,'lhs',[],'lhsSubs',[],'rhs',[],'deps',[],...
-  'active',[],'kind',[],'info',[]);
-reserved = {'S','Gator1Data','UserFunInputs','InNames','vodLoc','VodName',...
-  'OutName','stmts','reserved','FwdGator','fwddata'};
-for k = 1:n
-  % split at the first top-level '=' (the dialect has no '==' and no '='
-  % inside subscripts); parse the LHS manually rather than with optional
-  % regexp groups, whose tokens MATLAB drops when they do not participate
-  ln = S(k).text;
-  eq = strfind(ln,'=');
-  if isempty(eq) || ln(end) ~= ';'
-    error('adigator:fwdtape:parse','cannot parse generated statement: %s',ln);
-  end
-  lhsfull = strtrim(ln(1:eq(1)-1));
-  S(k).rhs = strtrim(ln(eq(1)+1:end-1));
-  par = strfind(lhsfull,'(');
-  if isempty(par)
-    S(k).lhs     = lhsfull;
-    S(k).lhsSubs = '';
-  elseif lhsfull(end) == ')'
-    S(k).lhs     = strtrim(lhsfull(1:par(1)-1));
-    S(k).lhsSubs = lhsfull(par(1)+1:end-1);
-  else
-    error('adigator:fwdtape:parse','cannot parse generated statement: %s',ln);
-  end
-  if isempty(regexp(S(k).lhs,'^[A-Za-z]\w*(\.\w+)?$','once')) || ...
-      isempty(S(k).rhs)
-    error('adigator:fwdtape:parse','cannot parse generated statement: %s',ln);
-  end
-  if ~isempty(regexp(ln,'\<cadaRG','once'))
-    error('adigator:fwdtape:parse','reserved name cadaRG* in generated code');
-  end
-  if any(strcmp(strtok(S(k).lhs,'.'),reserved))
-    error('adigator:fwdtape:parse',...
-      'variable name ''%s'' collides with a generator-internal name',...
-      strtok(S(k).lhs,'.'));
-  end
-end
-if any(ismember(InNames,reserved))
-  error('adigator:fwdtape:parse',...
-    'an input name collides with a generator-internal name');
-end
-
-% --------------- dependencies and backward slice from out.f ------------ %
-defined = [InNames(:); {'Gator1Data'}];
-for k = 1:n
-  % strip dotted tails so field names are not mistaken for variables
-  depsrc = regexprep([S(k).rhs,' ',char(S(k).lhsSubs)],'\.\w+','');
-  ids = regexp(depsrc,'[A-Za-z]\w*','match');
-  S(k).deps = intersect(ids,defined);
-  if ~isempty(S(k).lhsSubs)
-    S(k).deps = union(S(k).deps,{strtok(S(k).lhs,'.')}); % scatter reads old
-  end
-  defined = union(defined,{strtok(S(k).lhs,'.')});
-end
+% --------------- backward slice from out.f, excluding .d<vod> ---------- %
 outStmt = find(strcmp({S.lhs},[OutName,'.f']),1,'last');
 if isempty(outStmt)
   error('adigator:fwdtape:parse','could not find %s.f assignment',OutName);

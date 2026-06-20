@@ -110,6 +110,7 @@ push and pull request.
 | TS-U-08 | `UHygieneTest` — wrap generator calls (incl. injected failures via invalid user function) and assert path/fid/global invariants. B13 is fixed but **currently unpinned** — this hygiene test is not yet implemented as a separate file (planned). | REQ-C-09, REQ-T-07 |
 | TS-U-09 | `ULintTest` — `checkcode` over `lib/`, `util/`, `embedding/` with error-level gating and warning ratchet file. | REQ-C-10 |
 | TS-U-10 | `UForwardTapeTest` — `adigatorForwardTapeSlice` (the statement parser / backward value-tape slicer extracted from `adigatorGenRevGradFile` for reuse by the R7b field-slice, issue #21): parsing, dependency extraction, the backward slice (dead-statement removal, derivative-chain exclusion, scatter reads-old), and the rolled-control-flow / parse guards, on hand-written tape snippets. | R7b foundation (issue #21) |
+| TS-U-11 | `UFieldSliceTest` — `adigatorFieldSlice` (and the shared `adigatorParseTape`), the field-granular backward slicer at the core of R7b (issue #21): dropping UNdemanded sibling fields of an output struct (`.dy_location`/`.dy_size`) and the constant index tables they reference while keeping demanded fields and their value chains; whole-vs-field demand, value-only demand, scatter, and the inherited control-flow guard. | R7b core (issue #21) |
 
 ### 2.2 Integration tests — `tests/integration` (TS-I)
 
