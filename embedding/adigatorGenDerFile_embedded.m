@@ -132,10 +132,11 @@ for derf = 1:N_derivs
     if opts.slim_embed
         fprintf('\t Slimming derivative code (slim_embed)... ');
         slim = adigatorSlimEmbeddedDeriv(AdigatorGeneratedFiles(derf),UserFunInputs);
-        if slim.sliced
+        if slim.sliced || slim.collapsed > 0
             chk = '';
             if slim.checked; chk = ' (round-trip verified)'; end
-            fprintf('removed %d statement(s)%s.\n',slim.dropped,chk);
+            fprintf('removed %d statement(s), collapsed %d union copy(ies)%s.\n',...
+                slim.dropped,slim.collapsed,chk);
         else
             fprintf('no slimming (%s).\n',slim.reason);
         end
