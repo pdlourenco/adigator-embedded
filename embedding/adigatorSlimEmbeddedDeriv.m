@@ -1,44 +1,50 @@
 function info = adigatorSlimEmbeddedDeriv(genfile, UserFunInputs)
-% adigatorSlimEmbeddedDeriv  Slim one generated derivative (R7b driver, issue
-% #21): determine which output-struct fields the wrapper reads, field-slice
-% the _ADiGator* derivative file to those, cross-check, and commit the slimmed
+% adigatorSlimEmbeddedDeriv  Slim one generated derivative (R7b/R7c driver,
+% issue #21): determine which output-struct fields the wrapper reads, field-
+% slice the _ADiGator* derivative file to those (R7b), collapse no-op union
+% copies in the surviving body (R7c), cross-check, and commit the rewritten
 % file (so the now-unreferenced Gator*Data index tables drop in the subsequent
 % prune). Conservative: on ANY uncertainty OR error the original file is left
-% in place and generation continues unsliced - slimming must never break
+% in place and generation continues unchanged - slimming must never break
 % generation.
 %
 % ------------------------------ Inputs --------------------------------- %
 %   genfile       - one element of the GenFiles struct array from
 %                   adigatorGenJacFile/adigatorGenHesFile: fields .main (the
-%                   wrapper file), .m (the _ADiGator* derivative file), .name
+%                   wrapper file), .m (the _ADiGator* derivative file), .mat
+%                   (the static-data file, still unpruned at this stage), .name
 %                   (wrapper function), .dername (derivative function), .path.
 %   UserFunInputs - the cell of inputs to the user function (for staging the
 %                   numeric round-trip cross-check).
 %
 % ------------------------------ Output --------------------------------- %
-%   info - struct: .sliced (logical), .dropped (statements removed), .checked
-%          (whether the numeric round-trip ran), .reason (why not sliced).
+%   info - struct: .sliced (logical: the field-slice applied), .dropped
+%          (statements removed by the slice), .collapsed (union-copy pairs
+%          collapsed by the peephole), .checked (whether the numeric round-trip
+%          ran), .reason (why nothing was rewritten).
 %
-% Safety. Two independent guards, both bail-to-original on failure: the
-% eval-free dependency-closure gate inside adigatorSlimDerivBody (the primary,
-% always-on numeric-equivalence guarantee, ADR-0006), and a best-effort
-% generation-time numeric round-trip cross-check here (it evaluates the still-
-% classic-style wrapper - this runs BEFORE the embed patching - on staged
-% inputs and compares; it can only REJECT a slim on a definite mismatch or be
-% SKIPPED when it cannot run, never accept a wrong one). The round-trip is
-% side-effect-free on genfile.m (it restores the original after its temporary
-% eval), and the whole body is wrapped so any unexpected error restores the
-% original file - the single authoritative write of the slimmed file is the
-% one writelines below, reached only when the slim is accepted.
+% Safety. The field-slice carries its own eval-free dependency-closure gate
+% (the primary, always-on numeric-equivalence guarantee, ADR-0006); the union-
+% copy peephole is provably equivalent-or-stricter by construction (it throws
+% rather than mis-computes on a shape the pattern never produces, see
+% adigatorPeepholeUnionCopy) - that is its standing guarantee. On top of both, a
+% best-effort generation-time numeric round-trip cross-check here evaluates the
+% still-classic-style wrapper (this runs BEFORE the embed patching) on staged
+% inputs over the COMBINED rewrite and compares; it can only REJECT on a
+% definite mismatch or be SKIPPED when it cannot run, never accept a wrong one.
+% The round-trip is side-effect-free on genfile.m (it restores the original
+% after its temporary eval), and the whole body is wrapped so any unexpected
+% error restores the original file - the single authoritative write of the
+% rewritten file is the one writelines below, reached only when accepted.
 %
 % Copyright GMV.
 %   2026-06  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
-%            R7b interprocedural slice driver (issue #21).
+%            R7b interprocedural slice driver, R7c union-copy peephole (#21).
 % Distributed under the GNU General Public License version 3.0
 %
-% see also adigatorWrapperDemand, adigatorSlimDerivBody, adigatorGenDerFile_embedded
+% see also adigatorWrapperDemand, adigatorSlimDerivBody, adigatorPeepholeUnionCopy, adigatorGenDerFile_embedded
 
-info = struct('sliced',false,'dropped',0,'checked',false,'reason','');
+info = struct('sliced',false,'dropped',0,'collapsed',0,'checked',false,'reason','');
 
 try
   wrapperLines = readlines(genfile.main);
@@ -54,30 +60,67 @@ try
     info.reason = 'wrapper demand unresolved'; return
   end
 
-  % field-slice the derivative file to those fields (closure-gated internally)
-  [newLines, sinfo] = adigatorSlimDerivBody(origLines, fields);
-  if ~sinfo.sliced
-    info.reason = sinfo.reason; return
+  % R7b: field-slice the derivative file to those fields (closure-gated)
+  [slicedLines, sinfo] = adigatorSlimDerivBody(origLines, fields);
+  working = origLines;
+  if sinfo.sliced
+    working = slicedLines;
   end
 
-  % best-effort numeric round-trip cross-check (ADR-0006). It leaves genfile.m
-  % holding the ORIGINAL on return, so on a mismatch there is nothing to undo.
-  [ran, equal] = roundtripCheck(genfile, UserFunInputs, origLines, newLines);
+  % R7c (issue #21): collapse no-op union copies in the (possibly sliced) body,
+  % resolving the Gator*Data index tables from the still-unpruned .mat. Provably
+  % equivalent-or-stricter, so - like the slice's closure gate - it is the
+  % standing guarantee when the best-effort round-trip below is skipped.
+  pinfo = struct('changed',false,'count',0);
+  gatorData = loadGatorData(genfile);
+  if ~isempty(gatorData)
+    [peepLines, pinfo] = adigatorPeepholeUnionCopy(working, gatorData);
+    if pinfo.changed
+      working = peepLines;
+    end
+  end
+
+  if ~sinfo.sliced && ~pinfo.changed
+    info.reason = sinfo.reason; return % nothing to rewrite -> leave original
+  end
+
+  % best-effort numeric round-trip cross-check over the COMBINED rewrite
+  % (ADR-0006). It leaves genfile.m holding the ORIGINAL on return, so on a
+  % mismatch there is nothing to undo.
+  [ran, equal] = roundtripCheck(genfile, UserFunInputs, origLines, working);
   if ran && ~equal
     info.reason = 'numeric round-trip mismatch'; return
   end
 
-  % accept the slice (covers ran==false: the closure gate is the standing
-  % guarantee). This is the only authoritative write of the slimmed file.
-  writelines(newLines, genfile.m);
-  info.sliced  = true;
-  info.dropped = sinfo.dropped;
-  info.checked = ran;
+  % accept (covers ran==false: the closure gate and the peephole's provable
+  % equivalence are the standing guarantees). The only authoritative write.
+  writelines(working, genfile.m);
+  info.sliced    = sinfo.sliced;
+  info.dropped   = sinfo.dropped;
+  info.collapsed = pinfo.count;
+  info.checked   = ran;
 catch err
-  % never break generation: restore the original and continue unsliced
+  % never break generation: restore the original and continue unchanged
   ensureOriginal(genfile, origLines);
-  info = struct('sliced',false,'dropped',0,'checked',false, ...
-    'reason',['left unsliced after error: ',err.message]);
+  info = struct('sliced',false,'dropped',0,'collapsed',0,'checked',false, ...
+    'reason',['left unchanged after error: ',err.message]);
+end
+end
+
+%% --------------------------------------------------------------------- %%
+function gd = loadGatorData(genfile)
+% Load the per-function constant tables (Gator*Data, with the Index* arrays the
+% peephole resolves) for the main derivative function from the still-unpruned
+% .mat. Returns [] on any problem so the peephole is simply skipped. The data
+% layout (struct.<func>.Gator<D>Data.Index<N>) matches prune_adigator_mat.
+gd = [];
+try
+  s = load(genfile.mat);
+  if isfield(s, genfile.dername) && isstruct(s.(genfile.dername))
+    gd = s.(genfile.dername);
+  end
+catch
+  % any load/field problem -> gd stays [] and the peephole is skipped
 end
 end
 
