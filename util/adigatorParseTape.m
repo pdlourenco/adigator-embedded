@@ -211,6 +211,11 @@ function [writes, reads, loopVars] = analyzeBlock(inner)
 % variables (loopVars). Assignment LHS bases are writes; for-headers contribute
 % a loop variable and read their bounds; other control-flow lines contribute
 % their condition reads; everything is base-name granular (dotted tails out).
+% Like the strict parser, this assumes the generated one-statement-per-line,
+% semicolon-terminated dialect: an inner line counts as an assignment only when
+% it ends in ';' (a continued '...' or non-';' line is read as a bare
+% expression, so its LHS would be omitted from writes); .block inherits that
+% invariant, on which PR B's closure-over-.writes also relies.
 writes = {}; reads = {}; loopVars = {};
 for i = 1:numel(inner)
   t = strtrim(char(inner(i)));

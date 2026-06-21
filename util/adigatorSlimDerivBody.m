@@ -18,14 +18,17 @@ function [newLines, info] = adigatorSlimDerivBody(mLines, fieldNames)
 %              (why no slice happened, when .sliced is false).
 %
 % SAFETY. The function is conservative: on ANY condition it is not sure about
-% - missing body markers, line continuations, an unparseable header, rolled
-% control flow, no demanded fields, or a failed dependency-closure check - it
-% returns mLines UNCHANGED with .sliced = false. The closure check is an
-% eval-free numeric-equivalence guarantee for this side-effect-free
-% straight-line dialect: if every base read by a kept statement is an input /
-% Gator1Data or has ALL its writers kept, and every demanded output field is
-% still produced, the slimmed file computes the demanded outputs identically
-% (a dropped statement only ever removed a value nothing kept reads).
+% - missing body markers, line continuations, an unparseable header, top-level
+% 'while'/'if'/'switch' control flow, no demanded fields, or a failed
+% dependency-closure check - it returns mLines UNCHANGED with .sliced = false.
+% A rolled 'for...end' is handled as one atomic unit (kept or dropped whole;
+% adigatorFieldSlice via adigatorParseTape allowBlocks), not bailed on. The
+% closure check is an eval-free numeric-equivalence guarantee for this
+% side-effect-free straight-line dialect: if every base read by a kept
+% statement (a loop reads the externally defined bases it references) is an
+% input / Gator1Data or has ALL its writers kept, and every demanded output
+% field is still produced, the slimmed file computes the demanded outputs
+% identically (a dropped statement only ever removed a value nothing kept reads).
 %
 % Copyright GMV.
 %   2026-06  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
@@ -83,7 +86,12 @@ if ~ok
 end
 
 % --------------------------- re-emit the file -------------------------- %
-dropLines = [Sall(~keep).line];           % body-line indices to remove
+% a dropped statement removes its whole line span (.line:.lineEnd), so a dead
+% rolled loop drops as a unit; a plain statement spans a single line
+dropLines = [];
+for k = find(~keep(:)).'
+  dropLines = [dropLines, Sall(k).line:Sall(k).lineEnd]; %#ok<AGROW>
+end
 bmask = true(numel(body),1);
 bmask(dropLines) = false;
 newLines = [mL(1:bs); body(bmask); mL(be:end)];
@@ -115,10 +123,9 @@ function [ok, why] = closureOk(Sall, keep, demanded, innames)
 ok = false; why = '';
 external = [innames(:); {'Gator1Data'}];
 keep  = logical(keep(:));
-bases = cell(numel(Sall),1);                % base name written by each statement
-for i = 1:numel(Sall)
-  bases{i} = strtok(Sall(i).lhs,'.');
-end
+% writers{i}: every base statement i assigns (a rolled loop writes many; a
+% plain statement writes one), so the closure is correct for blocks too
+writers = {Sall.writes};
 
 readBases = {};
 for k = find(keep).'
@@ -131,11 +138,11 @@ for j = 1:numel(readBases)
   if any(strcmp(b,external))
     continue
   end
-  isW = strcmp(bases,b);
+  isW = cellfun(@(w) any(strcmp(b,w)),writers);
   if ~any(isW)
     why = ['undefined base ',b]; return
   end
-  if sum(isW & keep) ~= sum(isW)
+  if sum(isW & keep(:).') ~= sum(isW)
     why = ['a writer of ',b,' was dropped']; return % would corrupt its value
   end
 end
@@ -145,7 +152,7 @@ for j = 1:numel(demanded)
   base = strtok(d,'.');
   produced = false;
   for k = find(keep).'
-    if strcmp(Sall(k).lhs,d) || strcmp(Sall(k).lhs,base)
+    if strcmp(Sall(k).lhs,d) || any(strcmp(base,Sall(k).writes))
       produced = true; break
     end
   end
