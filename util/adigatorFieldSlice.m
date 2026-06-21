@@ -45,8 +45,12 @@ function [S, keep, Sall] = adigatorFieldSlice(body, InNames, demanded)
 % what lets undemanded sibling fields ('.dy_location'/'.dy_size') and their
 % index tables drop instead of being pulled back in.
 %
-% Rolled control flow is rejected (via adigatorParseTape) with
-% adigator:fwdtape:controlflow - the dialect is fully unrolled.
+% Rolled 'for...end' is handled conservatively AS A UNIT (via adigatorParseTape
+% with allowBlocks): the whole loop is one statement that writes the union of
+% the bases it assigns and reads the externally defined bases it references, so
+% the slice keeps or drops the entire loop together (no per-field precision
+% inside a loop, but a wholly dead loop still drops). Top-level 'while'/'if'/
+% 'switch' are still rejected with adigator:fwdtape:controlflow.
 %
 % Copyright GMV.
 %   2026-06  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
@@ -59,7 +63,8 @@ demanded = cellstr(string(demanded));
 demanded = demanded(:).';
 
 % ------------------------- parse the tape ------------------------------ %
-Sall = adigatorParseTape(body, InNames);
+% allowBlocks: fold a rolled 'for...end' into one atomic .block statement
+Sall = adigatorParseTape(body, InNames, true);
 S = Sall;
 n = numel(S);
 
@@ -73,17 +78,30 @@ wantField = unique(demanded(isDotted));
 % ------------------------- backward slice ------------------------------ %
 keep = false(n,1);
 for k = n:-1:1
-  T = S(k).lhs;
-  b = strtok(T,'.');
-  fieldWrite = ~strcmp(T,b);              % LHS is 'b.fld'
-  scatter    = ~isempty(S(k).lhsSubs);    % LHS is 'b(subs)'
-  if fieldWrite && ~scatter
-    % a field write satisfies only its own field demand (or a whole demand)
-    live = any(strcmp(T,wantField)) || any(strcmp(b,wantFull));
+  if S(k).block
+    % a rolled loop is atomic and whole-base: it is live when ANY base it
+    % assigns is demanded whole OR has any demanded field (no per-field
+    % precision inside the loop)
+    live = false;
+    for w = reshape(S(k).writes,1,[])
+      bw = w{1};
+      if any(strcmp(bw,wantFull)) || any(startsWith(wantField,[bw,'.']))
+        live = true; break
+      end
+    end
   else
-    % a whole write or scatter of b satisfies a whole demand on b OR any
-    % field demand whose base is b
-    live = any(strcmp(b,wantFull)) || any(startsWith(wantField,[b,'.']));
+    T = S(k).lhs;
+    b = strtok(T,'.');
+    fieldWrite = ~strcmp(T,b);              % LHS is 'b.fld'
+    scatter    = ~isempty(S(k).lhsSubs);    % LHS is 'b(subs)'
+    if fieldWrite && ~scatter
+      % a field write satisfies only its own field demand (or a whole demand)
+      live = any(strcmp(T,wantField)) || any(strcmp(b,wantFull));
+    else
+      % a whole write or scatter of b satisfies a whole demand on b OR any
+      % field demand whose base is b
+      live = any(strcmp(b,wantFull)) || any(startsWith(wantField,[b,'.']));
+    end
   end
   if live
     keep(k) = true;
