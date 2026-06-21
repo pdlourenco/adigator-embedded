@@ -73,6 +73,7 @@ Constraints that shape the plan (verified against the codebase):
 | REQ-T-06 | **Reproducibility.** Regeneration with identical inputs and options shall produce functionally identical files; `overwrite=0` shall refuse to clobber; user-specified `path` shall receive all generated artifacts and nothing shall be left in the calling directory. | Byte comparison modulo timestamps; file-location assertions. |
 | REQ-T-07 | **Robustness / hygiene.** Invalid inputs and mid-transformation errors shall raise clean errors, restore the MATLAB path, close all file handles, and leave no stray globals. | `path()` before == after; `fopen('all')` empty delta; `who('global')` delta empty after failure injection. |
 | REQ-T-08 | **Example health.** All shipped examples shall run headless without error (toolbox-gated where applicable). | Each example `main.m` completes; spot numeric checks. |
+| REQ-T-09 | **Randomized robustness (V&V).** Over a seeded Monte-Carlo campaign of generated derivatives (randomized function bodies, input/output shapes, sizes, densities, embed modes), outputs shall satisfy the tolerance-free oracles (cross-mode exact equality, known-derivative-by-construction, sparsity-superset) and the hygiene invariants of REQ-T-07. *Non-gating* — the campaign is opt-in/local; any failing seed shall be reproducible and reducible to a deterministic regression fixture. *(Planned; phased build in `docs/ROADMAP.md` R9. Issue #38, ADR-0007.)* | Pinned-seed smoke reports zero failures; each discovered failure is minimized (`mcShrink`) and promoted (`mcPromote`) into the deterministic suite. |
 
 ### 1.2 Component-level requirements (REQ-C)
 
@@ -138,6 +139,7 @@ merges; license-gated jobs skip cleanly when products are unavailable.
 | TS-S-01 | `SExamplesTest` — run each `examples/**/main*.m` headless (seeded RNG); assert completion and spot values (e.g. fsolve converges, pipg gap function derivatives match FD). | REQ-T-08, REQ-T-01 | Optimization Toolbox for the solver examples; others base MATLAB |
 | TS-S-02 | `SCodegenTest` — `codegen -config:lib` (and MEX) each 'i'-mode and 'l'-mode generated fixture; run MEX vs MATLAB equality. | REQ-T-05 | MATLAB Coder |
 | TS-S-03 | `SReleaseMatrixTest` — full TS-U + TS-I suite on MATLAB releases {R2022a (floor), latest}. | REQ-T-01..07 on supported releases | nightly only |
+| TS-S-04 | `MCSmokeTest` + `tests/montecarlo/mcCampaign` — randomized-function campaign over the generators (affine / quadratic / shape-fuzz → expression-tree) checked by the tolerance-free oracles (cross-mode exact, known-derivative, sparsity-superset; FD secondary), with delta-debug shrinking and automatic fixture promotion. `MCSmokeTest` runs a fixed-seed, fixed-iteration subset in the extended (per-merge) suite; the unbounded campaign is an opt-in local / release-checklist run. *(Issue #38, ADR-0007, roadmap R9.)* | REQ-T-09 (cross-validates REQ-T-01..04 at scale) | base MATLAB (Coder oracles skip-clean) |
 
 ### 2.4 Traceability matrix
 
@@ -151,6 +153,7 @@ merges; license-gated jobs skip cleanly when products are unavailable.
 | REQ-T-06 | TS-I-03 |
 | REQ-T-07 | TS-U-08 |
 | REQ-T-08 | TS-S-01 |
+| REQ-T-09 | TS-S-04 |
 | REQ-C-01 | TS-U-01 |
 | REQ-C-02 | TS-U-02 |
 | REQ-C-03 | TS-U-03 |
@@ -254,6 +257,14 @@ Jobs are split here only along axes that genuinely need separate installs:
   install; steps check product availability (`license('test',...)`) and
   `assumeFail` → skip rather than error when a product is missing, so the
   same workflow runs on licenses without Coder.
+Separately (no extra install axis), a base-MATLAB step in the extended
+workflow runs `MCSmokeTest` (TS-S-04) by selecting the `tests/montecarlo`
+folder — the fixed-seed, fixed-iteration Monte-Carlo smoke (ADR-0007). It runs
+here, **not** in the PR gate or the `ci_local` folder sweep
+(`tests/{unit,integration,system}`), because random-seed campaigns must not
+gate; `MCSmokeTest` lives under `tests/montecarlo/` precisely so those two
+selectors skip it. The unbounded campaign (`tests/montecarlo/mcCampaign`) stays
+an opt-in local / release run.
 
 ### 3.2 Licensing and runners
 

@@ -48,3 +48,5 @@ Contracts section (binding conventions), or for purely mechanical choices
   which derivative levels a generated wrapper returns (roadmap R7a, issue #21).
 - [ADR-0006](ADR-0006-r7b-closure-gate.md) — R7b slimming is gated by an
   eval-free dependency-closure check, not a numeric round-trip (issue #21).
+- [ADR-0007](ADR-0007-montecarlo-vv.md) — Randomized / Monte-Carlo V&V:
+  non-gating, tolerance-free oracles, fixture-promoting (issue #38).
