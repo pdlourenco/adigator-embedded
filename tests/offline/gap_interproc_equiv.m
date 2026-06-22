@@ -8,7 +8,17 @@ function result = gap_interproc_equiv()
 % under tests/fixtures/gen_dialect/ by its capture_gen_dialect.m. This is the
 % plain-assert core that consumes them, wrapped for the MATLAB CI gate by
 % tests/integration/IInterprocGapEquivTest. See ADR-0008 for the
-% committed-fixture / license-free offline-core rationale.
+% committed-fixture / license-free offline-core rationale and ADR-0009 for the
+% interprocedural slice the slimmed fixture exercises.
+%
+% The fixtures are generated in INLINE embed mode (capture_gen_dialect), so
+% slim_embed actually runs: the slimmed variant (slim1) is a genuinely sliced
+% interprocedural file (the main function's unread f.dz_location/f.dz_size and
+% their index table drop), not a byte-copy of slim0. Inline embedding wraps the
+% constant data in coder.const(...) (identity outside codegen); this core adds
+% a coder.const shim (tests/offline/octave_shims) only where coder.const is
+% unavailable, so the fixtures run license-free in Octave and on Coder-less
+% MATLAB without ever shadowing a real coder.const.
 %
 % gapfun (examples/optimization/pipg) is interprocedural: it calls conefun and
 % setfun, and conefun itself calls setfun, so the generated derivative is
@@ -25,20 +35,23 @@ function result = gap_interproc_equiv()
 %       gapfun source (oracle 2, independent of both the generated code and the
 %       hand derivation - it guards the oracle itself);
 %   (3) the slimmed fixture (slim1) is numerically IDENTICAL to the unslimmed
-%       one (slim0). This is the interprocedural-equivalence invariant: today
-%       the engine does no cross-call slimming so slim0 and slim1 happen to be
-%       byte-identical and (3) is trivially true; once part 1b implements
-%       interprocedural under-demand and the fixtures are regenerated, slim1's
-%       index tables will shrink while its NUMBERS must not move - that is when
-%       this guard bites. The contract is numeric, not structural, so (3)
-%       compares results (AbsTol 0), never bytes or index layout.
+%       one (slim0) - the interprocedural-equivalence invariant: the slice
+%       drops dead code / unread output fields but must not move the numbers.
+%       The contract is numeric, not structural, so (3) compares results
+%       (AbsTol 0), never bytes or index layout.
+%
+% The runner is fixture-shape agnostic: it cd's into each variant and clears the
+% entry function to force a reload of that folder's copy (the mechanism that
+% keeps the two same-named fixtures distinct), and also resets the classic
+% lazy-load global - so it works on both the inline fixtures and a classic
+% capture.
 %
 % On any mismatch it errors, so it fails a bare Octave run and the
 % matlab.unittest wrapper alike. Returns a struct with the computed
 % quantities for the wrapper to re-assert.
 %
 % Usage (license-free, from the repo root; the absolute path matters because
-% the fixtures cd elsewhere and a relative path entry would go stale):
+% the fixtures cd elsewhere and a relative load reference would go stale):
 %   octave --quiet --eval "addpath(fullfile(pwd,'tests','offline')); gap_interproc_equiv"
 
 here = fileparts(mfilename('fullpath'));
@@ -47,11 +60,17 @@ fixRoot = fullfile(root, 'tests', 'fixtures', 'gen_dialect');
 srcDir  = fullfile(root, 'examples', 'optimization', 'pipg');
 
 % restore the path and working directory whatever happens (the fixtures cd
-% into their own folders and rely on bare load('...mat') relative to cwd)
+% into their own folders and may load constant data relative to cwd)
 origPath = path();
 origPwd  = pwd();
 cleanup  = onCleanup(@() restoreEnv(origPath, origPwd)); %#ok<NASGU>
 addpath(srcDir);
+
+% inline fixtures call coder.const (identity at runtime); shim it ONLY where it
+% is unavailable, so we never shadow MATLAB's real coder.const.
+if isempty(which('coder.const'))
+    addpath(fullfile(here, 'octave_shims'));
+end
 
 % arbitrary test point: nonzero, distinct components so a dropped term shows up
 w = [3; 5];
@@ -106,10 +125,13 @@ end
 
 % ----------------------------------------------------------------------- %
 function [J, F] = runFixture(dir, w, z)
-% Execute one committed fixture. slim0 and slim1 share the function names
-% gapfun_Grd / gapfun_ADiGatorGrd and a single global, so clear both and reset
-% the global before each run: otherwise the second variant would silently reuse
-% the first's loaded .mat and the guard would compare a fixture against itself.
+% Execute one committed fixture. slim0 and slim1 share the entry name
+% gapfun_Grd (each a self-contained inline file), so cd into the variant and
+% clear it (and the derivative name, harmless when it is an inline local) to
+% force a reload of the current folder's copy. Reset the lazy-load global too:
+% it is unused by inline fixtures but, for a classic-mode capture, prevents the
+% second variant silently reusing the first's loaded data - so the runner stays
+% fixture-shape agnostic and never compares a fixture against itself.
 old     = cd(dir);
 restore = onCleanup(@() cd(old)); %#ok<NASGU>
 clear('gapfun_Grd', 'gapfun_ADiGatorGrd');
@@ -120,8 +142,9 @@ end
 
 % ----------------------------------------------------------------------- %
 function resetGlobal()
-% Force the fixture's lazy ADiGator_LoadData() to reload from the current
-% folder's .mat (the fixture reloads iff the global is empty).
+% Empty the lazy-load global so a classic fixture's ADiGator_LoadData() reloads
+% from the current folder (the fixture reloads iff the global is empty). A no-op
+% for inline fixtures, which embed their data and declare no such global.
 global ADiGator_gapfun_ADiGatorGrd
 ADiGator_gapfun_ADiGatorGrd = [];
 end
