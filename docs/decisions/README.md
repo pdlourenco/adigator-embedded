@@ -66,6 +66,9 @@ Contracts section (binding conventions), or for purely mechanical choices
 - [ADR-0009](ADR-0009-interprocedural-field-slice-worklist.md) — Interprocedural
   field-slice via an assembled-file worklist over `(function, demanded-field-set)`
   (issue #44 item 1).
+- [ADR-0010](ADR-0010-prune-shrink-referenced-index-scan.md) — Prune-shrink drops
+  a `Gator*Data.Index*` only when a static scan proves the slimmed code cannot
+  reference it; keep-all on any doubt (issue #21, R7b data half).
 - [ADR-0011](ADR-0011-adigator-error-path-cleanup.md) — `adigator.m` releases
   transformation state on every exit: globals cleared in-frame, temp dir / file
   handles via a by-value `onCleanup` (issue #38, bug B16).

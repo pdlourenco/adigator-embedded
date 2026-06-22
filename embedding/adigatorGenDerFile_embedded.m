@@ -145,7 +145,20 @@ for derf = 1:N_derivs
     %%% process the data file to prune it of unnecessary data for derivative evaluation
     fprintf('\t Processing static data file (cleaning up unnecessary data)... ');
     tmp_adigator_struct = load(AdigatorGeneratedFiles(derf).mat); % load data
-    tmp_adigator_struct = prune_adigator_mat(tmp_adigator_struct,AdigatorGeneratedFiles(derf).func); % remove unnecessary fields
+    %%% R7b data half (issue #21): when slim_embed actually rewrote the code,
+    %%% scan the now-slimmed file so the prune below drops the index tables the
+    %%% surviving code no longer references. Any failure -> empty map -> the
+    %%% prune keeps all Index* (unchanged behaviour); never blocks generation.
+    referenced = struct();
+    if opts.slim_embed && (slim.sliced || slim.collapsed > 0)
+        try
+            referenced = adigatorReferencedIndex(readlines(AdigatorGeneratedFiles(derf).m),...
+                                                 AdigatorGeneratedFiles(derf).func);
+        catch
+            referenced = struct();
+        end
+    end
+    tmp_adigator_struct = prune_adigator_mat(tmp_adigator_struct,AdigatorGeneratedFiles(derf).func,referenced); % remove unnecessary fields
     save(AdigatorGeneratedFiles(derf).mat,'-struct','tmp_adigator_struct'); % replace existing mat file with the relevant fields only
     fprintf('done.\n');
     % v1.5 (B6): pruning strips the re-differentiation metadata that

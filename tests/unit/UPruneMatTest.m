@@ -84,5 +84,89 @@ classdef UPruneMatTest < matlab.unittest.TestCase
             tc.verifyTrue(isfield(out.f, 'Gator1Data'));
             tc.verifyTrue(isfield(out.f, 'Gator2Data'));
         end
+
+        % --- slice-before-prune data half (issue #21): the optional REFERENCED
+        % map drops Index* the slimmed code no longer reads -----------------
+
+        function referencedDropsUnreadIndex(tc)
+            % dead index drops, live index kept (the data-shrink payoff)
+            s.myfun.Gator1Data.Index1 = [1 2 3];
+            s.myfun.Gator1Data.Index2 = [4 5];
+            ref.myfun.index = "Gator1Data.Index1";
+            ref.myfun.table = "Gator1Data";
+            out = prune_adigator_mat(s, {'myfun'}, ref);
+            tc.verifyTrue(isfield(out.myfun.Gator1Data, 'Index1'));
+            tc.verifyFalse(isfield(out.myfun.Gator1Data, 'Index2'));
+            tc.verifyClass(out.myfun.Gator1Data.Index1, 'uint32'); % still down-cast
+        end
+
+        function referencedKeepsReferencedEmptyIndex(tc)
+            % an empty Index that the code DOES reference must survive (the
+            % boilerplate still accesses the field)
+            s.myfun.Gator1Data.Index1 = zeros(0,0,'uint32');
+            ref.myfun.index = "Gator1Data.Index1";
+            ref.myfun.table = "Gator1Data";
+            out = prune_adigator_mat(s, {'myfun'}, ref);
+            tc.verifyTrue(isfield(out.myfun.Gator1Data, 'Index1'));
+        end
+
+        function referencedFallsBackWhenShrinkWouldEmptyReferencedTable(tc)
+            % a function that reads the table name but indexes nothing must NOT
+            % shrink to a zero-field struct (coder.const(struct()) is an
+            % unexercised codegen shape); it falls back to the unshrunk keep-set
+            % so `Gator1Data = coder.const(...Gator1Data)` keeps its proven
+            % shape (the setfun case)
+            s.myfun.Gator1Data.Index1 = [1 2]; % unreferenced
+            ref.myfun.index = strings(0,1);
+            ref.myfun.table = "Gator1Data";
+            out = prune_adigator_mat(s, {'myfun'}, ref);
+            tc.verifyTrue(isfield(out.myfun, 'Gator1Data'));
+            tc.verifyTrue(isfield(out.myfun.Gator1Data, 'Index1')); % unshrunk fallback
+        end
+
+        function referencedDropsWholeTableWhenUnreferenced(tc)
+            % a table neither indexed nor named by the slimmed code is dropped
+            s.myfun.Gator1Data.Index1 = [1 2];
+            ref.myfun.index = strings(0,1);
+            ref.myfun.table = strings(0,1);
+            out = prune_adigator_mat(s, {'myfun'}, ref);
+            tc.verifyTrue(isfield(out, 'myfun'));
+            tc.verifyFalse(isfield(out.myfun, 'Gator1Data'));
+        end
+
+        function referencedLeavesDataFieldsAlone(tc)
+            % the map governs Index* only; Data* stays under the non-empty rule
+            s.myfun.Gator1Data.Index1 = [1 2]; % unreferenced -> dropped
+            s.myfun.Gator1Data.Data1  = [2 0; 0 2];
+            ref.myfun.index = strings(0,1);
+            ref.myfun.table = "Gator1Data";
+            out = prune_adigator_mat(s, {'myfun'}, ref);
+            tc.verifyFalse(isfield(out.myfun.Gator1Data, 'Index1'));
+            tc.verifyTrue(isfield(out.myfun.Gator1Data, 'Data1'));
+            tc.verifyClass(out.myfun.Gator1Data.Data1, 'double');
+        end
+
+        function absentFunctionKeepsAllIndex(tc)
+            % a map that does not mention this function => keep-all (the
+            % conservative default for a not-confidently-parsed function)
+            s.myfun.Gator1Data.Index1 = [1 2];
+            s.myfun.Gator1Data.Index2 = [3 4];
+            ref.otherfun.index = "Gator1Data.Index1";
+            ref.otherfun.table = "Gator1Data";
+            out = prune_adigator_mat(s, {'myfun'}, ref);
+            tc.verifyTrue(isfield(out.myfun.Gator1Data, 'Index1'));
+            tc.verifyTrue(isfield(out.myfun.Gator1Data, 'Index2'));
+        end
+
+        function emptyMapMatchesTwoArgBehaviour(tc)
+            % an empty map (or the omitted third arg) keeps all Index*
+            s.myfun.Gator1Data.Index1 = [1 2];
+            s.myfun.Gator1Data.Index2 = [3 4];
+            out3 = prune_adigator_mat(s, {'myfun'}, struct());
+            out2 = prune_adigator_mat(s, {'myfun'});
+            tc.verifyEqual(out3, out2);
+            tc.verifyTrue(isfield(out3.myfun.Gator1Data, 'Index1'));
+            tc.verifyTrue(isfield(out3.myfun.Gator1Data, 'Index2'));
+        end
     end
 end
