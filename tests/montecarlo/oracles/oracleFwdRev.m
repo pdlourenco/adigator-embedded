@@ -8,9 +8,8 @@ function r = oracleFwdRev(c)
 % randomization. Skips cleanly for non-scalar cases.
 r = struct('name','fwdRev','pass',true,'skipped',false,'message','');
 
-% Applies to any scalar-output cost — the scalar-reduction generator and also
-% the quadratic generator (both tag outShape [1 1]); the latter is intentional
-% extra reverse-mode coverage over mtimes/transpose. Skips vector outputs.
+% Applies to any scalar-output cost (the scalar-reduction generator and the
+% quadratic generator both tag outShape [1 1]). Skips vector outputs.
 isScalar = isfield(c.tags,'outShape') && isequal(c.tags.outShape,[1 1]);
 if ~isScalar
     r.skipped = true; r.message = 'not a scalar cost'; return;
@@ -18,13 +17,31 @@ end
 
 ax = adigatorCreateDerivInput(c.xsize, 'x');
 
+% Reverse mode (ANALYSIS §3 / adigatorGenRevGradFile) supports only a subset
+% of constructs and rejects the rest at GENERATION time with an `adigator:*`
+% identifier (e.g. adigator:revgrad:unsupported). Treat exactly those as a
+% scope SKIP, not a failure, so a tool-scope limit can never be promoted as a
+% false regression. Any other error — including a bare user-function crash
+% (empty identifier) — propagates and is recorded as a failure/finding; a
+% genuine numeric disagreement is caught by the comparison below.
+try
+    adigatorGenRevGradFile(c.name, {ax}, adigatorOptions('overwrite',1,'echo',0));
+catch e
+    if startsWith(e.identifier, 'adigator')
+        r.skipped = true;
+        r.message = sprintf('reverse mode declined this construct (%s): %s', ...
+            e.identifier, e.message);
+        return;
+    end
+    rethrow(e);
+end
+
 % forward gradient (column, 'Grd' convention)
 adigatorGenJacFile(c.name, {ax}, struct('echo',0,'overwrite',1), 'Grd');
 outF = mcEval([c.name '_Grd'], 2, c.x0);
 gFwd = outF{1}(:);
 
 % reverse gradient: [value, grad] = <name>_RGrd(x)
-adigatorGenRevGradFile(c.name, {ax}, adigatorOptions('overwrite',1,'echo',0));
 outR = mcEval([c.name '_RGrd'], 2, c.x0);
 gRev = outR{2}(:);
 

@@ -41,12 +41,14 @@ deterministically.
 - **hessSymmetry** — `H == H'` for scalar Hessian cases (skips otherwise).
 - **fwdRev** — for scalar costs, the reverse-mode gradient
   (`adigatorGenRevGradFile`) equals the forward `Grd` wrapper and the closed
-  form (skips non-scalar cases).
+  form. Skips non-scalar cases, and skips (does not fail) when reverse mode
+  declines a construct at generation time — a tool-scope limit is not a
+  derivative bug.
 
 The `mcGenElementwise` / `mcGenScalarSum` rule-table generators exercise
 `cadaunarymath` (and the reverse adjoint rules) under randomization.
 Negative/hygiene fuzzing (REQ-T-07) is the next increment — it depends on an
 `adigator.m` error-path fix (transformation globals / output file handle are
-only released on the success path — to be logged as B16 with its fix), which
-the hygiene oracle prototype surfaced and which lands first. The finite-difference oracle and the typed
+only released on the success path — logged as B16, Open, in `ANALYSIS.md`
+§1.3b), which the hygiene oracle prototype surfaced and which lands first. The finite-difference oracle and the typed
 expression-tree generator are later phases (ROADMAP R9 C–D).
