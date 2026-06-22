@@ -16,6 +16,8 @@ classdef IInterprocGapEquivTest < matlab.unittest.TestCase
     % docs/CI_PLAN.md); this wrapper puts it in the MATLAB CI gate, while the
     % same core stays runnable license-free for local verification.
     %
+    % See ADR-0008 for the committed-fixture / offline-core rationale.
+    %
     % The equivalence contract is numeric, not structural: slim1 is allowed to
     % shrink (and will, once part 1b's interprocedural slimming lands and the
     % fixtures are regenerated), provided its NUMBERS match slim0 exactly -

@@ -50,3 +50,6 @@ Contracts section (binding conventions), or for purely mechanical choices
   eval-free dependency-closure check, not a numeric round-trip (issue #21).
 - [ADR-0007](ADR-0007-montecarlo-vv.md) — Randomized / Monte-Carlo V&V:
   non-gating, tolerance-free oracles, fixture-promoting (issue #38).
+- [ADR-0008](ADR-0008-offline-fixture-equivalence-tests.md) — License-free
+  equivalence tests run committed generated fixtures via a plain-assert core +
+  matlab.unittest wrapper (issue #44 part 1b).

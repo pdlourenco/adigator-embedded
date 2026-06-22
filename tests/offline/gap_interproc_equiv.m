@@ -7,7 +7,8 @@ function result = gap_interproc_equiv()
 % (docs/CI_PLAN.md), so the fixtures are captured on MATLAB and committed
 % under tests/fixtures/gen_dialect/ by its capture_gen_dialect.m. This is the
 % plain-assert core that consumes them, wrapped for the MATLAB CI gate by
-% tests/integration/IInterprocGapEquivTest.
+% tests/integration/IInterprocGapEquivTest. See ADR-0008 for the
+% committed-fixture / license-free offline-core rationale.
 %
 % gapfun (examples/optimization/pipg) is interprocedural: it calls conefun and
 % setfun, and conefun itself calls setfun, so the generated derivative is
