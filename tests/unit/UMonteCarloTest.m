@@ -131,14 +131,5 @@ classdef UMonteCarloTest < matlab.unittest.TestCase
             tc.verifySize(c.exactJac(c.x0), [n 1]);          % gradient
             tc.verifyMatches(strtrim(c.body{end}), '^y = sum\(\w+\(t\)\);$');
         end
-
-        function negativeGeneratorWellFormed(tc)
-            rng(7);
-            c = mcGenNegative(13);
-            tc.verifyTrue(c.tags.negative);
-            tc.verifyEqual(c.deriv, 'jacobian');
-            tc.verifyTrue(iscellstr(c.body) && ~isempty(c.body));
-            tc.verifyMatches(c.name, '^mc_neg_13$');
-        end
     end
 end

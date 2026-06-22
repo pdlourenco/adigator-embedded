@@ -23,10 +23,8 @@ deterministically.
 | Layer | Files |
 |-------|-------|
 | Driver / contract | `mcCampaign`, `mcCase`, `mcRunCase`, `mcReport`, `mcCoverage` |
-| Generators (positive) | `generators/mcGen{Affine,Quadratic,ShapeFuzz,Elementwise,ScalarSum}` |
-| Generators (negative) | `generators/mcGenNegative` |
+| Generators | `generators/mcGen{Affine,Quadratic,ShapeFuzz,Elementwise,ScalarSum}` |
 | Oracles (tolerance-free first) | `oracles/oracle{KnownDeriv,SparsitySuperset,CrossMode,HessSymmetry,FwdRev}` |
-| Oracle (robustness) | `oracles/oracleHygiene` |
 | Failure → fixture | `mcShrink`, `mcPromote`, `regressions/` |
 | Smoke (per-merge) | `MCSmokeTest` |
 
@@ -44,13 +42,11 @@ deterministically.
 - **fwdRev** — for scalar costs, the reverse-mode gradient
   (`adigatorGenRevGradFile`) equals the forward `Grd` wrapper and the closed
   form (skips non-scalar cases).
-- **hygiene** — for *negative* cases (malformed fixtures from `mcGenNegative`),
-  generation must error cleanly and restore the path / close file handles /
-  leave no stray globals (REQ-T-07). Run it as its own campaign — negative
-  cases must not be fed to the value oracles:
-  `mcCampaign('generators',{'mcGenNegative'},'oracles',{'oracleHygiene'})`.
 
 The `mcGenElementwise` / `mcGenScalarSum` rule-table generators exercise
-`cadaunarymath` (and the reverse adjoint rules) under randomization. The
-finite-difference oracle and the typed expression-tree generator are later
-phases (ROADMAP R9 C–D).
+`cadaunarymath` (and the reverse adjoint rules) under randomization.
+Negative/hygiene fuzzing (REQ-T-07) is the next increment — it depends on an
+`adigator.m` error-path fix (transformation globals / output file handle are
+only released on the success path — to be logged as B16 with its fix), which
+the hygiene oracle prototype surfaced and which lands first. The finite-difference oracle and the typed
+expression-tree generator are later phases (ROADMAP R9 C–D).

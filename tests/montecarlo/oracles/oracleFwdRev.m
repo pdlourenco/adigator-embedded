@@ -8,6 +8,9 @@ function r = oracleFwdRev(c)
 % randomization. Skips cleanly for non-scalar cases.
 r = struct('name','fwdRev','pass',true,'skipped',false,'message','');
 
+% Applies to any scalar-output cost — the scalar-reduction generator and also
+% the quadratic generator (both tag outShape [1 1]); the latter is intentional
+% extra reverse-mode coverage over mtimes/transpose. Skips vector outputs.
 isScalar = isfield(c.tags,'outShape') && isequal(c.tags.outShape,[1 1]);
 if ~isScalar
     r.skipped = true; r.message = 'not a scalar cost'; return;

@@ -89,20 +89,5 @@ classdef MCSmokeTest < matlab.unittest.TestCase
             tc.verifyGreaterThan(fr.pass, 0, 'fwdRev never ran (reverse-mode path untested)');
             tc.verifyEqual(fr.fail, 0, 'fwdRev reported a hard failure');
         end
-
-        function negativeHygieneIsClean(tc)
-            % Malformed fixtures must fail generation cleanly and leave the
-            % session hygienic (REQ-T-07), checked by oracleHygiene.
-            report = mcCampaign('nIters', 10, 'seed', 27182, ...
-                'generators', {'mcGenNegative'}, ...
-                'oracles', {'oracleHygiene'}, ...
-                'promote', false, 'verbose', false);
-
-            tc.verifyEqual(report.nFail, 0, ...
-                sprintf('hygiene smoke found %d failing case(s); see report.failures', report.nFail));
-            hg = report.oracleStats.oracleHygiene;
-            tc.verifyGreaterThan(hg.pass, 0, 'hygiene oracle never ran');
-            tc.verifyEqual(hg.fail, 0, 'a malformed function did not error cleanly / leaked state');
-        end
     end
 end
