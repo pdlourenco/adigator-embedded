@@ -60,8 +60,11 @@ try
     info.reason = 'wrapper demand unresolved'; return
   end
 
-  % R7b: field-slice the derivative file to those fields (closure-gated)
-  [slicedLines, sinfo] = adigatorSlimDerivBody(origLines, fields);
+  % R7b: field-slice the derivative file to those fields (closure-gated).
+  % adigatorSlimDerivFile is interprocedural (issue #44 / ADR-0009): it slices
+  % across subfunction calls and delegates to the intra-function
+  % adigatorSlimDerivBody for a single-derivative-function file.
+  [slicedLines, sinfo] = adigatorSlimDerivFile(origLines, fields);
   working = origLines;
   if sinfo.sliced
     working = slicedLines;
