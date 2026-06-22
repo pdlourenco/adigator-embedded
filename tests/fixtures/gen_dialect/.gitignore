@@ -1,0 +1,8 @@
+# These are committed golden fixtures, not stray generator output. The repo
+# root .gitignore excludes generated ADiGator files by name everywhere; re-include
+# them here so `git add tests/fixtures/gen_dialect` tracks them without -f.
+!*_ADiGator*.m
+!*_ADiGator*.mat
+!*_Grd.m
+!*_Hes.m
+!*_Jac.m
