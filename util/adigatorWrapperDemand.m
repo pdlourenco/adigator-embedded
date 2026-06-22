@@ -60,11 +60,16 @@ end
 resvar = hits{1};
 
 % defensive bail: if the result struct is used WHOLE anywhere (a bare
-% <resvar> token not followed by '.', other than the call's own LHS), the
+% <resvar> token not surrounded by '.', other than the call's own LHS), the
 % demand seeded from <resvar>.<field> reads would be incomplete - so refuse
 % to slice rather than under-demand. Today's generated wrappers only ever
 % field-access the result, so this never fires in practice.
-barepat = ['\<',regexptranslate('escape',resvar),'\>(?!\.)'];
+% The lookbehind '(?<!\.)' is essential: without it the bare scan matches a
+% FIELD whose name equals <resvar> (e.g. the seed 'gator_z.f' / the '.f' tail
+% of 'f.f' when resvar is 'f'), which is the canonical GRADIENT wrapper shape
+% (result var 'f', seed 'gator_z.f'). That false positive silently bailed
+% slim_embed on every gradient wrapper - pinned by wrapperFieldNameEqualsResvar.
+barepat = ['(?<!\.)\<',regexptranslate('escape',resvar),'\>(?!\.)'];
 for i = 1:numel(wrapperLines)
   if i == callidx(1)
     continue % the call's own LHS assignment, not a use
