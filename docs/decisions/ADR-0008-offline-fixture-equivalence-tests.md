@@ -5,6 +5,15 @@
 Accepted — 2026-06-22. First applied in the issue #44 part-1b interprocedural
 equivalence guard (`tests/offline/gap_interproc_equiv.m`).
 
+Amended — 2026-06-22 (with #44 item 1): the fixtures are generated in **inline
+embed mode**, not classic. `slim_embed` is skipped in classic mode (the embed
+pipeline returns early), so a classic capture makes `slim1` a byte-copy of
+`slim0` and the guard can never exercise slimming. Inline mode runs the slice
+*and* embeds the data into the wrapper as `coder.const(...)` (identity outside
+codegen); the offline core adds a `coder.const` shim
+(`tests/offline/octave_shims`) only where `coder.const` is unavailable, so the
+fixtures still run license-free in Octave / Coder-less MATLAB.
+
 ## Context
 
 Issue #44 part 1b (interprocedural under-demand) needs a regression guard that
@@ -26,20 +35,23 @@ Two constraints pull in opposite directions:
   *already generated* artifact, that is a heavy gate.
 
 The key observation: while *generating* a derivative needs MATLAB, *executing*
-a generated derivative does not — the emitted `*_ADiGator*.m`/`*_Grd.m` is plain
-procedural code (a global, a `load`, indexing, matrix ops) that runs unchanged
-in GNU Octave.
+a generated derivative does not — the emitted `*_Grd.m` is plain procedural code
+(indexing, matrix ops) that runs in GNU Octave. The one non-plain construct in
+the inline-embedded form is `coder.const(...)`, a MATLAB Coder directive that is
+identity at runtime and is shimmed where unavailable (see Amended status).
 
 ## Decision
 
 Pin interprocedural (and similar) derivative behaviour with **committed
 generated fixtures plus a plain-assert core wrapped for the MATLAB gate**:
 
-- Generate the derivative on MATLAB and **commit the fixtures** — wrapper,
-  `_ADiGator` derivative, and `.mat` — under `tests/fixtures/<group>/` (here
-  `tests/fixtures/gen_dialect/{slim0,slim1}`). The generator lives beside the
-  data it produces (`capture_gen_dialect.m`); a nested `.gitignore` re-includes
-  the generated filenames the repo-wide `.gitignore` excludes.
+- Generate the derivative on MATLAB and **commit the fixtures** under
+  `tests/fixtures/<group>/` (here `tests/fixtures/gen_dialect/{slim0,slim1}`).
+  In inline embed mode this is the single self-contained `gapfun_Grd.m` (the
+  derivative + per-subfunction data functions are embedded into it; there is no
+  separate `_ADiGator*.m` / `.mat`). The generator lives beside the data it
+  produces (`capture_gen_dialect.m`); a nested `.gitignore` re-includes the
+  generated filenames the repo-wide `.gitignore` excludes.
 - Put the actual checks in a **plain-assert core under `tests/offline/`** that
   runs in both Octave and MATLAB. It only *executes* the committed fixtures and
   asserts numeric equivalence against an independent oracle (analytic gradient,
@@ -85,7 +97,11 @@ layout. A slimmed variant is allowed to shrink; only its numbers must not move.
   a CI dependency (a second toolchain to install and maintain) for marginal gain
   over running the same core through the existing MATLAB gate.
 - **Compare variants structurally (byte / index-table identity).** Rejected —
-  it is trivially true today (the engine does no cross-call slimming yet, so the
-  variants are byte-identical) but would *wrongly fail* the moment part 1b
-  legitimately shrinks the slimmed variant's index tables. The contract that
-  must hold across the fix is numeric identity, not structural identity.
+  with the interprocedural slice (#44 item 1, ADR-0009) the slimmed variant
+  legitimately shrinks (its unread output fields and index tables drop), so a
+  structural comparison would *wrongly fail*. The contract that must hold across
+  the slice is numeric identity, not structural identity.
+- **Classic embed mode for the fixtures.** Rejected (see Amended status):
+  classic skips `slim_embed`, so `slim1` would be a byte-copy of `slim0` and the
+  guard could never exercise the slice. Inline mode (with the `coder.const`
+  shim) runs the slice while keeping license-free execution.

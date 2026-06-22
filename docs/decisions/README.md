@@ -53,3 +53,6 @@ Contracts section (binding conventions), or for purely mechanical choices
 - [ADR-0008](ADR-0008-offline-fixture-equivalence-tests.md) — License-free
   equivalence tests run committed generated fixtures via a plain-assert core +
   matlab.unittest wrapper (issue #44 part 1b).
+- [ADR-0009](ADR-0009-interprocedural-field-slice-worklist.md) — Interprocedural
+  field-slice via an assembled-file worklist over `(function, demanded-field-set)`
+  (issue #44 item 1).

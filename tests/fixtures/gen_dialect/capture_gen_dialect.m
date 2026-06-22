@@ -4,11 +4,12 @@ function capture_gen_dialect()
 % the fixtures stay in sync. It generates the gapfun gradient derivative
 % (gapfun calls subfunctions conefun/setfun, so the generated _ADiGator file is
 % multi-subfunction) and, for both slim variants:
-%   - the generated wrapper           gapfun_Grd.m
-%   - the generated derivative file   gapfun_ADiGatorGrd.m   <-- the key artifact
-%   - the .mat field/layout           gapfun_ADiGatorGrd.mat
-% both WITHOUT slimming (slim=0, the raw dialect the slice will consume) and
-% WITH the current slim (slim=1, what today's intra-function engine leaves).
+%   - the inline-embedded wrapper     gapfun_Grd.m   <-- the whole artifact
+% Inline mode embeds the derivative + per-subfunction data functions into the
+% wrapper and deletes the standalone _ADiGator*.m / .mat, both WITHOUT slimming
+% (slim=0) and WITH it (slim=1, a genuinely sliced interprocedural file - the
+% main function's unread f.dz_location/f.dz_size + their index table drop). The
+% offline guard (gap_interproc_equiv) checks the two are numerically identical.
 %
 % ADiGator uses classdef heavily, so generation must run in MATLAB (Octave
 % cannot run it). Run it from anywhere in the repo:
@@ -42,7 +43,11 @@ for doSlim = [0 1]
   cd(outdir);
   z = adigatorCreateDerivInput([2 1], 'z');
   w = adigatorCreateAuxInput([2 1]);
-  opts = struct('embed_mode','c','path',outdir,'echo',0, ...
+  % INLINE embed mode ('i'): slim_embed actually runs (it is skipped in classic
+  % mode), so slim=1 is a genuinely sliced interprocedural file rather than a
+  % byte-copy of slim=0. Inline embeds the derivative + per-subfunction data
+  % functions into gapfun_Grd.m and deletes the standalone _ADiGator*.m/.mat.
+  opts = struct('embed_mode','i','path',outdir,'echo',0, ...
                 'overwrite',1,'slim_embed',doSlim);
   fprintf('\n############### GENERATION slim_embed=%d into %s\n', doSlim, outdir);
   try
@@ -53,12 +58,19 @@ for doSlim = [0 1]
     continue
   end
   cd(orig);
-  dumpfile(sprintf('slim=%d  WRAPPER  gapfun_Grd.m', doSlim), ...
+  % inline embeds the derivative + data functions into gapfun_Grd.m (the
+  % standalone _ADiGator*.m / .mat are deleted), so that one file is the whole
+  % artifact; dump the others only if a non-inline capture leaves them.
+  dumpfile(sprintf('slim=%d  EMBEDDED WRAPPER  gapfun_Grd.m', doSlim), ...
            fullfile(outdir,'gapfun_Grd.m'));
-  dumpfile(sprintf('slim=%d  DERIV    gapfun_ADiGatorGrd.m', doSlim), ...
-           fullfile(outdir,'gapfun_ADiGatorGrd.m'));
-  dumpmat(sprintf('slim=%d  MAT      gapfun_ADiGatorGrd.mat', doSlim), ...
-          fullfile(outdir,'gapfun_ADiGatorGrd.mat'));
+  if isfile(fullfile(outdir,'gapfun_ADiGatorGrd.m'))
+    dumpfile(sprintf('slim=%d  DERIV    gapfun_ADiGatorGrd.m', doSlim), ...
+             fullfile(outdir,'gapfun_ADiGatorGrd.m'));
+  end
+  if isfile(fullfile(outdir,'gapfun_ADiGatorGrd.mat'))
+    dumpmat(sprintf('slim=%d  MAT      gapfun_ADiGatorGrd.mat', doSlim), ...
+            fullfile(outdir,'gapfun_ADiGatorGrd.mat'));
+  end
 end
 fprintf('\n############### DONE\n');
 end

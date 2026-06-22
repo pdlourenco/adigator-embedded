@@ -11,17 +11,21 @@ classdef IInterprocGapEquivTest < matlab.unittest.TestCase
     % (it calls conefun/setfun, conefun calls setfun), so this exercises the
     % multi-subfunction derivative end to end without regenerating it.
     %
-    % The core runs in base MATLAB and in GNU Octave alike (it only executes
-    % the committed fixtures - generation still needs MATLAB per
-    % docs/CI_PLAN.md); this wrapper puts it in the MATLAB CI gate, while the
-    % same core stays runnable license-free for local verification.
+    % The fixtures are inline-embedded (capture_gen_dialect), so slim1 is a
+    % genuinely sliced interprocedural file (the interprocedural slice of #44
+    % item 1 / ADR-0009 actually runs), not a byte-copy of slim0. The core runs
+    % in base MATLAB and in GNU Octave alike (it only executes the committed
+    % fixtures - generation still needs MATLAB per docs/CI_PLAN.md - shimming the
+    % inline coder.const where unavailable); this wrapper puts it in the MATLAB
+    % CI gate, while the same core stays runnable license-free for local
+    % verification.
     %
     % See ADR-0008 for the committed-fixture / offline-core rationale.
     %
-    % The equivalence contract is numeric, not structural: slim1 is allowed to
-    % shrink (and will, once part 1b's interprocedural slimming lands and the
-    % fixtures are regenerated), provided its NUMBERS match slim0 exactly -
-    % hence the AbsTol 0 below, and no byte/index comparison.
+    % The equivalence contract is numeric, not structural: slim1 legitimately
+    % shrinks (its unread output fields + index table drop), provided its
+    % NUMBERS match slim0 exactly - hence the AbsTol 0 below, and no byte/index
+    % comparison.
 
     methods (TestClassSetup)
         function addPaths(tc)
