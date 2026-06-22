@@ -19,6 +19,12 @@ out = cell(1, nout);
 end
 
 function clearClassicGlobal(wrapper)
+% Reverse-grad files cache under ADiGator_<wrapper> directly; classic
+% Jac/Grd/Hes files cache under ADiGator_<base>_ADiGator<Kind>.
+if endsWith(wrapper, '_RGrd')
+    clear('global', ['ADiGator_' wrapper]);
+    return;
+end
 kinds = {'Jac','Grd','Hes'};
 for i = 1:numel(kinds)
     suff = ['_' kinds{i}];

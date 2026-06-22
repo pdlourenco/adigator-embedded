@@ -21,10 +21,12 @@ constants used in arithmetic** (`cadamatprint.m`).
 > **Status (read first).** The bug descriptions in §1.1–1.3 are the original
 > analysis and are written in the present tense of when they were found. Their
 > **current disposition is tracked in [§1.5 Fix disposition log](#15-fix-disposition-log)**:
-> every bug below (B1–B15) is now **Fixed**, **Mitigated**, or **Won't-fix
-> (benign)** — none remain open. Where a description below names a file/line
-> (e.g. B1's old `adigatorGenDerFile_embedded.m` location), §1.5 records where
-> the code actually lives now (`embedding/prune_adigator_mat.m`).
+> every bug B1–B15 is now **Fixed**, **Mitigated**, or **Won't-fix (benign)**;
+> **B16** (§1.3b, surfaced by the issue-#38 Monte-Carlo hygiene fuzzer) is the
+> one **Open** item, with its fix sequenced as ROADMAP R9 B.3. Where a
+> description below names a file/line (e.g. B1's old
+> `adigatorGenDerFile_embedded.m` location), §1.5 records where the code
+> actually lives now (`embedding/prune_adigator_mat.m`).
 
 ### 1.1 Embedded pipeline (new code)
 
@@ -220,6 +222,27 @@ Identified in (now closed) PR #1. **Fixed** along with two comment typos
 referring to the nonexistent `RemoveUnneededIndices` (the function is
 `RemoveUnneededData`).
 
+### 1.3b Core-library bug found via the Monte-Carlo hygiene fuzzer (issue #38)
+
+**B16 — transformation state leaks on the error path (Open).**
+`adigator.m:79` declares `global ADIGATOR ADIGATORFORDATA ADIGATORDATA
+ADIGATORVARIABLESTORAGE` at entry and only releases them with
+`clear global ADIGATOR ...` at `adigator.m:815`, on the **success path**. The
+sole `try/catch` (`adigator.m:191`, around the initial user-function eval)
+restores the path and rethrows but does not clear those globals; there is no
+`try/catch`/`onCleanup` around the main transformation body, where the output
+file handle (`Dfid`, opened ~`adigator.m:567`, `fclose`d only on success
+~`adigator.m:787`) is also held. So when a user function errors mid-transformation,
+the session is left with stray `ADIGATOR*` globals (and, for functions that
+fail after `Dfid` opens, a leaked file handle) — a **REQ-T-07** violation
+("raise clean errors, restore the MATLAB path, close all file handles, and
+leave no stray globals"; the B13 family, noted "currently unpinned" in
+`CI_PLAN.md`). Surfaced by the issue-#38 `oracleHygiene` prototype on its first
+run. *Fix (ROADMAP R9 B.3):* wrap the transformation body so the
+transformation-state globals are cleared and `Dfid` closed on error as well as
+success (e.g. `onCleanup`), then rethrow; re-add `mcGenNegative`/`oracleHygiene`
+to pin it.
+
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
 - `cadaunarymath.m` derivative-rule corrections (`asec`, `acsc`, `asecd`,
@@ -243,6 +266,7 @@ referring to the nonexistent `RemoveUnneededIndices` (the function is
 | B2 (format string) | **Fixed** — pinned by `tests/unit/UEmbedMfileTest.m`. |
 | B5 (`structout` undefined) | **Fixed** in the extracted pruner. |
 | B15 (`OuterLoopMaxLenght` crash) | **Fixed** (see §1.3a). |
+| B16 (transformation state leaks on the error path) | **Open** (see §1.3b) — `adigator.m` clears its `ADIGATOR*` globals / closes `Dfid` only on the success path; a mid-transformation error leaves stray globals (and a possible leaked handle), violating REQ-T-07. Surfaced by the issue-#38 `oracleHygiene` prototype; fix sequenced as ROADMAP R9 B.3, then pinned by `mcGenNegative`/`oracleHygiene`. |
 | B7 (vector-output Hessian row multiplier) | **Fixed** — `(xind1-1)*m + yind` in `adigatorGenHesFile`, consistent with the documented `[m*n × n]` layout and `output.HessianStructure`. Covered by `hesVectorOutput*` in `tests/integration/IShapeMatrixTest.m`. |
 | B13 (`Gfid` never closed) | **Fixed** — both wrapper fids closed in `adigatorGenHesFile`. |
 | B8 (matrix-of-scalar Hessian branch) | **Fixed** — branch on `any(ysize == 1)`, subscripts converted to linear indices, unreachable sparse branch removed. The `hesMatrixOfScalar` case in `IShapeMatrixTest` auto-flipped to a regression guard. |

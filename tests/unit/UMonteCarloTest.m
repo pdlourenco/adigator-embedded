@@ -120,5 +120,16 @@ classdef UMonteCarloTest < matlab.unittest.TestCase
             tc.verifyEqual(cov0.nDistinct, 0);
             tc.verifyEqual(cov0.total, 0);
         end
+
+        function scalarSumGeneratorWellFormed(tc)
+            rng(6);
+            c = mcGenScalarSum(11);
+            n = c.xsize(1);
+            tc.verifyEqual(c.deriv, 'gradient');
+            tc.verifyTrue(c.tags.scalarCost);
+            tc.verifyEqual(c.tags.outShape, [1 1]);
+            tc.verifySize(c.exactJac(c.x0), [n 1]);          % gradient
+            tc.verifyMatches(strtrim(c.body{end}), '^y = sum\(\w+\(t\)\);$');
+        end
     end
 end
