@@ -36,6 +36,8 @@ classdef MCSmokeTest < matlab.unittest.TestCase
             % Deterministic campaign over the exact-derivative generators.
             report = mcCampaign('nIters', 24, 'seed', 90210, ...
                 'generators', {'mcGenAffine','mcGenQuadratic'}, ...
+                'oracles', {'oracleKnownDeriv','oracleSparsitySuperset', ...
+                            'oracleCrossMode','oracleHessSymmetry'}, ...
                 'promote', false, 'verbose', false);
 
             tc.verifyEqual(report.nFail, 0, ...
@@ -70,6 +72,37 @@ classdef MCSmokeTest < matlab.unittest.TestCase
             tc.verifyEqual(ks.fail, 0, 'knownDeriv reported a hard failure');
             tc.verifyEqual(report.oracleStats.oracleSparsitySuperset.fail, 0, ...
                 'sparsity superset failed on a diagonal Jacobian');
+        end
+
+        function reverseGradientCampaignIsClean(tc)
+            % Scalar reduction costs checked by oracleFwdRev: reverse-mode
+            % gradient (adigatorGenRevGradFile) must equal the forward 'Grd'
+            % wrapper and the closed form.
+            report = mcCampaign('nIters', 12, 'seed', 31415, ...
+                'generators', {'mcGenScalarSum'}, ...
+                'oracles', {'oracleKnownDeriv','oracleFwdRev','oracleSparsitySuperset'}, ...
+                'promote', false, 'verbose', false);
+
+            tc.verifyEqual(report.nFail, 0, ...
+                sprintf('reverse-gradient smoke found %d failing case(s)', report.nFail));
+            fr = report.oracleStats.oracleFwdRev;
+            tc.verifyGreaterThan(fr.pass, 0, 'fwdRev never ran (reverse-mode path untested)');
+            tc.verifyEqual(fr.fail, 0, 'fwdRev reported a hard failure');
+        end
+
+        function negativeHygieneIsClean(tc)
+            % Malformed fixtures must fail generation cleanly and leave the
+            % session hygienic (REQ-T-07), checked by oracleHygiene.
+            report = mcCampaign('nIters', 10, 'seed', 27182, ...
+                'generators', {'mcGenNegative'}, ...
+                'oracles', {'oracleHygiene'}, ...
+                'promote', false, 'verbose', false);
+
+            tc.verifyEqual(report.nFail, 0, ...
+                sprintf('hygiene smoke found %d failing case(s); see report.failures', report.nFail));
+            hg = report.oracleStats.oracleHygiene;
+            tc.verifyGreaterThan(hg.pass, 0, 'hygiene oracle never ran');
+            tc.verifyEqual(hg.fail, 0, 'a malformed function did not error cleanly / leaked state');
         end
     end
 end

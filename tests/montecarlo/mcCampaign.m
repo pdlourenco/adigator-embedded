@@ -24,9 +24,9 @@ p = inputParser; p.FunctionName = 'mcCampaign';
 p.addParameter('nIters', 100, @(x) isnumeric(x) && isscalar(x) && x >= 1);
 p.addParameter('seed', 0, @(x) isnumeric(x) && isscalar(x) && x >= 0);
 p.addParameter('generators', ...
-    {'mcGenAffine','mcGenQuadratic','mcGenShapeFuzz','mcGenElementwise'}, @iscellstr);
+    {'mcGenAffine','mcGenQuadratic','mcGenShapeFuzz','mcGenElementwise','mcGenScalarSum'}, @iscellstr);
 p.addParameter('oracles', ...
-    {'oracleKnownDeriv','oracleSparsitySuperset','oracleCrossMode','oracleHessSymmetry'}, @iscellstr);
+    {'oracleKnownDeriv','oracleSparsitySuperset','oracleCrossMode','oracleHessSymmetry','oracleFwdRev'}, @iscellstr);
 p.addParameter('stopOnFail', false, @(x) islogical(x) && isscalar(x));
 p.addParameter('promote', true, @(x) islogical(x) && isscalar(x));
 p.addParameter('reportPath', '', @(x) ischar(x) || isstring(x));

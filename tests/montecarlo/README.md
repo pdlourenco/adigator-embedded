@@ -23,8 +23,10 @@ deterministically.
 | Layer | Files |
 |-------|-------|
 | Driver / contract | `mcCampaign`, `mcCase`, `mcRunCase`, `mcReport`, `mcCoverage` |
-| Generators | `generators/mcGen{Affine,Quadratic,ShapeFuzz,Elementwise}` |
-| Oracles (tolerance-free first) | `oracles/oracle{KnownDeriv,SparsitySuperset,CrossMode,HessSymmetry}` |
+| Generators (positive) | `generators/mcGen{Affine,Quadratic,ShapeFuzz,Elementwise,ScalarSum}` |
+| Generators (negative) | `generators/mcGenNegative` |
+| Oracles (tolerance-free first) | `oracles/oracle{KnownDeriv,SparsitySuperset,CrossMode,HessSymmetry,FwdRev}` |
+| Oracle (robustness) | `oracles/oracleHygiene` |
 | Failure → fixture | `mcShrink`, `mcPromote`, `regressions/` |
 | Smoke (per-merge) | `MCSmokeTest` |
 
@@ -39,8 +41,16 @@ deterministically.
   bit-identical results; the `l`/`i` numeric check needs MATLAB Coder and
   skips cleanly otherwise.
 - **hessSymmetry** — `H == H'` for scalar Hessian cases (skips otherwise).
+- **fwdRev** — for scalar costs, the reverse-mode gradient
+  (`adigatorGenRevGradFile`) equals the forward `Grd` wrapper and the closed
+  form (skips non-scalar cases).
+- **hygiene** — for *negative* cases (malformed fixtures from `mcGenNegative`),
+  generation must error cleanly and restore the path / close file handles /
+  leave no stray globals (REQ-T-07). Run it as its own campaign — negative
+  cases must not be fed to the value oracles:
+  `mcCampaign('generators',{'mcGenNegative'},'oracles',{'oracleHygiene'})`.
 
-The `mcGenElementwise` rule-table generator exercises `cadaunarymath` under
-randomization. Finite-difference and forward-vs-reverse oracles, the
-expression-tree generator, and negative/hygiene fuzzing are later phases
-(ROADMAP R9 C–D).
+The `mcGenElementwise` / `mcGenScalarSum` rule-table generators exercise
+`cadaunarymath` (and the reverse adjoint rules) under randomization. The
+finite-difference oracle and the typed expression-tree generator are later
+phases (ROADMAP R9 C–D).
