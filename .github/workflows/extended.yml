@@ -75,6 +75,15 @@ jobs:
         with:
           select-by-folder: tests/system
           test-results-junit: results/system.xml
+      - name: Monte-Carlo smoke (TS-S-04)
+        # Selected here, not in the PR gate or the ci_local sweep: the
+        # random-seed harness must never gate a PR (ADR-0007). This job has
+        # MATLAB Coder, so MCSmokeTest's cross-mode numeric oracle runs fully.
+        if: success()
+        uses: matlab-actions/run-tests@v2
+        with:
+          select-by-folder: tests/montecarlo
+          test-results-junit: results/montecarlo.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
