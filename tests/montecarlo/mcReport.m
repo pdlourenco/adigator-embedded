@@ -20,6 +20,11 @@ if isfield(report,'oracleStats') && ~isempty(fieldnames(report.oracleStats))
     end
 end
 
+if isfield(report,'coverage') && report.coverage.nDistinct > 0
+    L{end+1} = sprintf('  coverage: %d distinct axis tuples over %d cases', ...
+        report.coverage.nDistinct, report.coverage.total);
+end
+
 if ~isempty(report.failures)
     L{end+1} = sprintf('  failing seeds (%d):', numel(report.failures));
     for i = 1:numel(report.failures)

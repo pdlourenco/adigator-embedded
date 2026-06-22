@@ -52,5 +52,24 @@ classdef MCSmokeTest < matlab.unittest.TestCase
             cm = report.oracleStats.oracleCrossMode;
             tc.verifyEqual(cm.fail, 0, 'crossMode oracle reported a hard failure');
         end
+
+        function elementwiseCampaignIsClean(tc)
+            % Rule-table generator: y = g(a.*x+b) with the exact diagonal
+            % Jacobian. Exercises cadaunarymath rules (REQ-C-01) under
+            % randomization; the unary rules are well-trodden (URulesUnaryTest),
+            % so this is safe for a per-merge smoke.
+            report = mcCampaign('nIters', 16, 'seed', 24601, ...
+                'generators', {'mcGenElementwise'}, ...
+                'oracles', {'oracleKnownDeriv','oracleSparsitySuperset','oracleCrossMode'}, ...
+                'promote', false, 'verbose', false);
+
+            tc.verifyEqual(report.nFail, 0, ...
+                sprintf('elementwise smoke found %d failing case(s)', report.nFail));
+            ks = report.oracleStats.oracleKnownDeriv;
+            tc.verifyGreaterThan(ks.pass, 0, 'knownDeriv never passed on elementwise cases');
+            tc.verifyEqual(ks.fail, 0, 'knownDeriv reported a hard failure');
+            tc.verifyEqual(report.oracleStats.oracleSparsitySuperset.fail, 0, ...
+                'sparsity superset failed on a diagonal Jacobian');
+        end
     end
 end

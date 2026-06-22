@@ -23,8 +23,10 @@ function report = mcCampaign(varargin)
 p = inputParser; p.FunctionName = 'mcCampaign';
 p.addParameter('nIters', 100, @(x) isnumeric(x) && isscalar(x) && x >= 1);
 p.addParameter('seed', 0, @(x) isnumeric(x) && isscalar(x) && x >= 0);
-p.addParameter('generators', {'mcGenAffine','mcGenQuadratic','mcGenShapeFuzz'}, @iscellstr);
-p.addParameter('oracles', {'oracleKnownDeriv','oracleSparsitySuperset','oracleCrossMode'}, @iscellstr);
+p.addParameter('generators', ...
+    {'mcGenAffine','mcGenQuadratic','mcGenShapeFuzz','mcGenElementwise'}, @iscellstr);
+p.addParameter('oracles', ...
+    {'oracleKnownDeriv','oracleSparsitySuperset','oracleCrossMode','oracleHessSymmetry'}, @iscellstr);
 p.addParameter('stopOnFail', false, @(x) islogical(x) && isscalar(x));
 p.addParameter('promote', true, @(x) islogical(x) && isscalar(x));
 p.addParameter('reportPath', '', @(x) ischar(x) || isstring(x));
@@ -41,12 +43,14 @@ for k = 1:numel(o.oracles)
 end
 failures = struct('seed',{},'gen',{},'message',{});
 promoted = {};
+tagsList = cell(1, o.nIters);
 
 for i = 1:o.nIters
     s = o.seed + i;
     rng(s);
     gen = o.generators{1 + mod(i-1, numel(o.generators))};
     c = feval(gen, i);
+    tagsList{i} = c.tags;
 
     res = mcRunCase(c, o.oracles);
 
@@ -94,6 +98,7 @@ report.nFail = nFail;
 report.oracleStats = oracleStats;
 report.failures = failures;
 report.promoted = promoted;
+report.coverage = mcCoverage(tagsList(~cellfun(@isempty, tagsList)));
 
 if o.verbose || ~isempty(o.reportPath)
     mcReport(report, o.reportPath);

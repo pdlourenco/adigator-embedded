@@ -94,5 +94,31 @@ classdef UMonteCarloTest < matlab.unittest.TestCase
             tc.verifyEqual(r.expected, [4 0; 0 9], 'AbsTol', 0);
             tc.verifyEqual(r.expectedKind, 'jacobian');
         end
+
+        function elementwiseGeneratorWellFormed(tc)
+            rng(4);
+            c = mcGenElementwise(9);
+            n = c.xsize(1);
+            tc.verifyEqual(c.deriv, 'jacobian');
+            J = c.exactJac(c.x0);
+            tc.verifySize(J, [n n]);
+            tc.verifyEqual(J, diag(diag(J)), 'AbsTol', 0, 'Jacobian must be diagonal');
+            tc.verifyTrue(iscellstr(c.body) && numel(c.body) == 2);
+            tc.verifyMatches(strtrim(c.body{end}), '^y = \w+\(t\);$');
+        end
+
+        function coverageCountsDistinctTuples(tc)
+            t1 = struct('gen','affine','order',1,'density','dense','inShape',[3 1],'outShape',[2 1]);
+            t2 = t1;                                   % same tuple
+            t3 = struct('gen','quadratic','order',2,'density','dense','inShape',[4 1],'outShape',[1 1]);
+            cov = mcCoverage({t1, t2, t3});
+            tc.verifyEqual(cov.total, 3);
+            tc.verifyEqual(cov.nDistinct, 2);          % t1==t2 collapse, t3 distinct
+            tc.verifyEqual(sum(cov.counts), 3);
+
+            cov0 = mcCoverage({});
+            tc.verifyEqual(cov0.nDistinct, 0);
+            tc.verifyEqual(cov0.total, 0);
+        end
     end
 end

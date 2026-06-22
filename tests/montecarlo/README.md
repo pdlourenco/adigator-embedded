@@ -22,21 +22,25 @@ deterministically.
 
 | Layer | Files |
 |-------|-------|
-| Driver / contract | `mcCampaign`, `mcCase`, `mcRunCase`, `mcReport` |
-| Generators | `generators/mcGen{Affine,Quadratic,ShapeFuzz}` |
-| Oracles (tolerance-free first) | `oracles/oracle{KnownDeriv,SparsitySuperset,CrossMode}` |
+| Driver / contract | `mcCampaign`, `mcCase`, `mcRunCase`, `mcReport`, `mcCoverage` |
+| Generators | `generators/mcGen{Affine,Quadratic,ShapeFuzz,Elementwise}` |
+| Oracles (tolerance-free first) | `oracles/oracle{KnownDeriv,SparsitySuperset,CrossMode,HessSymmetry}` |
 | Failure → fixture | `mcShrink`, `mcPromote`, `regressions/` |
 | Smoke (per-merge) | `MCSmokeTest` |
 
 ## Oracles
 
 - **knownDeriv** — exact value check vs the closed form the generator emits
-  (affine → `J = A`; quadratic → gradient `Qx+c`, Hessian `Q`). Tolerance-free.
+  (affine → `J = A`; quadratic → gradient `Qx+c`, Hessian `Q`; elementwise →
+  diagonal `diag(a.*g'(a.*x+b))`, with each `g'` mirroring `cadaunarymath`'s
+  emitted form). Tight tolerance (1e-9), not FD.
 - **sparsitySuperset** — `find(|D|>0) ⊆ find(Structure)` (REQ-T-03).
 - **crossMode** — `embed_mode` `c`/`l`/`i` static invariants (REQ-T-04) plus
   bit-identical results; the `l`/`i` numeric check needs MATLAB Coder and
   skips cleanly otherwise.
+- **hessSymmetry** — `H == H'` for scalar Hessian cases (skips otherwise).
 
-Finite-difference and forward-vs-reverse oracles, the rule-table /
-expression-tree generators, and negative/hygiene fuzzing are later phases
-(ROADMAP R9 B–D).
+The `mcGenElementwise` rule-table generator exercises `cadaunarymath` under
+randomization. Finite-difference and forward-vs-reverse oracles, the
+expression-tree generator, and negative/hygiene fuzzing are later phases
+(ROADMAP R9 C–D).
