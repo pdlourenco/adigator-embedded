@@ -23,8 +23,10 @@ deterministically.
 | Layer | Files |
 |-------|-------|
 | Driver / contract | `mcCampaign`, `mcCase`, `mcRunCase`, `mcReport`, `mcCoverage` |
-| Generators | `generators/mcGen{Affine,Quadratic,ShapeFuzz,Elementwise,ScalarSum}` |
+| Generators (positive) | `generators/mcGen{Affine,Quadratic,ShapeFuzz,Elementwise,ScalarSum}` |
+| Generators (negative) | `generators/mcGenNegative` |
 | Oracles (tolerance-free first) | `oracles/oracle{KnownDeriv,SparsitySuperset,CrossMode,HessSymmetry,FwdRev}` |
+| Oracle (robustness) | `oracles/oracleHygiene` |
 | Failure → fixture | `mcShrink`, `mcPromote`, `regressions/` |
 | Smoke (per-merge) | `MCSmokeTest` |
 
@@ -42,13 +44,16 @@ deterministically.
 - **fwdRev** — for scalar costs, the reverse-mode gradient
   (`adigatorGenRevGradFile`) equals the forward `Grd` wrapper and the closed
   form. Skips non-scalar cases, and skips (does not fail) when reverse mode
-  declines a construct at generation time — a tool-scope limit is not a
-  derivative bug.
+  declines a construct at generation time (an `adigator:revgrad:*` /
+  `adigator:fwdtape:*` rejection) — a tool-scope limit is not a derivative bug.
+- **hygiene** — for *negative* cases (malformed fixtures from `mcGenNegative`,
+  `tags.negative = true`), generation must error AND leave the session
+  hygienic: no stray transformation globals, the path restored, no open file
+  handles (REQ-T-07, pins the B16 `adigator.m` onCleanup fix). Run it as its
+  own campaign — negative cases must never be fed to the value oracles:
+  `mcCampaign('generators',{'mcGenNegative'},'oracles',{'oracleHygiene'})`.
 
 The `mcGenElementwise` / `mcGenScalarSum` rule-table generators exercise
-`cadaunarymath` (and the reverse adjoint rules) under randomization.
-Negative/hygiene fuzzing (REQ-T-07) is the next increment — it depends on an
-`adigator.m` error-path fix (transformation globals / output file handle are
-only released on the success path — logged as B16, Open, in `ANALYSIS.md`
-§1.3b), which the hygiene oracle prototype surfaced and which lands first. The finite-difference oracle and the typed
-expression-tree generator are later phases (ROADMAP R9 C–D).
+`cadaunarymath` (and the reverse adjoint rules) under randomization. The
+finite-difference oracle and the typed expression-tree generator are later
+phases (ROADMAP R9 C–D).

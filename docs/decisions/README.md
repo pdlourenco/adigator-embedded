@@ -28,6 +28,16 @@ Contracts section (binding conventions), or for purely mechanical choices
   the base branch before finalizing the number** — the rebase surfaces the
   in-flight neighbour the merge-base hid. The same rule applies to any
   identifier drawn from a sequence parallel tracks both append to.
+- **Before assigning a number, scan both merged and in-flight ADRs.** A rebase
+  only reveals what has *merged*; an open PR on another branch can still hold
+  the next number. Take `NNNN = 1 + max(merged, in-flight)`:
+  ```sh
+  git ls-tree --name-only origin/master docs/decisions/ | grep ADR-   # merged
+  gh pr list --state open --search 'ADR- in:files'                    # in-flight
+  ```
+  (e.g. ADR-0011 was taken precisely because master held 0001–0009 *and* an open
+  PR already claimed 0010). If you must pick before an in-flight neighbour
+  merges, leave its number reserved and take the one after.
 - Use the shape in [`ADR-TEMPLATE.md`](ADR-TEMPLATE.md).
 - Link the ADR from the PR description; reference it inline beside tactical
   values (`% see ADR-NNNN` next to a magic number or a policy branch).
@@ -56,3 +66,6 @@ Contracts section (binding conventions), or for purely mechanical choices
 - [ADR-0009](ADR-0009-interprocedural-field-slice-worklist.md) — Interprocedural
   field-slice via an assembled-file worklist over `(function, demanded-field-set)`
   (issue #44 item 1).
+- [ADR-0011](ADR-0011-adigator-error-path-cleanup.md) — `adigator.m` releases
+  transformation state on every exit: globals cleared in-frame, temp dir / file
+  handles via a by-value `onCleanup` (issue #38, bug B16).

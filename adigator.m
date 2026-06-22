@@ -79,6 +79,36 @@ function [Outputs,varargout] = adigator(UserFunName,UserFunInputs,DerFileName,va
 global ADIGATOR ADIGATORFORDATA ADIGATORDATA ADIGATORVARIABLESTORAGE
 tstart = tic;
 version = '1.5'; % v1.5
+
+% B16 / REQ-T-07: a transformation acquires three things that must be released
+% on EVERY exit (normal return or error): the four transformation-state globals,
+% the temp dir it puts on the path, and the file handles it opens. They are
+% released two different ways, on purpose:
+%   * The GLOBALS are cleared by a helper subfunction (adigatorClearTransformGlobals)
+%     on the normal path at the end and in the catch below. A literal
+%     `clear global` issued from adigator's OWN frame -- which declares these
+%     globals (the `global` statement at the top) -- proved unreliable on the
+%     success path: it re-registers the names empty instead of removing them, so
+%     `who('global')` keeps a stray (empty) `ADIGATOR`. Clearing from a helper
+%     frame that does NOT declare these globals releases them reliably on both
+%     paths. (As defense-in-depth the runtime-data global ADiGator_<name> is
+%     eval-declared in its own subfunction frame, adigatorLoadRuntimeData, never
+%     here; and the cleanup callback below must NOT re-declare the transformation
+%     globals -- an onCleanup that re-declares a still-live global re-registers it
+%     empty -- so it touches only handles/paths.)
+%   * The TEMP DIR and FILE HANDLES are released by an onCleanup registered once
+%     the temp dir is known (below). It captures what it needs BY VALUE and
+%     declares no global, so it fires on every exit without resurrecting the
+%     cleared globals. adigator opens handles at several sites (user source
+%     files, per-function temp files, the generated file), so rather than track
+%     each open site the cleanup closes the DELTA of the open-fid set against
+%     this entry snapshot -- exactly the handles adigator opened, leaving a
+%     caller's own open files untouched.
+% The runtime-data global is intentionally left intact -- the generated file
+% needs it. The try opens here so an error anywhere below -- including the
+% option block -- still clears the globals via the catch.
+adigatorEntryFids = adigatorOpenFids();   % handles open at entry; cleanup closes only the delta
+try
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ OPTIONS SETUP ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 opts = adigatorOptions();
 if nargin == 4
@@ -146,6 +176,10 @@ end
 
 
 [~,adigatorTempDir] = filekeeping();
+% The temp dir now exists and is on the path; register release of it and of every
+% handle adigator opens during this call (the delta against the entry snapshot)
+% for every exit. Captured BY VALUE, no global declaration (see the note above).
+adigatorResourceCleanup = onCleanup(@() adigatorReleaseResources(adigatorTempDir, adigatorEntryFids));
 %% ~~~~~~~~~~~~~~~~~~ PARSE USERFUNINPUTS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 if ~ischar(UserFunName)
   error(['First input to adigator must be string name of function to be ',...
@@ -780,11 +814,12 @@ fprintf(Dfid,['ADiGator_',ADIGATOR.PRINT.FILENAME,' = load(''',...
   ADIGATOR.PRINT.FILENAME,'.mat'');\n']);
 fprintf(Dfid,'return\nend');
 
-eval(['global ADiGator_',ADIGATOR.PRINT.FILENAME]);
-eval(['ADiGator_',ADIGATOR.PRINT.FILENAME,' = load(''',...
-  ADIGATOR.PRINT.FILEPATHS.mat,''');']); % v1.5 - the files can be in any path provided by the user
+% Load the runtime-data global ADiGator_<name> in a SUBFUNCTION frame, not here,
+% so adigator's own frame never eval-declares a global (defense-in-depth for the
+% B16 hygiene; the transformation globals are cleared via the non-declaring
+% helper). The global persists in the global workspace after the call.
+adigatorLoadRuntimeData(ADIGATOR.PRINT.FILENAME, ADIGATOR.PRINT.FILEPATHS.mat); % v1.5 - files can be in any user path
 
-fclose('all');
 if ADIGATOR.OPTIONS.ECHO
   disp(['Successfully transformed user function ''',UserFunName,...
     ''' to derivative function ''',ADiGator_GeneratedFiles.dername,'''']);
@@ -804,15 +839,79 @@ end
 if nargout > 3
     varargout{3} = ADIGATOR.GENFUNNAMES;
 end
-rmpath(adigatorTempDir);
-[sflag,msg] = rmdir(adigatorTempDir,'s');
-if ~sflag
-  warning('Could not remove old temp directory -- message produced: %s',msg);
+catch adigatorErr
+  % Clear the transformation-state globals via the non-declaring helper, then
+  % rethrow. The onCleanup registered above still fires as the frame unwinds,
+  % releasing the temp dir / path entry and the file handles adigator opened.
+  adigatorClearTransformGlobals();
+  rethrow(adigatorErr)
 end
-% Clear transformation-state globals so successive calls (e.g. in test
-% suites) start clean. The runtime data global ADiGator_<name> set up above
-% for immediate evaluation of the generated file is deliberately kept.
+% Success: clear the transformation-state globals via the non-declaring helper
+% (the temp dir and file handles are released by the onCleanup as the frame
+% unwinds). The runtime data global ADiGator_<name> loaded by
+% adigatorLoadRuntimeData is deliberately left intact for the generated file.
+adigatorClearTransformGlobals();
+end
+
+%% ~~~~~~~~~~~~~~~~~~~~~~~~~ RELEASE RESOURCES ~~~~~~~~~~~~~~~~~~~~~~~~~ %%
+function adigatorReleaseResources(tdir, entryFids)
+% B16 / REQ-T-07: release the temp dir / its path entry and every file handle
+% adigator opened during the call (the delta of fopen('all') against the entry
+% snapshot), on every exit. Holds NO `global` declaration by design (see the
+% cleanup note in adigator) so it cannot resurrect the transformation-state
+% globals released by adigatorClearTransformGlobals. A caller's own open files
+% (those already open at entry) are not in the delta and are left untouched.
+newfids = setdiff(adigatorOpenFids(), entryFids);
+for k = 1:numel(newfids)
+  if ~isempty(fopen(newfids(k))), fclose(newfids(k)); end
+end
+if ~isempty(tdir) && exist(tdir,'dir')
+  ws = warning('off','MATLAB:rmpath:DirNotFound');
+  rmpath(tdir);
+  warning(ws);
+  [sflag,msg] = rmdir(tdir,'s');
+  if ~sflag
+    warning('Could not remove old temp directory -- message produced: %s',msg);
+  end
+end
+end
+
+%% ~~~~~~~~~~~~~~~~~~~ CLEAR TRANSFORMATION GLOBALS ~~~~~~~~~~~~~~~~~~~~ %%
+function adigatorClearTransformGlobals()
+% B16 / REQ-T-07: clear the four transformation-state globals from a frame that
+% does NOT declare them global. adigator's own frame declares them (the `global`
+% statement at the top), and a literal `clear global` issued from within that
+% declaring frame is unreliable on the success path -- it re-registers the names
+% empty instead of removing them, leaving a stray (empty) ADIGATOR in
+% who('global'). Clearing from this clean helper frame (which never declares
+% them) releases them on both the success and the error path.
 clear global ADIGATOR ADIGATORFORDATA ADIGATORDATA ADIGATORVARIABLESTORAGE
+end
+
+%% ~~~~~~~~~~~~~~~~~~~~~~ LOAD RUNTIME DATA GLOBAL ~~~~~~~~~~~~~~~~~~~~~ %%
+function adigatorLoadRuntimeData(name, matpath)
+% B16 / REQ-T-07: declare and load the dynamically-named runtime-data global
+% ADiGator_<name> in ITS OWN frame, not adigator's. The global persists in the
+% global workspace after this returns (the generated file re-declares
+% `global ADiGator_<name>` to read it). Doing the eval-global here keeps
+% adigator's own frame free of an eval-declared global (defense-in-depth: the
+% transformation globals are released by adigatorClearTransformGlobals, a
+% non-declaring helper, not by an in-frame clear).
+eval(['global ADiGator_',name]);
+eval(['ADiGator_',name,' = load(''',matpath,''');']);
+end
+
+%% ~~~~~~~~~~~~~~~~~~~~~~~~~~~ OPEN FIDS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
+function fids = adigatorOpenFids()
+% List currently-open file identifiers, portably across releases. fopen('all')
+% is being removed (it errors on recent MATLAB, ID MATLAB:fopen:FopenAllStagedRemoval);
+% openedFiles is its replacement but does not exist on older releases (R2022a..),
+% where fopen('all') still works. Prefer openedFiles, fall back to fopen('all').
+if exist('openedFiles','builtin') == 5 || exist('openedFiles','file') == 2
+  fids = openedFiles();
+else
+  fids = fopen('all');
+end
 end
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ FILEKEEPING ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%

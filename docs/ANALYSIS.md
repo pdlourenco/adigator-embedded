@@ -21,12 +21,12 @@ constants used in arithmetic** (`cadamatprint.m`).
 > **Status (read first).** The bug descriptions in §1.1–1.3 are the original
 > analysis and are written in the present tense of when they were found. Their
 > **current disposition is tracked in [§1.5 Fix disposition log](#15-fix-disposition-log)**:
-> every bug B1–B15 is now **Fixed**, **Mitigated**, or **Won't-fix (benign)**;
-> **B16** (§1.3b, surfaced by the issue-#38 Monte-Carlo hygiene fuzzer) is the
-> one **Open** item, with its fix sequenced as ROADMAP R9 B.3. Where a
-> description below names a file/line (e.g. B1's old
-> `adigatorGenDerFile_embedded.m` location), §1.5 records where the code
-> actually lives now (`embedding/prune_adigator_mat.m`).
+> every bug B1–B16 is now **Fixed**, **Mitigated**, or **Won't-fix (benign)** —
+> none remain open. (B16, §1.3b, was surfaced by the issue-#38 Monte-Carlo
+> hygiene fuzzer and fixed in ROADMAP R9 B.3.) Where a description below names a
+> file/line (e.g. B1's old `adigatorGenDerFile_embedded.m` location), §1.5
+> records where the code actually lives now
+> (`embedding/prune_adigator_mat.m`).
 
 ### 1.1 Embedded pipeline (new code)
 
@@ -224,24 +224,51 @@ referring to the nonexistent `RemoveUnneededIndices` (the function is
 
 ### 1.3b Core-library bug found via the Monte-Carlo hygiene fuzzer (issue #38)
 
-**B16 — transformation state leaks on the error path (Open).**
-`adigator.m:79` declares `global ADIGATOR ADIGATORFORDATA ADIGATORDATA
-ADIGATORVARIABLESTORAGE` at entry and only releases them with
-`clear global ADIGATOR ...` at `adigator.m:815`, on the **success path**. The
-sole `try/catch` (`adigator.m:191`, around the initial user-function eval)
-restores the path and rethrows but does not clear those globals; there is no
-`try/catch`/`onCleanup` around the main transformation body, where the output
-file handle (`Dfid`, opened ~`adigator.m:567`, `fclose`d only on success
-~`adigator.m:787`) is also held. So when a user function errors mid-transformation,
-the session is left with stray `ADIGATOR*` globals (and, for functions that
-fail after `Dfid` opens, a leaked file handle) — a **REQ-T-07** violation
-("raise clean errors, restore the MATLAB path, close all file handles, and
-leave no stray globals"; the B13 family, noted "currently unpinned" in
-`CI_PLAN.md`). Surfaced by the issue-#38 `oracleHygiene` prototype on its first
-run. *Fix (ROADMAP R9 B.3):* wrap the transformation body so the
-transformation-state globals are cleared and `Dfid` closed on error as well as
-success (e.g. `onCleanup`), then rethrow; re-add `mcGenNegative`/`oracleHygiene`
-to pin it.
+Originally `adigator.m` declared `global ADIGATOR ADIGATORFORDATA ADIGATORDATA
+ADIGATORVARIABLESTORAGE` at entry and only released them with
+`clear global ADIGATOR ...` on the **success path**. The sole `try/catch`
+(around the initial user-function eval) restored the path and rethrew but did
+not clear those globals; there was no `try/catch`/`onCleanup` around the main
+transformation body, where the output file handle (`Dfid`) and the temp dir's
+path entry are also held. So when a user function errored mid-transformation,
+the session was left with stray `ADIGATOR*` globals, the temp dir still on the
+path, and (for functions that fail after `Dfid` opens) a leaked file handle —
+a **REQ-T-07** violation ("raise clean errors, restore the MATLAB path, close
+all file handles, and leave no stray globals"; the B13 family, previously noted
+"currently unpinned" in `CI_PLAN.md`). Surfaced by the issue-#38 `oracleHygiene`
+prototype on its first run.
+
+**Fix (ROADMAP R9 B.3, [ADR-0011](decisions/ADR-0011-adigator-error-path-cleanup.md)).**
+Release now happens on **every** exit (normal return or error), in two parts.
+The four transformation globals are cleared by a **non-declaring helper
+subfunction** (`adigatorClearTransformGlobals`, which runs `clear global …`
+without itself declaring those globals) — called once at the end of the body and
+once in a `catch` that wraps the body and rethrows. The decisive constraint,
+found empirically and confirmed in-situ against the real `adigatorGenJacFile`
+flow: a literal `clear global` issued from `adigator`'s **own** frame — which
+*declares* the four globals via the top `global` statement — is unreliable on the
+**success** path; it re-registers the names *empty* instead of removing them,
+leaving a stray (empty) `ADIGATOR`. (The error path's identical in-frame clear
+happened to release cleanly, so the leak was success-path-only and stayed
+invisible until a *positive*-path `who('global')` check existed — the gated
+`UCoreErrorHygieneTest`, which caught it.) Clearing from a helper frame that
+never declares these globals releases them on both paths. As defense-in-depth,
+the runtime-data global `ADiGator_<name>` is eval-declared in its own subfunction
+(`adigatorLoadRuntimeData`), keeping `adigator`'s frame free of an eval-declared
+global; an earlier cut that relied on this move-out plus an in-frame clear still
+leaked on success, which is why the helper-clear is the load-bearing fix. The
+temp dir and the file handles adigator opens (the user source files, per-function
+temp files and generated file, found as the delta of the open-fid set against an
+entry snapshot, so a caller's own open files are untouched) are released by an
+`onCleanup` registered once `filekeeping` has created the temp dir, capturing
+what it needs **by value** so it holds no `global` declaration (a callback that
+re-declares a still-live global would re-register it empty — the trap the first
+cut hit). The runtime data global `ADiGator_<name>` is deliberately **not**
+cleared — the generated file needs it. Pinned by **`UCoreErrorHygieneTest`**
+(gated `tests/unit`, success *and* error path) and, in the extended suite, the
+`mcGenNegative` / `oracleHygiene` pair plus `MCSmokeTest.successLeavesNoOpenHandles`:
+malformed fixtures must error, and neither path may leave `who('global')`, the
+path, or the open-fid set changed.
 
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
@@ -266,7 +293,7 @@ to pin it.
 | B2 (format string) | **Fixed** — pinned by `tests/unit/UEmbedMfileTest.m`. |
 | B5 (`structout` undefined) | **Fixed** in the extracted pruner. |
 | B15 (`OuterLoopMaxLenght` crash) | **Fixed** (see §1.3a). |
-| B16 (transformation state leaks on the error path) | **Open** (see §1.3b) — `adigator.m` clears its `ADIGATOR*` globals / closes `Dfid` only on the success path; a mid-transformation error leaves stray globals (and a possible leaked handle), violating REQ-T-07. Surfaced by the issue-#38 `oracleHygiene` prototype; fix sequenced as ROADMAP R9 B.3, then pinned by `mcGenNegative`/`oracleHygiene`. |
+| B16 (transformation state leaks on the error path) | **Fixed** (see §1.3b, ADR-0011) — `adigator.m` now clears the `ADIGATOR*` globals via a non-declaring helper subfunction (`adigatorClearTransformGlobals`) on both the normal path and in a `catch` that rethrows (a literal clear from `adigator`'s own declaring frame proved unreliable on the success path), with the runtime-data `eval`-global load isolated in `adigatorLoadRuntimeData` as defense-in-depth, and releases the adigator-owned handles + path/temp dir via a by-value `onCleanup`, on every exit. Surfaced by the issue-#38 `oracleHygiene` prototype; the success-path global leak was caught by the gated `UCoreErrorHygieneTest`. Pinned by `UCoreErrorHygieneTest` (gated) + the `mcGenNegative`/`oracleHygiene` pair and `MCSmokeTest.successLeavesNoOpenHandles` (extended) (REQ-T-07). |
 | B7 (vector-output Hessian row multiplier) | **Fixed** — `(xind1-1)*m + yind` in `adigatorGenHesFile`, consistent with the documented `[m*n × n]` layout and `output.HessianStructure`. Covered by `hesVectorOutput*` in `tests/integration/IShapeMatrixTest.m`. |
 | B13 (`Gfid` never closed) | **Fixed** — both wrapper fids closed in `adigatorGenHesFile`. |
 | B8 (matrix-of-scalar Hessian branch) | **Fixed** — branch on `any(ysize == 1)`, subscripts converted to linear indices, unreachable sparse branch removed. The `hesMatrixOfScalar` case in `IShapeMatrixTest` auto-flipped to a regression guard. |

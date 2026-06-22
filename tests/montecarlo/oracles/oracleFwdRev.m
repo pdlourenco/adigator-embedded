@@ -18,16 +18,18 @@ end
 ax = adigatorCreateDerivInput(c.xsize, 'x');
 
 % Reverse mode (ANALYSIS §3 / adigatorGenRevGradFile) supports only a subset
-% of constructs and rejects the rest at GENERATION time with an `adigator:*`
-% identifier (e.g. adigator:revgrad:unsupported). Treat exactly those as a
-% scope SKIP, not a failure, so a tool-scope limit can never be promoted as a
-% false regression. Any other error — including a bare user-function crash
-% (empty identifier) — propagates and is recorded as a failure/finding; a
-% genuine numeric disagreement is caught by the comparison below.
+% of constructs and rejects the rest at GENERATION time from its own builder
+% (`adigator:revgrad:*`) or tape parser (`adigator:fwdtape:*`). Treat exactly
+% those scope rejections as a SKIP, not a failure, so a tool-scope limit can
+% never be promoted as a false regression. Any other error — a different
+% `adigator:*` (a genuine generation bug the fuzzer should surface), or a bare
+% user-function crash (empty identifier) — propagates and is recorded as a
+% finding; a numeric disagreement is caught by the comparison below.
 try
     adigatorGenRevGradFile(c.name, {ax}, adigatorOptions('overwrite',1,'echo',0));
 catch e
-    if startsWith(e.identifier, 'adigator')
+    if startsWith(e.identifier, 'adigator:revgrad') || ...
+            startsWith(e.identifier, 'adigator:fwdtape')
         r.skipped = true;
         r.message = sprintf('reverse mode declined this construct (%s): %s', ...
             e.identifier, e.message);
