@@ -4,7 +4,10 @@ classdef SCodegenTest < matlab.unittest.TestCase
     % CI plan: TS-S-02, validates REQ-T-05: the inline-mode ('i') generated
     % gradient file must pass codegen, and the compiled MEX must reproduce
     % the MATLAB results exactly. A static-library build is also generated
-    % to prove embedded-C viability (no MEX-only constructs).
+    % to prove embedded-C viability (no MEX-only constructs). Run for both the
+    % full embedded data and the slim_embed=true slice-before-prune shrunk data
+    % (issue #21), to prove the dropped Index7 leaves the compiled result
+    % unchanged.
     %
     % Skips via assumption when MATLAB Coder is not licensed/installed
     % (PR-gate runners); the extended products job runs it.
@@ -35,10 +38,34 @@ classdef SCodegenTest < matlab.unittest.TestCase
 
     methods (Test)
         function inlineGradientCompilesAndMatches(tc)
-            % generate the pipg gap-function gradient in inline mode
+            % Default inline path (no slim_embed): the full, unshrunk embedded
+            % data must compile and stay numerically exact.
+            tc.genCompileAndCheck(false);
+        end
+
+        function inlineSlimGradientCompilesAndMatches(tc)
+            % slim_embed=true (issue #21, ADR-0006/0010): slice-before-prune
+            % drops the dead Index7 (and the dz_size/dz_location statements)
+            % from the embedded gradient. The compiled MEX must still match
+            % MATLAB and the analytic value - the shrink removes only
+            % unreferenced constants, so the result is unchanged. This is the
+            % end-to-end Coder round-trip on the shrunk data.
+            tc.genCompileAndCheck(true);
+        end
+    end
+
+    methods (Access = private)
+        function genCompileAndCheck(tc, slim)
+            % Generate the pipg gap-function gradient in inline mode, build a
+            % MEX and a static lib, and assert MEX == MATLAB == analytic. SLIM
+            % toggles slim_embed (shrunk vs. full embedded data); the numeric
+            % checks are identical either way.
             z = adigatorCreateDerivInput([2 1], 'z');
             w = adigatorCreateAuxInput([2 1]);
             opts = struct('embed_mode', 'i', 'path', pwd, 'echo', 0);
+            if slim
+                opts.slim_embed = true;
+            end
             adigatorGenDerFile_embedded('gradient', 'gapfun', {w, z}, opts);
             rehash;
 

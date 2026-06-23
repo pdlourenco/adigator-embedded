@@ -140,7 +140,7 @@ merges; license-gated jobs skip cleanly when products are unavailable.
 | ID | Test | Validates | Gate |
 |----|------|-----------|------|
 | TS-S-01 | `SExamplesTest` — run each `examples/**/main*.m` headless (seeded RNG); assert completion and spot values (e.g. fsolve converges, pipg gap function derivatives match FD). | REQ-T-08, REQ-T-01 | Optimization Toolbox for the solver examples; others base MATLAB |
-| TS-S-02 | `SCodegenTest` — `codegen -config:lib` (and MEX) each 'i'-mode and 'l'-mode generated fixture; run MEX vs MATLAB equality. | REQ-T-05 | MATLAB Coder |
+| TS-S-02 | `SCodegenTest` — `codegen -config:lib` (and MEX) the 'i'-mode generated gradient, run MEX vs MATLAB vs analytic equality. Two points: the default (full, unshrunk embedded data) and a `slim_embed=true` point (issue #21) that puts the slice-before-prune shrunk data through the same Coder round-trip, proving the dropped `Index7` leaves the compiled result unchanged. | REQ-T-05 | MATLAB Coder |
 | TS-S-03 | `SReleaseMatrixTest` — full TS-U + TS-I suite on MATLAB releases {R2022a (floor), latest}. | REQ-T-01..07 on supported releases | nightly only |
 | TS-S-04 | `MCSmokeTest` + `tests/montecarlo/mcCampaign` — randomized-function campaign over the generators (affine / quadratic / shape-fuzz → expression-tree) checked by the tolerance-free oracles (cross-mode exact, known-derivative, sparsity-superset; FD secondary), with delta-debug shrinking and automatic fixture promotion. `MCSmokeTest` runs a fixed-seed, fixed-iteration subset in the extended (per-merge) suite; the unbounded campaign is an opt-in local / release-checklist run. *(Issue #38, ADR-0007, roadmap R9.)* | REQ-T-09 (cross-validates REQ-T-01..04 at scale) | base MATLAB (Coder oracles skip-clean) |
 
