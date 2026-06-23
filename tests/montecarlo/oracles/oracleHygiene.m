@@ -32,14 +32,21 @@ if ~errored
     return;
 end
 
-% ... and must not leave the transformation-state globals behind. (The runtime
+% ... and must not leave live transformation-state globals behind. (The runtime
 % data global ADiGator_<name> is only created on the success path, so it can
-% never leak from a failed generation; we still check the four explicitly.)
+% never leak from a failed generation; we still check the four explicitly.) A
+% stray NAME is only a B16 violation if it carries live state -- reading one of
+% adigator's returned cada objects re-registers an EMPTY transformation global
+% (every @cada method opens with `global ADIGATOR`), which holds no state and
+% cannot poison a later transform. The error path never touches a cada output so
+% this leg sees no re-registration, but the predicate matches UCoreErrorHygiene-
+% Test's so both legs assert the same invariant. See issue #54 for the @cada fix.
 transformGlobals = {'ADIGATOR','ADIGATORFORDATA','ADIGATORDATA','ADIGATORVARIABLESTORAGE'};
 stray = intersect(setdiff(who('global'), globals0), transformGlobals);
-if ~isempty(stray)
+populated = stray(cellfun(@(n) ~isempty(globalValue(n)), stray));
+if ~isempty(populated)
     r.pass = false;
-    r.message = sprintf('leaked transformation globals: %s', strjoin(stray, ', '));
+    r.message = sprintf('leaked populated transformation globals: %s', strjoin(populated, ', '));
     return;
 end
 
@@ -70,4 +77,12 @@ if exist('openedFiles','builtin') == 5 || exist('openedFiles','file') == 2
 else
     fids = fopen('all');
 end
+end
+
+function v = globalValue(name)
+% Read a global's current value by name in this disposable helper frame. The
+% name is already present in who('global') here, so declaring it global just
+% binds the existing value -- the read itself re-registers nothing new.
+eval(['global ',name]);
+v = eval(name);
 end

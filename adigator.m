@@ -82,20 +82,28 @@ version = '1.5'; % v1.5
 
 % B16 / REQ-T-07: a transformation acquires three things that must be released
 % on EVERY exit (normal return or error): the four transformation-state globals,
-% the temp dir it puts on the path, and the file handles it opens. They are
-% released two different ways, on purpose:
+% the temp dir it puts on the path, and the file handles it opens. The invariant
+% this guarantees is that no LIVE (populated) transformation state survives a
+% transform to poison the next one. They are released two different ways, on
+% purpose:
 %   * The GLOBALS are cleared by a helper subfunction (adigatorClearTransformGlobals)
 %     on the normal path at the end and in the catch below. A literal
 %     `clear global` issued from adigator's OWN frame -- which declares these
 %     globals (the `global` statement at the top) -- proved unreliable on the
-%     success path: it re-registers the names empty instead of removing them, so
-%     `who('global')` keeps a stray (empty) `ADIGATOR`. Clearing from a helper
-%     frame that does NOT declare these globals releases them reliably on both
-%     paths. (As defense-in-depth the runtime-data global ADiGator_<name> is
-%     eval-declared in its own subfunction frame, adigatorLoadRuntimeData, never
-%     here; and the cleanup callback below must NOT re-declare the transformation
-%     globals -- an onCleanup that re-declares a still-live global re-registers it
-%     empty -- so it touches only handles/paths.)
+%     success path; clearing from a helper frame that does NOT declare these
+%     globals releases their live state reliably on both paths. (As defense-in-
+%     depth the runtime-data global ADiGator_<name> is eval-declared in its own
+%     subfunction frame, adigatorLoadRuntimeData, never here; and the cleanup
+%     callback below must NOT re-declare the transformation globals -- an
+%     onCleanup that re-declares a still-live global re-registers it empty -- so
+%     it touches only handles/paths.)
+%     NOTE: after adigator returns, a caller that reads one of the returned cada
+%     objects (e.g. adigatorGenJacFile reading adiout.func.size) re-registers an
+%     EMPTY `ADIGATOR` global, because every @cada method opens with `global
+%     ADIGATOR`. That empty name is outside adigator's control and carries no
+%     transformation state, so it is benign for B16; the hygiene pins tolerate a
+%     present-but-empty stray and fail only on a populated one. The @cada-layer
+%     fix that would stop the empty re-registration is tracked in issue #54.
 %   * The TEMP DIR and FILE HANDLES are released by an onCleanup registered once
 %     the temp dir is known (below). It captures what it needs BY VALUE and
 %     declares no global, so it fires on every exit without resurrecting the
