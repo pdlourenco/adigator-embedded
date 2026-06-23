@@ -89,5 +89,52 @@ classdef MCSmokeTest < matlab.unittest.TestCase
             tc.verifyGreaterThan(fr.pass, 0, 'fwdRev never ran (reverse-mode path untested)');
             tc.verifyEqual(fr.fail, 0, 'fwdRev reported a hard failure');
         end
+
+        function negativeHygieneIsClean(tc)
+            % Malformed fixtures must fail generation cleanly and leave the
+            % session hygienic — no stray transformation globals, path
+            % restored, no open file handles (REQ-T-07 / B16), checked by
+            % oracleHygiene. Pins the adigator.m onCleanup error-path release.
+            report = mcCampaign('nIters', 9, 'seed', 27182, ...
+                'generators', {'mcGenNegative'}, ...
+                'oracles', {'oracleHygiene'}, ...
+                'promote', false, 'verbose', false);
+
+            tc.verifyEqual(report.nFail, 0, ...
+                sprintf('hygiene smoke found %d failing case(s); see report.failures', report.nFail));
+            hg = report.oracleStats.oracleHygiene;
+            tc.verifyGreaterThan(hg.pass, 0, 'hygiene oracle never ran');
+            tc.verifyEqual(hg.fail, 0, 'a malformed function did not error cleanly / leaked state');
+        end
+
+        function successLeavesNoOpenHandles(tc)
+            % SUCCESS-path hygiene (REQ-T-07 / B16): a successful transformation
+            % must close every handle it opened (source files, temp files, the
+            % generated file) and leave no transformation-state globals. The
+            % negative hygiene cases fail at the initial eval, before the source
+            % handles open, so they cannot pin this — hence a positive campaign.
+            fids0 = openFidsPortable();
+            report = mcCampaign('nIters', 8, 'seed', 13579, ...
+                'generators', {'mcGenAffine','mcGenScalarSum'}, ...
+                'oracles', {'oracleKnownDeriv'}, ...
+                'promote', false, 'verbose', false);
+            tc.verifyEqual(report.nFail, 0, 'success-hygiene campaign had failures');
+
+            tc.verifyEmpty(setdiff(openFidsPortable(), fids0), ...
+                'a successful transformation left file handle(s) open (REQ-T-07)');
+            tc.verifyEmpty(intersect(who('global'), ...
+                {'ADIGATOR','ADIGATORFORDATA','ADIGATORDATA','ADIGATORVARIABLESTORAGE'}), ...
+                'transformation-state globals leaked after successful generation');
+        end
     end
+end
+
+function fids = openFidsPortable()
+% Portable open-file-identifier list: fopen('all') is being removed (errors on
+% recent MATLAB); openedFiles is the replacement but is absent on R2022a..
+if exist('openedFiles','builtin') == 5 || exist('openedFiles','file') == 2
+    fids = openedFiles();
+else
+    fids = fopen('all');
+end
 end
