@@ -5,8 +5,10 @@
 # pushing to the protected `master` branch (which would need a GitHub App /
 # PAT), it runs on pull requests and commits the rebuilt PDF back to the PR
 # branch, so the PDF merges into master through the normal PR flow using only
-# the built-in GITHUB_TOKEN. Fork PRs build (validate) but skip the commit
-# (their GITHUB_TOKEN is read-only).
+# the built-in GITHUB_TOKEN. The job is restricted to same-repo PRs: a fork
+# PR's head branch is not in this repo (so the head_ref checkout cannot run)
+# and its GITHUB_TOKEN is read-only (so the commit could not push) - it is
+# skipped cleanly rather than failing.
 name: User Guide PDF
 
 on:
@@ -19,6 +21,8 @@ permissions:
 
 jobs:
   build-pdf:
+    # Same-repo PRs only (see header): fork PRs are skipped, not failed.
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,11 +40,9 @@ jobs:
       - name: Move PDF into docs/
         run: mv docs/userguidefiles/ADiGatorUserGuide.pdf docs/ADiGatorUserGuide.pdf
 
-      # Commit only when the PDF actually changed, and only for same-repo PRs
-      # (fork PRs have a read-only token). GITHUB_TOKEN pushes do not retrigger
-      # workflows, so this cannot loop.
+      # Commit only when the PDF actually changed. GITHUB_TOKEN pushes do not
+      # retrigger workflows, so this cannot loop.
       - name: Commit regenerated PDF to the PR branch
-        if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           file_pattern: docs/ADiGatorUserGuide.pdf

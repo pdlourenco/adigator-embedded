@@ -261,9 +261,11 @@ trick is only needed for the required `test` job). To avoid pushing to the
 protected `master` branch (which would require a GitHub App / PAT / bypass), it
 runs on pull requests and commits the rebuilt PDF **back to the PR branch**
 using the built-in `GITHUB_TOKEN`, so the PDF merges into `master` through the
-normal PR flow; fork PRs build but skip the commit (read-only token). Because a
-`GITHUB_TOKEN` commit does not retrigger workflows, re-run the `test` check on
-the PR head before merging if branch protection requires it.
+normal PR flow; the job is restricted to same-repo PRs (a fork PR's head branch
+is not in this repo and its token is read-only, so it is skipped cleanly rather
+than failing). Because a `GITHUB_TOKEN` commit does not retrigger workflows,
+re-run the `test` check on the PR head before merging if branch protection
+requires it.
 
 **`.github/workflows/extended.yml`** — runs the heavy suites on every push
 to `embedded` (i.e., on merge) and on manual dispatch.
