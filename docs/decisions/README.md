@@ -72,3 +72,8 @@ Contracts section (binding conventions), or for purely mechanical choices
 - [ADR-0011](ADR-0011-adigator-error-path-cleanup.md) — `adigator.m` releases
   transformation state on every exit: globals cleared in-frame, temp dir / file
   handles via a by-value `onCleanup` (issue #38, bug B16).
+<!-- ADR-0012 (embedded-generator default inline+slim) is reserved by an
+     in-flight PR; its index entry lands with that PR. -->
+- [ADR-0013](ADR-0013-fork-versioning-over-upstream.md) — Release from this repo
+  (fork-versioning) rather than upstreaming the dormant Algorithm-984 lineage;
+  keep the B-series fixes cherry-pick-ready (issue #18 item 3).
