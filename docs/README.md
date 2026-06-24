@@ -1,20 +1,82 @@
-# ADiGator Version 1.5
+# ADiGator — embedded fork (v1.5)
 
-A Source Transformation via Operator Overloading Tool for the Automatic Differentiation of Mathematical Functions Defined by MATLAB Code
+ADiGator is a **source-transformation** automatic-differentiation tool for
+MATLAB: it runs a user function once with overloaded inputs that *record* each
+elementary operation, then emits a standalone `.m` file that returns the
+function value together with its (sparse) Jacobian, gradient or Hessian — with
+**statically known sizes and sparsity**, no run-time taping and no symbolic
+engine.
 
-Please see doc/ADiGatorUserGuide.pdf for User's Guide.
+This fork (GMV / Pedro Lourenço, 2025–2026) extends the Weinstein & Rao v1.5
+release with **embeddable, MATLAB-Coder-ready derivative files** plus a range of
+correctness, performance and capability improvements. The original algorithm and
+theory are unchanged; see [`docs/DESIGN.md`](DESIGN.md) for the architecture and
+[`docs/ANALYSIS.md`](ANALYSIS.md) for the full bug / optimisation analysis.
 
-Copyright 2011-2017 Matthew J. Weinstein and Anil V. Rao
+## Quick start
 
-Embeddable file generation updates in 2025 by Pedro Lourenço @ GMV
-Distributed under the GNU General Public License version 3.0
-Please see COPYING.txt for full License.
+```matlab
+% differentiate gapfun(w,z) w.r.t. z, with w an auxiliary (fixed-sparsity) input
+z    = adigatorCreateDerivInput([2 1],'z');   % variable of differentiation
+w    = adigatorCreateAuxInput([2 1]);         % auxiliary input
+opts = adigatorOptions('embed_mode','i');     % 'i'nline: self-contained, no .mat/globals
 
-## Contact Info:
+adigatorGenDerFile_embedded('hessian','gapfun',{w,z},opts);
 
-weinstein87@gmail.com
+% the generated wrapper takes the SAME inputs as gapfun and returns the levels:
+w = randn(2,1); z = randn(2,1);
+[H,G,f] = gapfun_Hes(w,z);                     % Hessian, gradient, value
+```
 
-# Citing ADiGator:
+`DerType` is `'jacobian'`, `'gradient'` or `'hessian'`; the input cell mirrors
+the user function's argument order. For classic (non-embedded) use,
+`adigatorGenJacFile` / `adigatorGenHesFile` remain available.
+
+## Embed modes (`embed_mode`)
+
+| mode | constant data | globals | runtime load | `.mat` | codegen |
+|------|---------------|---------|--------------|--------|---------|
+| `'c'` classic *(default)* | `.mat` via `global` + runtime `load` | yes | yes | yes | no |
+| `'l'` coderload | `.mat` via `coder.load` + `coder.const` | no (persistent) | compile-time only | yes | yes |
+| `'i'` inline | emitted as source in a data function | no | no | no | yes |
+
+All three return numerically identical results (DESIGN §Contracts C-4).
+
+## Options at a glance
+
+| option | default | what it does |
+|--------|---------|--------------|
+| `embed_mode` | `'c'` | classic / coderload / inline (above) |
+| `path` | calling dir | output directory for all generated files |
+| `unroll` | `0` | keep loops & subfunctions rolled (`1` = unroll) |
+| `loopbound` | `{}` | name input(s) as runtime loop bounds — generate at max, run at any `n ≤ max` |
+| `jac_output` | `'matrix'` | `'nonzeros'` returns the nonzero vector + a once-exported pattern (no per-call projection) |
+| `der_levels` | `[]` (all) | subset of `{0,1,2}` selecting which levels the wrapper returns (top level always included) |
+| `slim_embed` | `0` | slice unread `_location`/`_size` chains from embedded code so their index tables drop (R7b) |
+
+Full reference: [`adigatorOptions.m`](../adigatorOptions.m).
+
+## Documentation map
+
+| Document | Purpose |
+|----------|---------|
+| [`ADiGatorUserGuide.pdf`](ADiGatorUserGuide.pdf) | the upstream user's guide |
+| [`DESIGN.md`](DESIGN.md) | architecture rationale + the binding output contracts |
+| [`ANALYSIS.md`](ANALYSIS.md) | bug catalogue (B1–B16) + optimisation / reverse-mode analysis |
+| [`ROADMAP.md`](ROADMAP.md) | development roadmap (R1–R14) |
+| [`CI_PLAN.md`](CI_PLAN.md) | CI strategy + requirement/test traceability |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | contributor mechanics, pre-push review, ADR policy |
+| [`decisions/`](decisions/) | architecture decision records (ADR-0001 …) |
+
+## Requirements
+
+- **MATLAB R2022a or later** — the embedding layer uses `arguments` blocks,
+  `readlines`/`writelines` and string arrays; Octave is not supported today.
+- Base MATLAB suffices for generation; the optimisation examples need the
+  Optimization Toolbox and the codegen path needs MATLAB Coder.
+- GPLv3 (see [`COPYING.txt`](COPYING.txt)).
+
+## Citing ADiGator
 
 Please cite the most recent ACM-TOMS CALGO article. BibTex is here:
 
@@ -31,14 +93,12 @@ Please cite the most recent ACM-TOMS CALGO article. BibTex is here:
 }
 ```
 
-# Release Notes:
+## What's new in the embedded fork
 
-V 1.5 - embedded  (GMV / Pedro Lourenço, 2025-2026; unreleased)
-
-This fork adds embeddable (C-code-generation-ready) derivative file
-generation plus a range of correctness, performance and capability
-improvements over upstream 1.5. See docs/ROADMAP.md and docs/ANALYSIS.md
-for the full development log; highlights:
+v1.5 — embedded (GMV / Pedro Lourenço, 2025–2026; unreleased). Embeddable
+(C-code-generation-ready) derivative generation plus correctness, performance
+and capability improvements over Weinstein & Rao v1.5. Full development log in
+[`ROADMAP.md`](ROADMAP.md) and [`ANALYSIS.md`](ANALYSIS.md); highlights:
 
 Embeddable generation
 - `adigatorGenDerFile_embedded` produces self-contained derivative files for
@@ -86,6 +146,19 @@ Testing / CI
 - GitHub Actions pipeline (unit + integration PR gate; extended example and
   codegen suites) backed by a `tests/` suite with finite-difference and
   cross-mode equivalence checks.
+
+## License & attribution
+
+ADiGator is Copyright 2011–2017 Matthew J. Weinstein and Anil V. Rao,
+distributed under the GNU General Public License v3.0
+([`COPYING.txt`](COPYING.txt)). The embeddable-generation extensions
+(2025–2026) are by Pedro Lourenço (GMV), under the same licence. Upstream
+contact: weinstein87@gmail.com.
+
+## Upstream release history
+
+<details>
+<summary>Weinstein &amp; Rao changelog (v1.5 and earlier)</summary>
 
 V 1.5 6/02/19
 
@@ -265,3 +338,5 @@ V0.3.2 5/15/14 mjw
   V0.3.0
 * Changed the way the options work - options are now given directly to the adigator command
 * Also made it so that adigator does not forcefully overwrite derivative files unless the overwrite option is set to true
+
+</details>
