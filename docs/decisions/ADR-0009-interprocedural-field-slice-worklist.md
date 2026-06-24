@@ -7,6 +7,12 @@ increment deferred from #21); extends the closure-gate reasoning of
 [ADR-0006](ADR-0006-r7b-closure-gate.md) across call boundaries. Guarded by the
 fixtures/test from [ADR-0008](ADR-0008-offline-fixture-equivalence-tests.md).
 
+**Amended — 2026-06-24 (R10(a), issue #44 item 1):** the deferred
+rolled-`for…end`-in-a-multi-subfunction follow-up landed. The call-site and
+result-field scans are now block-aware, so the bail described under
+*Consequences* below is lifted; that bullet is updated in place. The core
+decision (assembled-file split + worklist) is unchanged.
+
 ## Context
 
 R7b shipped as an **intra-function** field-slice: `adigatorSlimDerivBody` slices
@@ -75,16 +81,20 @@ reuses `adigatorFieldSlice` per function:
   only** (`loadGatorData` returns `s.(dername)`); it stays main-only in this
   increment. Extending it per-subfunction is a separate, benign-if-skipped
   follow-up (less optimization, never a wrong result).
-- **Rolled `for…end` is out of scope when interprocedural.** A subfunction call
-  or a result-field read hidden inside a rolled loop would be invisible to the
-  top-level call/field scans and would under-demand a callee (a wrong
-  derivative), so a multi-subfunction file containing *any* rolled loop bails
-  the whole file unsliced. The intra-function path (`adigatorSlimDerivBody`)
-  keeps its loop-as-a-unit handling for single-function files, where there is
-  no cross-call demand to get wrong. The interprocedural + rolled-loop
-  combination (the rest of issue #44 item 1) is a deferred follow-up. (The bail
-fires only for a rolled loop in a *reached* block; an undemanded subfunction is
-left whole and never sliced, so its loops are moot.)
+- **Rolled `for…end` interprocedurally — handled (R10(a), 2026-06-24).** The
+  call-site and result-field scans (`callSites`/`fieldsRead`) are **block-aware**:
+  a kept rolled loop is scanned line by line, so a subfunction call OR a
+  callee-result-field read nested in the loop is seen and its demand propagated,
+  instead of bailing the whole file. **Soundness:** demand is a *may*-analysis —
+  scanning the loop body can only ADD demand (over-approximate to "the loop
+  reads/calls this"), never drop a needed producer; the loop's value chain is
+  kept-or-dropped whole by `adigatorFieldSlice`'s atomic-block handling under the
+  same per-function closure gate, and the driver's whole-file numeric round-trip
+  remains the combined cross-check. A residual conservative bail stays for a
+  call nested in a loop whose result is **not** a plain whole-struct assignment
+  (a subscripted/dotted LHS) — its read fields can't be tracked, so the whole
+  file bails, exactly as a malformed top-level call does. The intra-function
+  path (`adigatorSlimDerivBody`) is unchanged for single-function files.
 - A wrong cross-call demand would be a wrong derivative, so the layer is
   conservative: any unresolved split, ambiguous call site, or closure failure
   bails the **whole** file to unsliced (never a partial, possibly-inconsistent
