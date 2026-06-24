@@ -377,8 +377,26 @@ lower-order derivatives* of every intermediate. When the user only consumes
 6. **Peephole pass to remove no-op gather/scatter.** Sparsity-union
    ("overmap") code of the form
    `cada1td1 = zeros(k,1); cada1td1(Index) = src; ...` is an identity copy
-   whenever `Index` is `1:k` and `src` has length `k` (common after the
-   union stabilizes). Detectable at generation time from the index constants.
+   whenever `Index` is `1:k` and `src` has length `k`. Detectable at
+   generation time from the index constants; implemented as R7c
+   (`adigatorPeepholeUnionCopy`, wired into the `slim_embed` driver).
+
+   **Empirical reachability note (R10(b), issue #44 item 2).** A probe of ~40
+   generated Jacobians/Hessians — straight-line, rolled (`unroll=0`), and
+   unrolled (`unroll=1`) — found that this *ordered-identity full fill* does
+   **not** actually arise in code this fork's emitter produces: real overmaps
+   are always strict **partial** fills into a union-sized buffer (e.g.
+   `Index=[1 2]` into `zeros(4,1)`, `[1 3 5]` into `zeros(6,1)`), and
+   equal-pattern unions are added directly with no overmap buffer at all
+   (`cadaOverMap` only allocates a buffer when the union genuinely grows). The
+   rolled-loop scatters are loop-counter-indexed logical masks, a different
+   shape the peephole bails on anyway. So the R7c collapse is
+   **correct-but-unreachable** on current generated input — its collapse count
+   is always 0 in `IEmbedSlimTest`/`SCodegenTest` (which is why `SCodegenTest`
+   reports "collapsed 0 union copies" on the real `gapfun`). The collapse logic
+   is exercised positively by the synthetic fixture in `IPeepholeDriverTest`
+   (TS-I-08); the pass is retained as a guard for the pattern (and for any
+   future re-vectorization post-pass, R12/issue #56, that would emit it).
 7. **Keep loops rolled (`unroll=0`) for code size**, but verify Coder
    compatibility of the rolled-loop Gator data (cell arrays indexed by loop
    counter): heterogeneous constant cells are supported by `coder.const`, but
