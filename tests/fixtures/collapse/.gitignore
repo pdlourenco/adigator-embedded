@@ -1,7 +1,6 @@
 # These are committed synthetic fixtures, not stray generator output. The repo
 # root .gitignore excludes generated ADiGator files by name everywhere; re-include
 # them here so `git add tests/fixtures/collapse` tracks them without -f.
-# (The .mat is built at test runtime, not committed.)
+# (The .mat is built at test runtime, not committed, so it needs no re-include.)
 !*_ADiGator*.m
-!*_ADiGator*.mat
 !*_Jac.m
