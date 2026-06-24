@@ -41,6 +41,14 @@ Note: the MATLAB suite **cannot** run in a Claude-Code-on-the-web container
 (`CI_PLAN.md` §3.1) and in local MATLAB sessions. Web sessions can still author,
 review diffs, and edit docs.
 
+The codegen system tests (`SCodegenTest`, TS-S-02) additionally need a MATLAB
+Coder license and a configured C compiler (`mex -setup`); they self-skip via
+assumption otherwise (so a "skipped/incomplete" result there is expected without
+Coder, not a failure). On R2024a with MinGW + ninja, codegen also needs `.` (the
+current directory) on the **system** PATH so `cmd.exe` finds the generated
+`.bat` build script, plus `MW_MINGW64_LOC` and `MinGW\bin` on the persistent
+PATH — an R2024a environment quirk, not a toolbox bug.
+
 ## Design decisions (ADRs)
 
 Non-obvious tactical choices live in [`decisions/`](decisions/) — see
