@@ -36,7 +36,12 @@ function info = adigatorGenDerFile_embedded(DerType,UserFunName,UserFunInputs,va
 %                       use the adigatorCreateDerivInput(size,varname) and
 %                               adigatorCreateAuxInput(size) utilities
 %       options         optional input with the possible ADiGator options
-%                       please consult adigatorOptions
+%                       please consult adigatorOptions. Defaults specific to
+%                       this entry point (ADR-0012): an unset
+%                       embed_mode defaults to 'i' (inline) and an unset
+%                       slim_embed defaults to ON - calling this function
+%                       implies the user wants embeddable, optimized code.
+%                       Pass either option explicitly to override.
 %
 %   Output:
 %       info            information about the differentiation process
@@ -77,10 +82,18 @@ if nargin>3
         % struct must be read with the field name they actually used
         opts.(lower(optfields{Fcount})) = varargin{1}.(optfields{Fcount});
     end
-else
-    varargin = {opts};
 end
+% Embedded-generation defaults (ADR-0012): calling this entry point
+% means the user wants embeddable, optimized output, so an UNSET ([]) embed_mode
+% and slim_embed default to inline + slim here (the other generators resolve []
+% to classic / off). Any value the user actually set is honoured.
+if isempty(opts.embed_mode); opts.embed_mode = 'i';  end
+if isempty(opts.slim_embed); opts.slim_embed = true; end
 opts.embed_mode = adigatorNormalizeEmbedMode(opts.embed_mode); % v1.5 (B11 fix)
+% Forward the fully-resolved options to the inner generators so the wrapper and
+% the post-processing agree on the mode (previously the caller's raw struct was
+% forwarded, which could disagree with the resolved opts).
+varargin = {opts};
 
 %% --------------------- Call the ADiGator wrappers ---------------------%%
 switch DerType
@@ -105,7 +118,7 @@ switch opts.embed_mode
         coderload = true; inline = false;
         fprintf('User selected coderload mode.\n')
     otherwise
-        error('unkown embed_mode option %s',opts.embed_mode);
+        error('unknown embed_mode option %s',opts.embed_mode);
 end
 
 %% ------------ Post-process according to user instructions -------------%%

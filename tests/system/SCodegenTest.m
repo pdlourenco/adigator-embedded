@@ -62,10 +62,10 @@ classdef SCodegenTest < matlab.unittest.TestCase
             % checks are identical either way.
             z = adigatorCreateDerivInput([2 1], 'z');
             w = adigatorCreateAuxInput([2 1]);
-            opts = struct('embed_mode', 'i', 'path', pwd, 'echo', 0);
-            if slim
-                opts.slim_embed = true;
-            end
+            % slim is explicit (false = full unshrunk data, true = slice-before-
+            % prune). The embedded generator now defaults slim_embed ON (ADR-0012), so the false case must opt out for the unshrunk-data point to
+            % be exercised.
+            opts = struct('embed_mode', 'i', 'path', pwd, 'echo', 0, 'slim_embed', slim);
             adigatorGenDerFile_embedded('gradient', 'gapfun', {w, z}, opts);
             rehash;
 

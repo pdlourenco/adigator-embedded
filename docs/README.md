@@ -36,23 +36,28 @@ the user function's argument order. For classic (non-embedded) use,
 
 | mode | constant data | globals | runtime load | `.mat` | codegen |
 |------|---------------|---------|--------------|--------|---------|
-| `'c'` classic *(default)* | `.mat` via `global` + runtime `load` | yes | yes | yes | no |
+| `'c'` classic | `.mat` via `global` + runtime `load` | yes | yes | yes | no |
 | `'l'` coderload | `.mat` via `coder.load` + `coder.const` | no (persistent) | compile-time only | yes | yes |
-| `'i'` inline | emitted as source in a data function | no | no | no | yes |
+| `'i'` inline *(embedded-generator default)* | emitted as source in a data function | no | no | no | yes |
 
 All three return numerically identical results (DESIGN §Contracts C-4).
+`adigatorGenDerFile_embedded` defaults to **`'i'` inline + `slim_embed` on** (calling it
+implies you want embeddable, optimized output); the classic generators default to `'c'`.
 
 ## Options at a glance
 
 | option | default | what it does |
 |--------|---------|--------------|
-| `embed_mode` | `'c'` | classic / coderload / inline (above) |
+| `embed_mode` | `[]`† | classic / coderload / inline (above) |
 | `path` | calling dir | output directory for all generated files |
 | `unroll` | `0` | keep loops & subfunctions rolled (`1` = unroll) |
 | `loopbound` | `{}` | name input(s) as runtime loop bounds — generate at max, run at any `n ≤ max` |
 | `jac_output` | `'matrix'` | `'nonzeros'` returns the nonzero vector + a once-exported pattern (no per-call projection) |
 | `der_levels` | `[]` (all) | subset of `{0,1,2}` selecting which levels the wrapper returns (top level always included) |
-| `slim_embed` | `0` | slice unread `_location`/`_size` chains from embedded code so their index tables drop (R7b) |
+| `slim_embed` | `[]`† | slice unread `_location`/`_size` chains from embedded code so their index tables drop (R7b) |
+
+† `embed_mode`/`slim_embed` default to `[]` (unset), resolved per entry point:
+`adigatorGenDerFile_embedded` → `'i'` + slim on; classic generators → `'c'` / off.
 
 Full reference: [`adigatorOptions.m`](../adigatorOptions.m).
 

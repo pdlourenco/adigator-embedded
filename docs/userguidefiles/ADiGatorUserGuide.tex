@@ -260,7 +260,8 @@ A list of all options, values, and descriptions is given in Table \ref{Tab:Optio
 ~ & 0 & If this option is set, \texttt{adigator} will error out rather than overwrite the derivative file. (default)\\ \hline
 {\bf MAXWHILEITER} & $k > 0$ & For use with \texttt{while} loops. The maximum number of iterations, $k$, that the algorithm will attempt to find a static loop iteration during file generation. (default is $k = 10$).\\ \hline
 {\bf COMPLEX} & 0 & Binary flag for turning on and off complex variable handling. If set to 1, the tool will expect complex variables and thus use the complex forms of ctranspose, abs, dot, etc. Otherwise, it will assume no complex numbers exist in the user's program.\\ \hline
-{\bf EMBED\_MODE} & \texttt{'c'} & {\bf (v1.5 fork)} {\bf C}lassic. The static index/data tables are stored in a \texttt{.mat} file, loaded at runtime into a global variable. Not suitable for embedded code generation. (default) \\ \cline{2-3}
+{\bf EMBED\_MODE} & \texttt{[]} & {\bf (v1.5 fork)} Unset (default): each entry point resolves its own default --- \texttt{adigatorGenDerFile\_embedded} uses \texttt{'i'} (inline), the other generators use \texttt{'c'} (classic). Set explicitly to override. \\ \cline{2-3}
+~ & \texttt{'c'} & {\bf C}lassic. The static index/data tables are stored in a \texttt{.mat} file, loaded at runtime into a global variable. Not suitable for embedded code generation. \\ \cline{2-3}
 ~ & \texttt{'l'} & Coder{\bf l}oad. The \texttt{.mat} is read through \texttt{coder.load} and wrapped in \texttt{coder.const}: loaded at runtime when interpreted, at compile-time into a persistent constant when compiled with MATLAB Coder. No global variables. \\ \cline{2-3}
 ~ & \texttt{'i'} & {\bf I}nline. The static tables are emitted as source in a companion data function: no \texttt{.mat}, no global/persistent variables, and no runtime load. Fully self-contained for code generation. \\ \hline
 {\bf PATH} & \texttt{[]} & {\bf (v1.5 fork)} Directory in which to place all generated files. If empty, the calling directory is used (default). \\ \hline
@@ -270,7 +271,8 @@ A list of all options, values, and descriptions is given in Table \ref{Tab:Optio
 ~ & \texttt{'nonzeros'} & The wrapper returns the nonzero vector in the fixed pattern order, with the pattern exported once via \texttt{output.JacobianLocs}/\texttt{output.JacobianStructure}; no per-call allocation or scatter. \\ \hline
 {\bf DER\_LEVELS} & \texttt{[]} & {\bf (v1.5 fork)} The wrapper returns every derivative level its generator produces (default). \\ \cline{2-3}
 ~ & vector & A subset of $\{0,1,2\}$ ($0$ = function value, $1$ = first derivative, $2$ = Hessian) selecting which levels the wrapper returns; the top level the generator is named for is always included. \\ \hline
-{\bf SLIM\_EMBED} & 0 & {\bf (v1.5 fork)} No slimming (default). \\ \cline{2-3}
+{\bf SLIM\_EMBED} & \texttt{[]} & {\bf (v1.5 fork)} Unset (default): \texttt{adigatorGenDerFile\_embedded} defaults this on (embeddable output is wanted); the other generators leave it off. Set 0/1 to override. \\ \cline{2-3}
+~ & 0 & No slimming. \\ \cline{2-3}
 ~ & 1 & In embedded modes (\texttt{'l'}/\texttt{'i'}), slice from the generated code the statements that feed only output fields the wrapper never reads (the \texttt{\_location}/\texttt{\_size} metadata), so their constant index tables drop from the embedded data. Guarded by a generation-time correctness check; left unsliced on any uncertainty. \\ \hline
 \end{tabular}
 \end{table}
@@ -434,6 +436,7 @@ The features described in this section are specific to the embedded fork of \emp
 
 \subsection{adigatorGenDerFile\_embedded}\label{SubSec:GenDerEmbedded}
 \underline{When to use}: You wish to generate an embeddable (code-generation-ready) Jacobian, gradient, or Hessian file, free of the runtime \texttt{load}/global-variable mechanism of the classic generated files.\\\\
+\underline{Defaults}: Because this entry point exists to produce embeddable, optimized code, an unset \texttt{EMBED\_MODE} defaults to \texttt{'i'} (inline) and an unset \texttt{SLIM\_EMBED} defaults to on (vs.~classic / off for the other generators). Pass either option explicitly to override.\\\\
 \underline{User Function Input Restrictions}: One input must be the variable of differentiation (created via \texttt{adigatorCreateDerivInput}); it may be carried within a scalar struct/cell (see Section \ref{SubSec:StructInput}). The user function may have a single output.\\\\
 \underline{Generated File Info}: For \texttt{DerType} \texttt{'jacobian'} the wrapper is named with \texttt{\_Jac} appended; for \texttt{'gradient'}, with \texttt{\_Grd}; for \texttt{'hessian'}, with \texttt{\_Hes} (returning the Hessian, gradient, and function value). The wrapper takes the same inputs as the original file. The number and nature of the additional generated files depends on \texttt{EMBED\_MODE}: classic \texttt{'c'} writes a wrapper, a \texttt{.mat}, and the derivative file; coderload \texttt{'l'} writes a wrapper (reading the \texttt{.mat} through \texttt{coder.load}) and the \texttt{.mat}; inline \texttt{'i'} writes a single self-contained file with no \texttt{.mat}. All three modes return numerically identical results.\\\\
 \begin{tabular}{l|l}

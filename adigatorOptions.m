@@ -48,12 +48,15 @@ function options = adigatorOptions(varargin)
 %                  non-complex forms of abs, ctranspose, dot (default)
 %              1 - expect variables to be complex, use complex forms of
 %                  ctranspose, abs, dot.
-% EMBED_MODE: 'c'- Classic. The data on the generated derivatives is stored
+% EMBED_MODE: [] - (default) UNSET. Each entry point resolves its own default:
+%                  adigatorGenDerFile_embedded uses 'i' (inline), the other
+%                  generators (adigatorGenJacFile/adigatorGenHesFile, classic
+%                  adigator) use 'c' (classic). Set explicitly to override.
+%             'c'- Classic. The data on the generated derivatives is stored
 %                  in a .mat file that is loaded every time the generated
-%                  derivative function is called and stored in a global 
+%                  derivative function is called and stored in a global
 %                  variable. Not suitable for embedded code generation!
-%                  DEFAULT OPTION
-%             'l'- CoderLoad. The data is still stored in a .mat file. If 
+%             'l'- CoderLoad. The data is still stored in a .mat file. If
 %                  the derivative file is called as an interpreted MATLAB
 %                  function, the data is loaded at runtime. If, however,
 %                  the function is compiled into C-code through the code
@@ -125,7 +128,10 @@ function options = adigatorOptions(varargin)
 %                  wrapper output assembly accordingly; the Grd intermediate
 %                  of a Grd->Hes chain keeps its full [Grd,Fun] form so it
 %                  stays re-differentiable. (Roadmap R7a, issue #21.)
-% SLIM_EMBED: 0   - (default) no slimming.
+% SLIM_EMBED: [] - (default) UNSET. adigatorGenDerFile_embedded defaults this
+%                  ON (calling it implies the user wants optimized embeddable
+%                  code); the other generators leave it off. Set 0/1 to override.
+%             0   - no slimming.
 %             1   - in the embedded pipeline (embed_mode 'l'/'i'), slice the
 %                  generated derivative code, removing the statements that
 %                  feed only output-struct fields the wrapper never reads
@@ -182,7 +188,7 @@ function options = adigatorOptions(varargin)
 %                                   derivative code (roadmap R7b, issue #21).
 
 % Set Defaults
-options.embed_mode   = 'c'; % v1.5 - 'c(lassic)' | '(coder)l(oad)' | 'i(nline)'
+options.embed_mode   = []; % v1.5 - [] (unset) | 'c(lassic)' | '(coder)l(oad)' | 'i(nline)'; resolved per entry point
 options.path         = []; % v1.5 - user provided path; default: calling dir
 options.auxdata      = 0;
 options.echo         = 1;
@@ -195,7 +201,7 @@ options.complex      = 0;
 options.loopbound    = {}; % roadmap R3 (issue #6 Tier 1): runtime loop bounds
 options.jac_output   = 'matrix'; % roadmap R5: 'matrix' | 'nonzeros'
 options.der_levels   = []; % roadmap R7a: [] (all) | vector subset of {0,1,2}
-options.slim_embed   = 0; % roadmap R7b (issue #21): slice unread output-field chains in embed modes
+options.slim_embed   = []; % roadmap R7b (issue #21): [] (unset) resolved per entry point; embedded generator -> on, others -> off
 
 if nargin/2 ~= floor(nargin/2)
   error('Inputs to adigatorOptions must come in field/value pairs')
