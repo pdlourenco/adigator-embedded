@@ -38,13 +38,20 @@ function [newLines, info] = adigatorSlimDerivFile(mLines, fieldNames)
 %   info     - struct: .sliced (logical), .dropped (lines removed), .reason
 %              (why no slice happened, when .sliced is false).
 %
+% A rolled 'for...end' in a multi-subfunction file is sliced as a unit, not
+% bailed on (R10(a), issue #44 item 1): the call-site and result-field scans are
+% block-aware (they read the loop body), so a subfunction call or a callee-
+% result-field read nested in a kept loop is seen and its demand propagated.
+% Because demand is a may-analysis, scanning the loop body can only over-demand
+% (keep more), never under-demand. The loop's value chain is kept/dropped whole
+% by the field-slice's atomic-block handling, under the same closure gate.
+%
 % SAFETY. Conservative throughout: on ANY uncertainty - an unparseable split, a
-% call site whose result/arguments cannot be read, an unknown callee, a call
-% graph cycle, a per-function slice error (line continuations, top-level
-% while/if/switch), ANY rolled 'for...end' in a multi-subfunction file (whose
-% interior the top-level call/field scans do not see - see sliceOneBlock), or a
-% failed closure check in ANY block - it returns mLines UNCHANGED with
-% .sliced = false. It never emits a partial,
+% call site whose result/arguments cannot be read (including a call nested in a
+% loop that does not assign a plain whole result struct), an unknown callee, a
+% call graph cycle, a per-function slice error (line continuations, top-level
+% while/if/switch), or a failed closure check in ANY block - it returns mLines
+% UNCHANGED with .sliced = false. It never emits a partial,
 % possibly-inconsistent rewrite. The closure gate is the same eval-free
 % numeric-equivalence guarantee adigatorSlimDerivBody documents, applied per
 % function; the driver's whole-file numeric round-trip is the combined
@@ -196,16 +203,20 @@ catch ME
   end
   rethrow(ME)
 end
-% Conservative scope (ADR-0009): the interprocedural forward-demand and call-
-% site scans read only top-level statement text, so a subfunction call OR a
-% result-field read hidden INSIDE a rolled 'for...end' would be missed and
-% under-demand a callee - a wrong derivative. So bail the WHOLE file unsliced if
-% any rolled loop appears in a multi-subfunction file. (A single-subfunction
-% rolled-loop file never reaches here: it goes through adigatorSlimDerivBody,
-% which handles the loop-as-a-unit with no cross-call demand to get wrong.)
-if any([Sall.block])
-  why = ['rolled loop in interprocedural file (',blk.name, ...
-    '); conservative bail']; return
+% Attach each rolled 'for...end' block's full body text to its statement so the
+% interprocedural call-site and result-field scans (callSites/fieldsRead) can
+% read INSIDE the loop (issue #44 item 1, R10(a)): a subfunction call or a
+% callee-result-field read nested in a kept loop would otherwise be invisible to
+% the top-level-only scans and under-demand a callee. Demand is a may-analysis,
+% so scanning the loop body (over-approximating to "the loop reads/calls this")
+% is sound - it can only keep more, never drop a needed producer. A call inside
+% a loop whose result is not a plain whole-struct assignment still bails
+% conservatively in callSites, as at top level.
+[Sall.blocktext] = deal(strings(0,1));
+for q = 1:numel(Sall)
+  if Sall(q).block
+    Sall(q).blocktext = body(Sall(q).line:Sall(q).lineEnd);
+  end
 end
 [cok, cwhy] = closureOk(Sall, keep, demanded, blk.innames);
 if ~cok
@@ -310,24 +321,78 @@ function [calls, ok] = callSites(Sall, keep, derivNames)
 % The kept call statements 'X = ADiGator_<sub>(arg1,...)'. Each entry has
 % .result (X) and .callee (the subfunction name). ok=false if a statement whose
 % RHS is a bare call to one of derivNames cannot be parsed into result+callee.
+% Block-aware (R10(a)): a kept rolled 'for...end' is scanned line by line so a
+% call nested in the loop is found too; demand is a may-analysis, so an
+% over-counted call only over-demands its callee, never under-demands one.
 calls = struct('result',{},'callee',{});
 ok = true;
 for k = find(keep(:)).'
-  rhs = strtrim(char(Sall(k).rhs));
-  tok = regexp(rhs,'^([A-Za-z]\w*)\s*\((.*)\)$','tokens','once');
-  if isempty(tok)
-    continue
+  for ln = scanLines(Sall(k))
+    [res, callee, isCall, lineOk] = parseCallLine(char(ln), derivNames);
+    if ~lineOk
+      ok = false; return   % a call to a derivative function not assigning a
+                           % plain whole result struct: bail (as at top level)
+    end
+    if isCall
+      calls(end+1) = struct('result',res,'callee',callee); %#ok<AGROW>
+    end
   end
-  callee = string(tok{1});
-  if ~any(callee == derivNames)
-    continue   % a call to a non-derivative function (library/builtin): not ours
-  end
-  lhs = char(Sall(k).lhs);
-  if isempty(lhs) || contains(lhs,'.') || ~isempty(Sall(k).lhsSubs)
-    ok = false; return   % a call must assign a whole result struct
-  end
-  calls(end+1) = struct('result',lhs,'callee',callee); %#ok<AGROW>
 end
+end
+
+%% --------------------------------------------------------------------- %%
+function lines = scanLines(S)
+% The statement text lines to scan interprocedurally: a normal statement is its
+% single line; a rolled 'for...end' block is every line of its body (so calls /
+% result-field reads nested in the loop are seen). Row string for for-iteration.
+if S.block && ~isempty(S.blocktext)
+  lines = reshape(string(S.blocktext),1,[]);
+else
+  lines = string(S.text);
+end
+end
+
+%% --------------------------------------------------------------------- %%
+function [res, callee, isCall, lineOk] = parseCallLine(ln, derivNames)
+% Parse one statement line. If its RHS is a bare call 'callee(args)' to a name in
+% derivNames, return isCall=true with res (the assigned result var) and callee;
+% lineOk=false iff it IS such a call but the result is not a plain whole-struct
+% assignment (dotted/subscripted LHS). Non-call lines: isCall=false, lineOk=true.
+%
+% The '^callee(args)$' anchor (and the single-'=' split) rely on the generator
+% emitting each subfunction call as its own statement on its own line, with the
+% '% Call to function' note on the NEXT line (lib/adigatorFunctionInitialize.m).
+% That invariant is what makes "RHS does not end in ')' => not a call" safe: a
+% future emitter change that appended an inline comment or fused a call with a
+% result-read on one line would slip past this and under-demand the callee, so
+% it must be caught in review, not here.
+res = ''; callee = ''; isCall = false; lineOk = true;
+t = strtrim(ln);
+if isempty(t) || t(1) == '%'
+  return
+end
+eq = strfind(t,'=');
+if isempty(eq)
+  return   % no assignment (for/end/bare expr): cannot be a call statement
+end
+lhsfull = strtrim(t(1:eq(1)-1));
+rhs = strtrim(t(eq(1)+1:end));
+if ~isempty(rhs) && rhs(end) == ';'
+  rhs = strtrim(rhs(1:end-1));
+end
+tok = regexp(rhs,'^([A-Za-z]\w*)\s*\((.*)\)$','tokens','once');
+if isempty(tok)
+  return   % RHS is not a bare single call
+end
+cal = string(tok{1});
+if ~any(cal == derivNames)
+  return   % a call to a non-derivative function (library/builtin): not ours
+end
+% it is a call to one of our subfunctions - the result must be a whole struct
+if isempty(lhsfull) || contains(lhsfull,'.') || contains(lhsfull,'(')
+  lineOk = false; return
+end
+res = lhsfull; callee = char(cal); isCall = true;
 end
 
 %% --------------------------------------------------------------------- %%
@@ -336,22 +401,26 @@ function fr = fieldsRead(Sall, keep, resultVar)
 % names, or the string 'WHOLE' if the result struct is read whole anywhere (a
 % bare <resultVar> token not followed by '.'). Mirrors adigatorWrapperDemand's
 % extraction, over the kept derivative-block statements rather than a wrapper.
+% Block-aware (R10(a)): a kept rolled loop is scanned line by line, so a
+% '<resultVar>.field' read nested in the loop is counted; the call line that
+% assigns <resultVar> is skipped wherever it appears (top level or in a loop).
 rv     = regexptranslate('escape',resultVar);
 barepat = ['\<',rv,'\>(?!\.)'];
 fldpat  = ['\<',rv,'\.([A-Za-z]\w*)'];
 found = {};
 for k = find(keep(:)).'
-  % skip the call's own LHS assignment: 'resultVar = callee(...)'
-  if strcmp(strtok(char(Sall(k).lhs),'.'),resultVar) && isempty(Sall(k).lhsSubs)
-    continue
-  end
-  txt = char(Sall(k).text);
-  if ~isempty(regexp(txt,barepat,'once'))
-    fr = 'WHOLE'; return
-  end
-  toks = regexp(txt,fldpat,'tokens');
-  for t = 1:numel(toks)
-    found{end+1,1} = toks{t}{1}; %#ok<AGROW>
+  for ln = scanLines(Sall(k))
+    txt = char(ln);
+    if isAssignmentOf(txt, resultVar)
+      continue   % the 'resultVar = ...' assignment itself, not a use
+    end
+    if ~isempty(regexp(txt,barepat,'once'))
+      fr = 'WHOLE'; return
+    end
+    toks = regexp(txt,fldpat,'tokens');
+    for t = 1:numel(toks)
+      found{end+1,1} = toks{t}{1}; %#ok<AGROW>
+    end
   end
 end
 fr = unique(found(:)).';
@@ -361,10 +430,27 @@ end
 end
 
 %% --------------------------------------------------------------------- %%
+function tf = isAssignmentOf(ln, base)
+% true iff line ln is a plain whole assignment 'base = ...' (no dotted field, no
+% subscript on the LHS) - the call's own result assignment, which must not be
+% mistaken for a bare whole-struct READ of base.
+tf = false;
+t = strtrim(ln);
+eq = strfind(t,'=');
+if isempty(eq)
+  return
+end
+lhs = strtrim(t(1:eq(1)-1));
+tf = strcmp(lhs, base);
+end
+
+%% --------------------------------------------------------------------- %%
 function [ok, why] = closureOk(Sall, keep, demanded, innames)
 % Per-function eval-free closure gate (identical reasoning to
-% adigatorSlimDerivBody/closureOk): every base read by a kept statement is an
-% input / Gator1Data or has ALL its writers kept, and every demanded output
+% adigatorSlimDerivBody/closureOk; block-aware via Sall.writes, so a base
+% assigned inside a rolled loop counts as produced/written): every base read by
+% a kept statement is an input / Gator1Data or has ALL its writers kept, and
+% every demanded output
 % field is still produced.
 ok = false; why = '';
 external = [innames(:); {'Gator1Data'}];
