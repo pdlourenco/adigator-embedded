@@ -254,9 +254,9 @@ workflow itself therefore runs the full gate, since `ci.yml` is not a docs
 path.)
 
 **User-guide PDF (`docs-pdf.yml`).** A separate, non-gating workflow compiles
-the LaTeX user guide (`docs/userguidefiles/`, via a TeXLive container running
+the LaTeX user guide (`docs/userguide/`, via a TeXLive container running
 the `makepdf.sh` pdflatex/bibtex sequence) and commits the regenerated
-`docs/ADiGatorUserGuide.pdf`. It is path-filtered to `docs/userguidefiles/**`,
+`docs/userguide/ADiGatorUserGuide.pdf`. It is path-filtered to `docs/userguide/**`,
 so it only runs when the guide sources change — a plain `paths:` filter
 suffices here precisely because it is **not** a required check (the in-job diff
 trick is only needed for the required `test` job). To avoid pushing to the
