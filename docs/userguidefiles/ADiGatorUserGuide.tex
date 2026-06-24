@@ -104,6 +104,8 @@
 \section{Introduction}
 \emph{ADiGator} is a MATLAB automatic differentiation package which transforms user function files into derivative function files. These derivative function files are written completely in terms of the native MATLAB commands and thus may be evaluated on numeric input values to calculate the numeric derivative of the output with respect to a defined variable of differentiation. These numeric evaluations may be performed as many times as desired without generating a new derivative file, as long as the input sizes and derivative sparsity patterns are not to change. In the event that a user wishes to obtain derivatives of the same function file, but evaluated on different input sizes and/or derivative sparsity patterns, then a new derivative file must be generated. The package is particularly appealing for applications where the same derivative must be found at multiple different points, i.e. non-linear root finding/optimization, stiff ode integration, etc. For details on the methodology behind the algorithm and the overloaded class which is used, the user is referred to \cite{Weinstein2014}, and \cite{Patterson2013}, which can be seen \href{http://vdol.mae.ufl.edu/JournalPublications/TOMS-2013-0067.pdf}{here} and \href{http://vdol.mae.ufl.edu/JournalPublications/TOMS-2011-0055.pdf}{here}, respectively.
 In the following user's guide we will explain how to use the \emph{ADiGator} package. For more information on Automatic Differentiation in general, please refer to  \cite{Griewank1}. For an explanation on the mathematical notations used within this guide, please see the \hyperlink{Appendix}{Appendix}.
+
+This document describes the base \emph{ADiGator} package. The embedded fork (Version 1.5; GMV / Pedro Louren\c{c}o, 2025--2026) adds derivative files suitable for embedded code generation (MATLAB Coder), together with several capability and output-form extensions. These are documented in Section \ref{Sec:Embedded} and as additional options in Table \ref{Tab:Options}; the underlying differentiation algorithm is unchanged.
 \section{Installation}
 The \emph{ADiGator} package is written entirely in MATLAB and thus should be usable on any operating system as long as MATLAB is installed. The code has been tested in MATLAB versions 7.11 through 8.2. To install the package, one needs to unpack the zip file and add two directories to the MATLAB path. This may be done as follows:
 \begin{enumerate}
@@ -256,6 +258,18 @@ A list of all options, values, and descriptions is given in Table \ref{Tab:Optio
 ~ & 0 & If this option is set, \texttt{adigator} will error out rather than overwrite the derivative file. (default)\\ \hline
 {\bf MAXWHILEITER} & $k > 0$ & For use with \texttt{while} loops. The maximum number of iterations, $k$, that the algorithm will attempt to find a static loop iteration during file generation. (default is $k = 10$).\\ \hline
 {\bf COMPLEX} & 0 & Binary flag for turning on and off complex variable handling. If set to 1, the tool will expect complex variables and thus use the complex forms of ctranspose, abs, dot, etc. Otherwise, it will assume no complex numbers exist in the user's program.\\ \hline
+{\bf EMBED\_MODE} & \texttt{'c'} & {\bf (v1.5 fork)} {\bf C}lassic. The static index/data tables are stored in a \texttt{.mat} file, loaded at runtime into a global variable. Not suitable for embedded code generation. (default) \\ \cline{2-3}
+~ & \texttt{'l'} & Coder{\bf l}oad. The \texttt{.mat} is read through \texttt{coder.load} and wrapped in \texttt{coder.const}: loaded at runtime when interpreted, at compile-time into a persistent constant when compiled with MATLAB Coder. No global variables. \\ \cline{2-3}
+~ & \texttt{'i'} & {\bf I}nline. The static tables are emitted as source in a companion data function: no \texttt{.mat}, no global/persistent variables, and no runtime load. Fully self-contained for code generation. \\ \hline
+{\bf PATH} & \texttt{[]} & {\bf (v1.5 fork)} Directory in which to place all generated files. If empty, the calling directory is used (default). \\ \hline
+{\bf LOOPBOUND} & \texttt{\{\}} & {\bf (v1.5 fork)} All loop bounds are fixed at their generation-time trip counts (default). \\ \cline{2-3}
+~ & name(s) & Char/string/cellstr naming input(s) of the differentiated function which act as runtime loop bounds: the file is generated at the maximum trip count (the value passed to \texttt{adigator}) and may then be evaluated for any \texttt{n} up to that maximum. See Section \ref{SubSec:Loopbound}. \\ \hline
+{\bf JAC\_OUTPUT} & \texttt{'matrix'} & {\bf (v1.5 fork; \texttt{adigatorGenJacFile} only)} The wrapper projects the derivative into a dense/sparse Jacobian matrix on every call (default). \\ \cline{2-3}
+~ & \texttt{'nonzeros'} & The wrapper returns the nonzero vector in the fixed pattern order, with the pattern exported once via \texttt{output.JacobianLocs}/\texttt{output.JacobianStructure}; no per-call allocation or scatter. \\ \hline
+{\bf DER\_LEVELS} & \texttt{[]} & {\bf (v1.5 fork)} The wrapper returns every derivative level its generator produces (default). \\ \cline{2-3}
+~ & vector & A subset of $\{0,1,2\}$ ($0$ = function value, $1$ = first derivative, $2$ = Hessian) selecting which levels the wrapper returns; the top level the generator is named for is always included. \\ \hline
+{\bf SLIM\_EMBED} & 0 & {\bf (v1.5 fork)} No slimming (default). \\ \cline{2-3}
+~ & 1 & In embedded modes (\texttt{'l'}/\texttt{'i'}), slice from the generated code the statements that feed only output fields the wrapper never reads (the \texttt{\_location}/\texttt{\_size} metadata), so their constant index tables drop from the embedded data. Guarded by a generation-time correctness check; left unsliced on any uncertainty. \\ \hline
 \end{tabular}
 \end{table}
 
@@ -413,6 +427,62 @@ If \texttt{auxdata} specified, it is fixed in all function handles.\\
 \texttt{examples/optimization/ipoptEx/}
 \end{tabular}
 \end{tabular}
+\section{Embedded and Extended Features (Version 1.5 Fork)}\label{Sec:Embedded}
+The features described in this section are specific to the embedded fork of \emph{ADiGator} (Version 1.5; GMV / Pedro Louren\c{c}o, 2025--2026). They extend the base package with derivative files suitable for embedded code generation (MATLAB Coder), together with several capability and output-form additions. The underlying differentiation algorithm is unchanged; for the architecture and the binding output conventions see \texttt{docs/DESIGN.md}, and for the development log see \texttt{docs/ROADMAP.md} and \texttt{docs/ANALYSIS.md}.
+
+\subsection{adigatorGenDerFile\_embedded}\label{SubSec:GenDerEmbedded}
+\underline{When to use}: You wish to generate an embeddable (code-generation-ready) Jacobian, gradient, or Hessian file, free of the runtime \texttt{load}/global-variable mechanism of the classic generated files.\\\\
+\underline{User Function Input Restrictions}: One input must be the variable of differentiation (created via \texttt{adigatorCreateDerivInput}); it may be carried within a scalar struct/cell (see Section \ref{SubSec:StructInput}). The user function may have a single output.\\\\
+\underline{Generated File Info}: For \texttt{DerType} \texttt{'jacobian'} the wrapper is named with \texttt{\_Jac} appended; for \texttt{'gradient'}, with \texttt{\_Grd}; for \texttt{'hessian'}, with \texttt{\_Hes} (returning the Hessian, gradient, and function value). The wrapper takes the same inputs as the original file. The number and nature of the additional generated files depends on \texttt{EMBED\_MODE}: classic \texttt{'c'} writes a wrapper, a \texttt{.mat}, and the derivative file; coderload \texttt{'l'} writes a wrapper (reading the \texttt{.mat} through \texttt{coder.load}) and the \texttt{.mat}; inline \texttt{'i'} writes a single self-contained file with no \texttt{.mat}. All three modes return numerically identical results.\\\\
+\begin{tabular}{l|l}
+{\bf Usage} & \begin{tabular}{l}
+ \texttt{info = adigatorGenDerFile\_embedded(DerType,UserFunName,UserFunInputs,options)}\end{tabular} \\ \hline
+{\bf Input Info} & \begin{tabular}{l}
+\texttt{DerType} - \texttt{'jacobian'}, \texttt{'gradient'}, or \texttt{'hessian'}\\
+\texttt{UserFunName} - string name of file to be differentiated\\
+\texttt{UserFunInputs} - cell array of inputs to user's function; the variable of\\ differentiation created via \texttt{adigatorCreateDerivInput}, auxiliary inputs via\\ \texttt{adigatorCreateAuxInput}\\
+\texttt{options} - (optional) options structure; see \texttt{EMBED\_MODE}, \texttt{PATH},\\ \texttt{DER\_LEVELS}, \texttt{SLIM\_EMBED} in Table \ref{Tab:Options}
+\end{tabular}\\ \hline
+{\bf Examples} & \begin{tabular}{l}
+\texttt{examples/optimization/pipg/} (Hessian, mode \texttt{'l'})\\
+\texttt{examples/hessians/logsumexp/}
+\end{tabular}
+\end{tabular}\\\\
+A minimal example, generating an inline (self-contained) Hessian of \texttt{gapfun} with respect to its second input:
+\begin{verbatim}
+z    = adigatorCreateDerivInput([2 1],'z');  % variable of differentiation
+w    = adigatorCreateAuxInput([2 1]);        % auxiliary input
+opts = adigatorOptions('embed_mode','i');    % inline: no .mat, no globals
+adigatorGenDerFile_embedded('hessian','gapfun',{w,z},opts);
+
+w = randn(2,1); z = randn(2,1);
+[H,G,f] = gapfun_Hes(w,z);   % Hessian, gradient, value
+\end{verbatim}
+
+\subsection{N-Dimensional Auxiliary Inputs}\label{SubSec:NDParam}
+Although \emph{ADiGator} objects are restricted to two dimensions, the \texttt{adigatorCreateAuxInput} utility accepts an N-dimensional size for {\bf auxiliary} (parameter) inputs, declaring a parameter such as \texttt{B} of size \texttt{m}$\times$\texttt{n}$\times$\texttt{K}. The N-D declaration is folded internally to a two-dimensional array, and trailing-subscript slicing such as \texttt{B(:,:,k)}, or the multi-counter form \texttt{B(:,:,a,k)}, is translated into the corresponding affine column window of the fold, returning an ordinary two-dimensional object. This covers the common ``matrix over time steps (and per actuator)'' case without an N-D object type. See \texttt{examples/jacobians/ndparam/}.
+
+\subsection{Struct Inputs}\label{SubSec:StructInput}
+The variable of differentiation and the auxiliary inputs may be carried as fields of a (scalar) struct, to any nesting depth through scalar-struct fields and cell elements (struct arrays are excluded). The convenience and embedded generators locate the variable of differentiation within the struct, seed its derivative along that access path, and forward the remaining fields unchanged; the generated wrapper accepts the same struct shape as the original function. See \texttt{examples/jacobians/structinput/}.
+
+\subsection{Runtime Loop Bounds}\label{SubSec:Loopbound}
+The \texttt{LOOPBOUND} option (Table \ref{Tab:Options}) names input(s) of the differentiated function which act as runtime loop bounds. The derivative file is generated at the maximum trip count (the value passed to \texttt{adigator}, used for the analysis), and the matching outer loops are printed with the named input as their bound, guarded by \texttt{assert(n <= max)}; loop-exit variables take the union over all iterations. The generated file may then be evaluated for any $1 \le \texttt{n} \le \texttt{max}$ without regeneration. Results agree with the true \texttt{n}-sized program when the post-loop code is \emph{padding-benign} (sums, dot products, scatter/gather over the loop-written entries); operations that read a fixed-size buffer's padded tail (\texttt{length}, \texttt{end}, \texttt{mean}, \texttt{max}) see the maximum size. See \texttt{examples/jacobians/loopbound/}.
+
+\subsection{Alternative Output Forms and Reverse Mode}\label{SubSec:OutputForms}
+Several routines target first-order embedded solvers, which want the nonzero vector or matrix-vector products rather than a dense projection:
+\begin{itemize}
+\item {\bf Nonzero-vector Jacobian output.} With \texttt{JAC\_OUTPUT = 'nonzeros'} (Table \ref{Tab:Options}), \texttt{adigatorGenJacFile} returns the Jacobian nonzero vector in the fixed pattern order, exporting the constant sparsity pattern once through \texttt{output.JacobianLocs}/\texttt{output.JacobianStructure}, with no per-call dense allocation or scatter.
+\item {\bf Transposed Jacobian-vector products.} \texttt{adigatorGenJtVFile} generates a file computing $\bfJ^\top \bfv$ for a runtime vector \texttt{v} in a single forward-plus-adjoint sweep, without forming the Jacobian.
+\item {\bf Reverse-mode gradient.} \texttt{adigatorGenRevGradFile} generates a standalone reverse-mode (adjoint) gradient file for a scalar cost, computing the gradient in a fixed number of sweeps independent of the number of variables --- well suited to dense objective gradients (sums, log-sum-exp, least squares). See \texttt{examples/gradients/logsumexp/}.
+\end{itemize}
+
+\subsection{Additional Overloaded Operators}\label{SubSec:Operators}
+This fork adds the following overloads:
+\begin{itemize}
+\item \texttt{norm} --- vector $p$-norms ($p = 2,\,1,\,\infty,\,-\infty$, general $p$) and the Frobenius norm (\texttt{'fro'}) are rewritten to elementary differentiable operations. The induced/spectral matrix norms (which would require a singular-value decomposition) raise a clear error rather than returning an incorrect derivative.
+\item \texttt{isnan}, \texttt{isinf}, \texttt{isfinite} --- derivative-free predicates evaluated on the value at run time, usable in conditionals and masks.
+\end{itemize}
+
 \section{User Function File Coding Restrictions}\label{Sec:Restrictions}
 The \emph{ADiGator} package generates derivative code by both reading the user's code and evaluating sections of the user's code on overloaded {\bf cada} objects. This allows it to generate stand-alone derivative files, but due to the complexity of the process, certain coding restrictions are placed on the files which it can differentiate. These are mostly in place for two reasons, 1. that the package can follow the flow of the user's code and track all variables from within it, and 2. that the code has enough information to print valid derivative calculations. In this section we go over the various coding requirements which the user should follow to ensure that their function files are differentiable using \emph{ADiGator}.
 \subsection{Known Numeric Values}\label{SubSec:Numeric}
