@@ -1,0 +1,57 @@
+# Build the LaTeX user guide and commit the regenerated PDF.
+#
+# Separate from ci.yml and NOT a required gate. Path-filtered to the guide
+# sources so it only runs when those change (docs/CI_PLAN.md §3.1). To avoid
+# pushing to the protected `master` branch (which would need a GitHub App /
+# PAT), it runs on pull requests and commits the rebuilt PDF back to the PR
+# branch, so the PDF merges into master through the normal PR flow using only
+# the built-in GITHUB_TOKEN. The job is restricted to same-repo PRs: a fork
+# PR's head branch is not in this repo (so the head_ref checkout cannot run)
+# and its GITHUB_TOKEN is read-only (so the commit could not push) - it is
+# skipped cleanly rather than failing.
+name: User Guide PDF
+
+on:
+  pull_request:
+    paths:
+      - 'docs/userguidefiles/**'
+
+permissions:
+  contents: write
+
+jobs:
+  build-pdf:
+    # Same-repo PRs only (see header): fork PRs are skipped, not failed.
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      # Full TeXLive in a container; latexmk runs the pdflatex/bibtex/pdflatex
+      # passes (the same sequence as docs/userguidefiles/makepdf.sh).
+      # SOURCE_DATE_EPOCH + FORCE_SOURCE_DATE make pdftex stamp fixed dates, so
+      # an unchanged source yields a byte-identical PDF and the commit step
+      # below no-ops - a push that does not touch the guide produces no churn.
+      - name: Compile user guide
+        uses: xu-cheng/latex-action@v3
+        env:
+          SOURCE_DATE_EPOCH: '1700000000'
+          FORCE_SOURCE_DATE: '1'
+        with:
+          working_directory: docs/userguidefiles
+          root_file: ADiGatorUserGuide.tex
+
+      - name: Move PDF into docs/
+        run: mv docs/userguidefiles/ADiGatorUserGuide.pdf docs/ADiGatorUserGuide.pdf
+
+      # Commit only when the PDF actually changed. GITHUB_TOKEN pushes do not
+      # retrigger workflows, so this cannot loop.
+      - name: Commit regenerated PDF to the PR branch
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          file_pattern: docs/ADiGatorUserGuide.pdf
+          commit_message: 'docs(userguide): regenerate PDF [skip ci]'
+          commit_user_name: 'github-actions[bot]'
+          commit_user_email: '41898282+github-actions[bot]@users.noreply.github.com'
