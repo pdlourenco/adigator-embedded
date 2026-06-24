@@ -1,5 +1,8 @@
 # CI Phase 0 — see docs/CI_PLAN.md §3.
 # Single job so MATLAB is installed once; lint fails fast before tests.
+# The job always runs (so the required `test` check always reports), but a
+# docs-only PR skips the MATLAB-heavy steps — see the "Detect docs-only
+# change" step and CI_PLAN.md §3.1.
 name: CI
 
 on:
@@ -15,40 +18,67 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Skip the MATLAB steps when a PR touches only docs (docs/** or *.md):
+      # such a diff cannot change any lint/test outcome, and MATLAB install is
+      # the dominant cost. The job still succeeds, so the required `test` check
+      # stays green. Conservative by direction — any non-docs path (incl.
+      # .github/, tests/, *.m) runs the full gate; push events always run.
+      - name: Detect docs-only change
+        id: changes
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          code=true
+          if [ "$EVENT" = "pull_request" ]; then
+            files=$(git diff --name-only "origin/$BASE_REF...HEAD")
+            echo "Changed files:"; printf '%s\n' "$files"
+            if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -qvE '(^docs/|\.md$)'; then
+              code=false
+            fi
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "Run MATLAB steps: $code"
 
       - name: Set up MATLAB
+        if: steps.changes.outputs.code == 'true'
         uses: matlab-actions/setup-matlab@v2
         with:
           release: latest
           cache: true
 
       - name: Lint (TS-U-09, parse-error gate)
+        if: steps.changes.outputs.code == 'true'
         uses: matlab-actions/run-command@v2
         with:
           command: addpath('tests'); ci_lint
 
       - name: Unit tests (TS-U)
+        if: steps.changes.outputs.code == 'true'
         uses: matlab-actions/run-tests@v2
         with:
           select-by-folder: tests/unit
           test-results-junit: results/unit.xml
 
       - name: Integration tests (TS-I)
-        if: success()
+        if: steps.changes.outputs.code == 'true'
         uses: matlab-actions/run-tests@v2
         with:
           select-by-folder: tests/integration
           test-results-junit: results/integration.xml
 
       - name: Coverage report + ratchet (Phase 4)
-        if: success()
+        if: steps.changes.outputs.code == 'true'
         uses: matlab-actions/run-command@v2
         with:
           command: addpath('tests'); ci_coverage
 
       - name: Upload test results
+        if: always() && steps.changes.outputs.code == 'true'
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: ci-results
           path: results

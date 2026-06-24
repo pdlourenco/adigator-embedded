@@ -239,6 +239,18 @@ jobs:
 (`cache: true` additionally caches the MATLAB installation across runs of
 the same release, cutting the remaining setup time.)
 
+**Docs-only skip.** The `test` job runs on every pull request — so the
+required check always reports — but its first step diffs the PR against its
+base and, when *every* changed path is under `docs/` or ends in `.md`, skips
+the MATLAB setup + lint + test + coverage steps. The job still succeeds, so
+the required check stays green without paying the (dominant) MATLAB install,
+and a docs-only diff cannot change any lint/test outcome anyway. The filter is
+conservative by direction: any non-docs path (including `.github/`, `tests/`,
+`*.m`) runs the full gate, and `push` events always run — an unnecessary full
+run is harmless, skipping when code changed is not. (A PR that edits the
+workflow itself therefore runs the full gate, since `ci.yml` is not a docs
+path.)
+
 **`.github/workflows/extended.yml`** — runs the heavy suites on every push
 to `embedded` (i.e., on merge) and on manual dispatch.
 
