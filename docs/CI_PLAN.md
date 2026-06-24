@@ -263,9 +263,12 @@ runs on pull requests and commits the rebuilt PDF **back to the PR branch**
 using the built-in `GITHUB_TOKEN`, so the PDF merges into `master` through the
 normal PR flow; the job is restricted to same-repo PRs (a fork PR's head branch
 is not in this repo and its token is read-only, so it is skipped cleanly rather
-than failing). Because a `GITHUB_TOKEN` commit does not retrigger workflows,
-re-run the `test` check on the PR head before merging if branch protection
-requires it.
+than failing). The build is reproducible (`SOURCE_DATE_EPOCH` /
+`FORCE_SOURCE_DATE` pin pdftex's timestamps), so an unchanged source yields a
+byte-identical PDF and the commit step no-ops — only a genuine guide-source
+change produces a PDF commit. Because a `GITHUB_TOKEN` commit does not retrigger
+workflows, that one PDF commit leaves the `test` check stale on the new head;
+re-run `test` before merging if branch protection requires it.
 
 **`.github/workflows/extended.yml`** — runs the heavy suites on every push
 to `embedded` (i.e., on merge) and on manual dispatch.

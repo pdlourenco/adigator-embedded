@@ -31,8 +31,14 @@ jobs:
 
       # Full TeXLive in a container; latexmk runs the pdflatex/bibtex/pdflatex
       # passes (the same sequence as docs/userguidefiles/makepdf.sh).
+      # SOURCE_DATE_EPOCH + FORCE_SOURCE_DATE make pdftex stamp fixed dates, so
+      # an unchanged source yields a byte-identical PDF and the commit step
+      # below no-ops - a push that does not touch the guide produces no churn.
       - name: Compile user guide
         uses: xu-cheng/latex-action@v3
+        env:
+          SOURCE_DATE_EPOCH: '1700000000'
+          FORCE_SOURCE_DATE: '1'
         with:
           working_directory: docs/userguidefiles
           root_file: ADiGatorUserGuide.tex
