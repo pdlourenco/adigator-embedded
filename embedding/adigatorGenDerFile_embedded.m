@@ -75,6 +75,7 @@ function info = adigatorGenDerFile_embedded(DerType,UserFunName,UserFunInputs,va
 %% -------------------------- ARGUMENTS PARSING -------------------------%%
 % parse options
 opts = adigatorOptions();
+userSetOverwrite = false;
 if nargin>3
     optfields = fieldnames(varargin{1});
     for Fcount = 1:length(optfields)
@@ -82,6 +83,7 @@ if nargin>3
         % struct must be read with the field name they actually used
         opts.(lower(optfields{Fcount})) = varargin{1}.(optfields{Fcount});
     end
+    userSetOverwrite = any(strcmpi(optfields,'overwrite'));
 end
 % Embedded-generation defaults (ADR-0012): calling this entry point
 % means the user wants embeddable, optimized output, so an UNSET ([]) embed_mode
@@ -89,6 +91,14 @@ end
 % to classic / off). Any value the user actually set is honoured.
 if isempty(opts.embed_mode); opts.embed_mode = 'i';  end
 if isempty(opts.slim_embed); opts.slim_embed = true; end
+% OVERWRITE default: like the other wrapper-generation entry points, this one
+% regenerates by default (adigatorOptions NOTES: the OVERWRITE default differs
+% for the wrapper generators vs. the basic adigator file). The inner wrappers
+% force overwrite=1 only when the caller passes NO overwrite field; but below we
+% forward a fully-resolved opts that always carries an overwrite value, which
+% would otherwise suppress that. Restore the documented default here unless the
+% caller set overwrite explicitly, so regenerating over stale files still works.
+if ~userSetOverwrite; opts.overwrite = 1; end
 opts.embed_mode = adigatorNormalizeEmbedMode(opts.embed_mode); % v1.5 (B11 fix)
 % Forward the fully-resolved options to the inner generators so the wrapper and
 % the post-processing agree on the mode (previously the caller's raw struct was
