@@ -33,6 +33,8 @@ classdef UOptionsTest < matlab.unittest.TestCase
             tc.verifyError(@() adigatorNormalizeEmbedMode('x'), 'adigator:embedMode');
             tc.verifyError(@() adigatorNormalizeEmbedMode(42), 'adigator:embedMode');
             tc.verifyError(@() adigatorNormalizeEmbedMode(''), 'adigator:embedMode');
+            % ADR-0012: the [] sentinel (unset) resolves to classic
+            tc.verifyEqual(adigatorNormalizeEmbedMode([]), 'c');
         end
 
         function adigatorOptionsNormalizesEmbedMode(tc)
@@ -40,6 +42,16 @@ classdef UOptionsTest < matlab.unittest.TestCase
             tc.verifyEqual(o.embed_mode, 'c');
             o = adigatorOptions('embed_mode','Inline');
             tc.verifyEqual(o.embed_mode, 'i');
+        end
+
+        function unsetDefaultsAreEmpty(tc)
+            % ADR-0012: embed_mode and slim_embed default to []
+            % (unset) so each entry point resolves its own default - the
+            % embedded generator to inline + slim, the classic generators to
+            % classic / off.
+            o = adigatorOptions();
+            tc.verifyEmpty(o.embed_mode);
+            tc.verifyEmpty(o.slim_embed);
         end
 
         function generatorAcceptsDocumentedSpellings(tc)

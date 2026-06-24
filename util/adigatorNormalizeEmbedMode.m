@@ -17,6 +17,15 @@ function mode = adigatorNormalizeEmbedMode(mode)
 %              'classic' (PR #8 follow-up).
 
 if isstring(mode); mode = char(mode); end
+if isempty(mode) && ~ischar(mode)
+    % Unset sentinel ([] from adigatorOptions): the embed_mode was not chosen.
+    % Resolve to the classic default here; the embedded generator
+    % (adigatorGenDerFile_embedded) overrides [] -> 'i' BEFORE calling this, so
+    % only the classic generators reach this branch. An empty CHAR ('') is a
+    % malformed value and still errors below.
+    mode = 'c';
+    return
+end
 if ~ischar(mode) || isempty(mode)
     error('adigator:embedMode', ...
         'EMBED_MODE must be ''c''/''classic'', ''l''/''coderload'', or ''i''/''inline''');
