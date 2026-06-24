@@ -251,6 +251,20 @@ run is harmless, skipping when code changed is not. (A PR that edits the
 workflow itself therefore runs the full gate, since `ci.yml` is not a docs
 path.)
 
+**User-guide PDF (`docs-pdf.yml`).** A separate, non-gating workflow compiles
+the LaTeX user guide (`docs/userguidefiles/`, via a TeXLive container running
+the `makepdf.sh` pdflatex/bibtex sequence) and commits the regenerated
+`docs/ADiGatorUserGuide.pdf`. It is path-filtered to `docs/userguidefiles/**`,
+so it only runs when the guide sources change — a plain `paths:` filter
+suffices here precisely because it is **not** a required check (the in-job diff
+trick is only needed for the required `test` job). To avoid pushing to the
+protected `master` branch (which would require a GitHub App / PAT / bypass), it
+runs on pull requests and commits the rebuilt PDF **back to the PR branch**
+using the built-in `GITHUB_TOKEN`, so the PDF merges into `master` through the
+normal PR flow; fork PRs build but skip the commit (read-only token). Because a
+`GITHUB_TOKEN` commit does not retrigger workflows, re-run the `test` check on
+the PR head before merging if branch protection requires it.
+
 **`.github/workflows/extended.yml`** — runs the heavy suites on every push
 to `embedded` (i.e., on merge) and on manual dispatch.
 
