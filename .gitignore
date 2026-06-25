@@ -1,10 +1,33 @@
-﻿*_ADiGator*.m
+# adigator-generated derivative files (forward / reverse / J'·v) + their data.
+# These are produced next to the source by adigatorGen*; never commit them.
+*_ADiGator*.m
 *_ADiGator*.mat
-*_Grd.m
-*_Hes.m
 *_Jac.m
+*_Hes.m
+*_Grd.m
+*_RGrd.m
+*_JtV.m
+*_RGrd.mat
+*_JtV.mat
 adigatortempfunc*.m
+
+# MATLAB Coder / build output (codegen examples, SCodegenTest, R15 codegen-equiv).
+codegen/
+codegen_lib/
+slprj/
+*_mex.*
+*.mexa64
+*.mexw64
+*.mexmaca64
+*.mexmaci64
+
+# Editor / MATLAB autosave cruft.
 *.asv
 
-# Per-example scratch dirs for adigator-generated example output (issue #67).
+# Per-example scratch dirs for adigator-generated example output (issue #67/#69).
 examples/**/generated/
+
+# Intentional, committed generated-shaped fixtures (synthetic + offline-test
+# fixtures): keep them — and any future ones — trackable without `git add -f`.
+# Must stay last so it overrides the suffix rules above.
+!tests/fixtures/**
