@@ -2,6 +2,15 @@ function y = length(x)
 % CADA overloaded LENGTH
 % Copyright 2011-2014 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
+%
+% R11 (issue #54): outside a transformation (no ADIGATOR global), return the
+% plain length of the stored shape without declaring - hence creating - the
+% transformation global. This matches the value the transformation path
+% records (max of the dimensions, 0 if any dimension is empty).
+if isempty(who('global','ADIGATOR'))
+  if any(x.func.size == 0), y = 0; else, y = max(x.func.size); end
+  return
+end
 global ADIGATOR
 fid    = ADIGATOR.PRINT.FID;
 NUMvod = ADIGATOR.NVAROFDIFF;

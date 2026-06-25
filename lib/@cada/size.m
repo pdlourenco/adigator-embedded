@@ -12,6 +12,21 @@ function varargout = size(x,varargin)
 %              parameters: the declared shape and the internal 2D fold
 %              would silently disagree (roadmap R2, issue #11 Level 2,
 %              PR #14).
+%   2026-06    R11 (issue #54): outside a transformation (no ADIGATOR global),
+%              return the plain size of the stored 2-D shape without declaring
+%              - hence creating - the transformation global. Covers size(x),
+%              [m,n,...]=size(x), and size(x,dim).
+if isempty(who('global','ADIGATOR'))
+  sz = x.func.size;
+  if nargin > 1
+    varargout{1} = arrayfun(@(k) szAt(sz,k), varargin{1});
+  elseif nargout <= 1
+    varargout{1} = sz;
+  else
+    varargout = num2cell(arrayfun(@(k) szAt(sz,k), 1:nargout));
+  end
+  return
+end
 global ADIGATOR
 NUMvod = ADIGATOR.NVAROFDIFF;
 fid    = ADIGATOR.PRINT.FID;
@@ -378,4 +393,9 @@ elseif nargout == 1
 else
   error('??? too many outputs')
 end
+end
+
+function s = szAt(sz, k)
+% k-th dimension of the stored 2-D shape sz, 1 past its end (MATLAB size rule).
+if k <= numel(sz); s = sz(k); else; s = 1; end
 end

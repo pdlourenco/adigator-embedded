@@ -13,6 +13,13 @@ classdef UCoreErrorHygieneTest < matlab.unittest.TestCase
     % The checks are delta-based (snapshot before, compare after) so a runtime
     % data global ADiGator_<name> left from an earlier test cannot confound them;
     % only the four transformation globals are asserted gone.
+    %
+    % R11 (issue #54, ADR-0015): the invariant is now strict name-absence. Before
+    % R11 a benign read of a returned cada object re-registered an *empty*
+    % ADIGATOR (every @cada method opened with `global ADIGATOR`), so #51 had to
+    % relax this to "no *populated* global survives". The @cada read paths now
+    % declare the globals only where they use them, so no transformation global
+    % -- empty or populated -- may survive a transformation.
 
     methods (TestClassSetup)
         function addPaths(tc)
@@ -64,30 +71,29 @@ classdef UCoreErrorHygieneTest < matlab.unittest.TestCase
             verifySessionClean(tc, g0, p0, f0, 'after a failed transformation');
         end
 
-        function populatedLeakCaughtEmptyTolerated(tc)
-            % Guard the populated-state invariant itself, so the relaxed predicate
-            % cannot pass vacuously: a *populated* transformation global must be
-            % reported as a B16 leak, while an *empty* re-registration -- the
-            % unavoidable @cada artifact (issue #54) -- must be tolerated. This
-            % exercises populatedStrayGlobals directly (the same predicate the two
-            % transform tests assert through), with no transform involved.
+        function strayTransformGlobalAlwaysCaught(tc)
+            % Guard the strict invariant predicate so it cannot pass vacuously:
+            % after R11/#54 (ADR-0015) ANY surviving transformation global is a
+            % leak -- empty re-registration or live state -- so strayTransformGlobals
+            % must report it in both cases. (Pre-R11 the empty form was tolerated;
+            % #54 removed the @cada re-registration at source, so the invariant is
+            % now strict name-absence.) Exercises the predicate directly, with no
+            % transform involved.
             transformGlobals = {'ADIGATOR','ADIGATORFORDATA','ADIGATORDATA','ADIGATORVARIABLESTORAGE'};
             clearTransformGlobals();                    % clean slate
             guard = onCleanup(@clearTransformGlobals);   % release regardless of outcome
             g0 = setdiff(who('global'), transformGlobals);  % baseline as if the four are absent
 
-            % An empty (state-free) re-registration must be tolerated.
+            % An empty (state-free) re-registration is now a leak, not tolerated.
             setGlobalExpr('ADIGATOR', '[]');
-            tc.verifyEmpty(populatedStrayGlobals(g0), ...
-                'an empty (state-free) transformation global must be tolerated (issue #54)');
+            tc.verifyTrue(any(strcmp('ADIGATOR', strayTransformGlobals(g0))), ...
+                'an empty transformation global must now be reported as a leak (R11/#54)');
 
-            % A populated transformation global must be reported as a leak.
-            setGlobalExpr('ADIGATOR', 'struct(''CADA'',''live'')');
-            leak = populatedStrayGlobals(g0);
-            tc.verifyNumElements(leak, 1, ...
-                'exactly the populated transformation global must be reported');
-            tc.verifyTrue(any(strcmp('ADIGATOR', leak)), ...
-                'a populated transformation global must be reported as a B16 leak');
+            % A populated transformation global is a leak.
+            setGlobalExpr('ADIGATORDATA', 'struct(''CADA'',''live'')');
+            leak = strayTransformGlobals(g0);
+            tc.verifyTrue(any(strcmp('ADIGATORDATA', leak)), ...
+                'a populated transformation global must be reported as a leak');
 
             clear guard;   % run the cleanup now so the assertions above are the test's last act
         end
@@ -112,33 +118,21 @@ fids0    = openFidsPortable();
 end
 
 function verifySessionClean(tc, globals0, path0, fids0, when)
-populated = populatedStrayGlobals(globals0);
-tc.verifyEmpty(populated, sprintf('populated transformation-state globals leaked %s: %s', ...
-    when, strjoin(populated, ', ')));
+stray = strayTransformGlobals(globals0);
+tc.verifyEmpty(stray, sprintf('transformation-state globals leaked %s: %s', ...
+    when, strjoin(stray, ', ')));
 tc.verifyEqual(path, path0, sprintf('MATLAB path not restored %s', when));
 tc.verifyEmpty(setdiff(openFidsPortable(), fids0), ...
     sprintf('file handle(s) left open %s', when));
 end
 
-function names = populatedStrayGlobals(globals0)
-% Transformation-state globals present beyond the baseline AND carrying live
-% (non-empty) state. A stray transformation-global NAME is only a B16 violation
-% if it carries live state: reading one of adigator's returned cada objects
-% re-registers an EMPTY transformation global (every @cada method opens with
-% `global ADIGATOR`); that holds no state and cannot poison a later transform,
-% so it is excluded here. A *populated* stray is a real leak. See issue #54 for
-% the @cada-layer fix that would let this tighten back to strict name-absence.
+function names = strayTransformGlobals(globals0)
+% Transformation-state globals present beyond the baseline. After R11/#54
+% (ADR-0015) the invariant is strict name-absence: a benign read of a returned
+% cada object no longer re-registers an empty ADIGATOR, so NO transformation
+% global may survive -- empty or populated -- and the bare name is the leak.
 transformGlobals = {'ADIGATOR','ADIGATORFORDATA','ADIGATORDATA','ADIGATORVARIABLESTORAGE'};
-stray = intersect(setdiff(who('global'), globals0), transformGlobals);
-names = stray(cellfun(@(n) ~isempty(globalValue(n)), stray));
-end
-
-function v = globalValue(name)
-% Read a global's current value by name in this disposable helper frame. The
-% name is already present in who('global') here, so declaring it global just
-% binds the existing value -- the read itself re-registers nothing new.
-eval(['global ',name]);
-v = eval(name);
+names = intersect(setdiff(who('global'), globals0), transformGlobals);
 end
 
 function clearTransformGlobals()
@@ -150,12 +144,11 @@ end
 function setGlobalExpr(name, rhsExpr)
 % Declare a global by name and assign it the value of the MATLAB source text
 % rhsExpr (e.g. '[]' for an empty re-registration, 'struct(...)' for live
-% state). Routed through eval like globalValue, but with *concatenated*
-% (non-constant) eval arguments on purpose: a literal `global` statement is a
-% checkcode GVMIS finding and eval of a *constant* string is an EVLC finding,
-% whereas eval of a concatenation is neither -- and both name and rhsExpr are
-% referenced in the concatenation, so neither argument reads as unused. This is
-% the same form the existing globalValue helper relies on to stay lint-clean.
+% state). The eval arguments are *concatenated* (non-constant) on purpose: a
+% literal `global` statement is a checkcode GVMIS finding and eval of a
+% *constant* string is an EVLC finding, whereas eval of a concatenation is
+% neither -- and both name and rhsExpr are referenced in the concatenation, so
+% neither argument reads as unused.
 eval(['global ',name]);
 eval([name,' = ',rhsExpr,';']);
 end
