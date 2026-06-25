@@ -15,7 +15,8 @@ m = 3; n = 2; K = 4;
 
 gx = adigatorCreateDerivInput([n 1],'x');
 gB = adigatorCreateAuxInput([m n K]);
-adigator('tvmap',{gx,gB},'tvmap_dx',adigatorOptions('overwrite',1));
+adigator('tvmap',{gx,gB},'tvmap_dx',adigatorOptions('overwrite',1,'path','generated'));
+addpath(fullfile(pwd,'generated'));
 
 B = randn(m,n,K);
 x.f  = randn(n,1);
@@ -44,3 +45,4 @@ fprintf('max |J - J_fd|                  : %8.3g\n', max(abs(full(J(:))-Jfd(:)))
 y2 = tvmap_dx(x, reshape(B,m,[]));
 fprintf('max |y(3D arg) - y(folded arg)| : %8.3g\n', ...
     max(abs([y.f-y2.f; y.dx-y2.dx])));
+rmpath(fullfile(pwd,'generated'));

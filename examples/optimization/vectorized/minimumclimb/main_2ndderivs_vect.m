@@ -39,7 +39,8 @@ gU = adigatorCreateDerivInput([Inf m],...
   struct('vodname','Y','vodsize',[Inf (m+n)],...
   'nzlocs',[(1:m).' (n+1:m+n).']));
 gOut = adigator('dynamics',{gX,gU,probinfo},'dynamics_yvect',...
-  adigatorOptions('overwrite',1));
+  adigatorOptions('overwrite',1,'path','generated'));
+addpath(fullfile(pwd,'generated'));
 % We can now extract sparsity pattern of Fy(t)
 iFy = gOut{1}.deriv.nzlocs(:,1);
 jFy = gOut{1}.deriv.nzlocs(:,2);
@@ -48,7 +49,7 @@ jFy = gOut{1}.deriv.nzlocs(:,2);
 gX  = struct('f',gX,'dY',adigatorCreateAuxInput([Inf n]));
 gU  = struct('f',gU,'dY',adigatorCreateAuxInput([Inf m]));
 gOut2 = adigator('dynamics_yvect',{gX,gU,probinfo},'dynamics_yyvect',...
-  adigatorOptions('overwrite',1,'comments',0));
+  adigatorOptions('overwrite',1,'comments',0,'path','generated'));
 % We can now extract sparsity pattern of Fyy(t)
 iFdyy = gOut2{1}.dY.deriv.nzlocs(:,1); % Note, these are the deriv locations
 kFyy  = gOut2{1}.dY.deriv.nzlocs(:,2); % of F.dy which is a vector of non-zeros
@@ -130,6 +131,8 @@ end
 
 end
 
+
+rmpath(fullfile(pwd,'generated'));
 
 fprintf(['Total Time Supplying Second Derivatives (vectorized): ',...
   num2str(sum(time)),'\n']);

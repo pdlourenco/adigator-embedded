@@ -17,7 +17,8 @@ Nmax = 8;
 gx = adigatorCreateDerivInput([Nmax 1],'x');
 gp = adigatorCreateAuxInput([Nmax 2]);
 adigator('lb_alloc',{gx,gp,Nmax},'lb_alloc_dx', ...
-    adigatorOptions('overwrite',1,'loopbound','N'));
+    adigatorOptions('overwrite',1,'loopbound','N','path','generated'));
+addpath(fullfile(pwd,'generated'));
 
 p = [0.5 + rand(Nmax,1), randn(Nmax,1)];
 for n = [Nmax 5 3]
@@ -36,3 +37,4 @@ for n = [Nmax 5 3]
         n, abs(J.f - Jn), max(abs(gJ(1:n) - gn)), ...
         max([abs(gJ(n+1:end)); 0]), max([abs(v.f(n+1:end)); 0]));
 end
+rmpath(fullfile(pwd,'generated'));

@@ -30,7 +30,8 @@ end
 % NOTE: fmincon is given the function basic_conswrap which builds the
 % Jacobian by calling basic_cons_z
 gz = adigatorCreateDerivInput([length(guess), 1],'z');
-adigator('basic_cons',{gz,probinfo},'basic_cons_z',adigatorOptions('overwrite',1));
+adigator('basic_cons',{gz,probinfo},'basic_cons_z',adigatorOptions('overwrite',1,'path','generated'));
+addpath(fullfile(pwd,'generated'));
 % Also note, we must create a new derivative file each time we change
 % meshes
 
@@ -66,6 +67,8 @@ xlabel('time')
 ylabel('control')
 end
 
+
+rmpath(fullfile(pwd,'generated'));
 
 fprintf(['Total Time Supplying First Derivatives (non-vectorized): ',...
   num2str(sum(time)),'\n']);

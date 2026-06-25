@@ -15,12 +15,14 @@ x = rand(n,1);
 v = rand(n,1);
 opts.overwrite = 1;
 opts.echo = 0;
+opts.path = 'generated';
 
 % ------------------------- 1st Deriv of f wrt x ------------------------ %
 % Want p = Jf(x)*v - can make function which computes Jf(x)
 tic
 x_x = adigatorCreateDerivInput([n 1],'x');
 adigator('arrow',{x_x},'arrow_x',opts);
+addpath(fullfile(pwd,'generated'));
 jac.gen = toc;
 
 x1.f = x;
@@ -103,3 +105,5 @@ display('Times for Computing Hf(x)*v (Hessian Vector Product)')
 disp(hesv)
 display('Max Pct Diff of H*v both ways')
 disp(err2)
+
+rmpath(fullfile(pwd,'generated'));

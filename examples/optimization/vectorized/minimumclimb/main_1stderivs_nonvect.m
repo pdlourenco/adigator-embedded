@@ -44,7 +44,8 @@ gX = adigatorCreateDerivInput([N n],...
 gU = adigatorCreateDerivInput([N m],...
   struct('vodname','y','vodsize',[(m+n)*N 1],...
   'nzlocs',[(1:m*N).' probinfo.uind(:)]));
-adigator('dynamics',{gX,gU,probinfo},'dynamics_y',adigatorOptions('overwrite',1));
+adigator('dynamics',{gX,gU,probinfo},'dynamics_y',adigatorOptions('overwrite',1,'path','generated'));
+addpath(fullfile(pwd,'generated'));
 % Also note, we must create a new derivative file each time we change
 % meshes
 
@@ -84,6 +85,8 @@ ylabel('control')
 end
 end
 
+
+rmpath(fullfile(pwd,'generated'));
 
 fprintf(['Total Time Supplying First Derivatives (non-vectorized): ',...
   num2str(sum(time)),'\n']);

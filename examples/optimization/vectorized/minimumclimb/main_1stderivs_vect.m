@@ -33,7 +33,8 @@ gU = adigatorCreateDerivInput([Inf m],...
   struct('vodname','Y','vodsize',[Inf (m+n)],...
   'nzlocs',[(1:m).' (n+1:m+n).']));
 gOut = adigator('dynamics',{gX,gU,probinfo},'dynamics_yvect',...
-  adigatorOptions('overwrite',1));
+  adigatorOptions('overwrite',1,'path','generated'));
+addpath(fullfile(pwd,'generated'));
 % We can now extract sparsity pattern of dF(t)/dy(t)
 iFy = gOut{1}.deriv.nzlocs(:,1);
 jFy = gOut{1}.deriv.nzlocs(:,2);
@@ -91,6 +92,8 @@ ylabel('control')
 end
 end
 
+
+rmpath(fullfile(pwd,'generated'));
 
 fprintf(['Total Time Supplying First Derivatives (vectorized): ',...
   num2str(sum(time)),'\n']);

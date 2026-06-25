@@ -30,7 +30,7 @@ Href = Q;                      % hess
 Fref = 0.5*(x.'*(Q*x)) + c.'*x;
 
 % --------------------- 1) flat struct, Hessian, classic --------------- %
-o = opts; o.path = 'test_flat';
+o = opts; o.path = 'generated/flat';
 gin.x = adigatorCreateDerivInput([n 1],'x');
 gin.Q = adigatorCreateAuxInput([n n]);
 gin.c = adigatorCreateAuxInput([n 1]);
@@ -40,7 +40,7 @@ in.x = x; in.Q = Q; in.c = c;
 checkder('flat classic (in.x)', F,G,H, Fref,Gref,Href);
 
 % -------------------- 2) nested struct, Hessian, classic -------------- %
-o = opts; o.path = 'test_nested';
+o = opts; o.path = 'generated/nested';
 gin2.vars.x = adigatorCreateDerivInput([n 1],'x');
 gin2.par.Q  = adigatorCreateAuxInput([n n]);
 gin2.par.c  = adigatorCreateAuxInput([n 1]);
@@ -52,7 +52,7 @@ checkder('nested classic (in.vars.x)', F2,G2,H2, Fref,Gref,Href);
 % ----------------- 3) Jacobian of a vector function, classic ---------- %
 m = 3;
 A = randn(m,n); b = randn(m,1);
-o = opts; o.path = 'test_jac';
+o = opts; o.path = 'generated/jac';
 ginj.x = adigatorCreateDerivInput([n 1],'x');
 ginj.A = adigatorCreateAuxInput([m n]);
 ginj.b = adigatorCreateAuxInput([m 1]);
@@ -70,7 +70,7 @@ assert(jerr < 1e-10 && yerr < 1e-10, 'structinput: Jacobian case disagrees with 
 % --------------- 4) flat struct, Hessian, embedded inline ('i') ------- %
 % Same struct objective, generated through the embedded (inline) pipeline,
 % confirming struct inputs survive prune/patch/inline and round-trip.
-o = opts; o.path = 'test_embed_i'; o.embed_mode = 'i';
+o = opts; o.path = 'generated/embed_i'; o.embed_mode = 'i';
 gine.x = adigatorCreateDerivInput([n 1],'x');
 gine.Q = adigatorCreateAuxInput([n n]);
 gine.c = adigatorCreateAuxInput([n 1]);

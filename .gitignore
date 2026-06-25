@@ -5,3 +5,6 @@
 *_Jac.m
 adigatortempfunc*.m
 *.asv
+
+# Per-example scratch dirs for adigator-generated example output (issue #67).
+examples/**/generated/

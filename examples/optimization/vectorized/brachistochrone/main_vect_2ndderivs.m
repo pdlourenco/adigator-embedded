@@ -27,7 +27,8 @@ gX = adigatorCreateDerivInput([Inf,3],struct('vodname','Y','vodsize',[Inf,4],...
 gU = adigatorCreateDerivInput([Inf,1],struct('vodname','Y','vodsize',[Inf,4],...
   'nzlocs',[1 4]));
 % Create Vectorized Dynamics 1st Derivative File
-dyn_out1 = adigator('dynamics',{gX,gU},'dynamics_Y',adigatorOptions('overwrite',1));
+dyn_out1 = adigator('dynamics',{gX,gU},'dynamics_Y',adigatorOptions('overwrite',1,'path','generated'));
+addpath(fullfile(pwd,'generated'));
 % Can extract the sparsity pattern of dF(t)/dY(t) from dyn_out
 I1 = dyn_out1{1}.deriv.nzlocs(:,1); J1 = dyn_out1{1}.deriv.nzlocs(:,2);
 time(1) = toc;
@@ -38,7 +39,7 @@ gXs.f = gX; gUs.f = gU;
 gXs.dY = adigatorCreateAuxInput([Inf 3]);
 gUs.dY = adigatorCreateAuxInput([Inf 1]);
 dyn_out2 = adigator('dynamics_Y',{gXs,gUs},'dynamics_YY',...
-  adigatorOptions('overwrite',1,'comments',0));
+  adigatorOptions('overwrite',1,'comments',0,'path','generated'));
 
 % Now, we will need the sparsity pattern of F.dY wrt Y(t)
 % NOTE: this is a different sparsity pattern than than d^2F/dY^2, it is the
@@ -106,7 +107,7 @@ gtf = adigatorCreateDerivInput([1 1],...
   'nzlocs',[1 4*N+1]));
 % Call adigator
 Coutput = adigator('vect_cons',{gx,gf,gtf,probinfo},'vect_cons_z',...
-  adigatorOptions('overwrite',1));
+  adigatorOptions('overwrite',1,'path','generated'));
 % We create a wrapper for this file in vect_conswrap.m
 
 % ---------- Take Derivative of Lagrangian Gradient File ---------------- %
@@ -123,7 +124,7 @@ gdtf = 1; % dtf has no derivative wrt z
 glambda = adigatorCreateAuxInput(Coutput{1}.func.size);
 % Call adigator
 gH2 = adigator('vect_laggrad',{gx,gdx,gf,gdf,gtf,gdtf,glambda,probinfo},...
-  'vect_laggrad_z',adigatorOptions('overwrite',1));
+  'vect_laggrad_z',adigatorOptions('overwrite',1,'path','generated'));
 
 % ------------------------ Define Hessian File -------------------------- %
 % We wrote a wrapper for vect_laggrad_z and called it vect_laggradwrap.m -
@@ -166,6 +167,8 @@ plot(t,U,'-o');
 xlabel('time')
 ylabel('control')
 end
+
+rmpath(fullfile(pwd,'generated'));
 
 fprintf(['Total Time Supplying Second Derivatives (vectorized): ',...
   num2str(sum(time)),'\n']);
