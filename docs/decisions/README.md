@@ -79,3 +79,7 @@ Contracts section (binding conventions), or for purely mechanical choices
 - [ADR-0013](ADR-0013-fork-versioning-over-upstream.md) — Release from this repo
   (fork-versioning) rather than upstreaming the dormant Algorithm-984 lineage;
   keep the B-series fixes cherry-pick-ready (issue #18 item 3).
+- [ADR-0014](ADR-0014-matlabtest-codegen-equivalence.md) — Adopt MATLAB Test
+  `matlabtest.coder.TestCase` codegen-equivalence into the V&V suite: re-base
+  `SCodegenTest` (hand-rolled fallback kept) and add a sampled, skip-clean
+  `oracleCodegenEquivalence` to the #38 campaign (issue #64).

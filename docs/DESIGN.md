@@ -4,8 +4,8 @@ The *rationale* half of the documentation set: why the tool is shaped the way
 it is. The binding output **contracts** are in [§Contracts](#contracts) below;
 the requirement/test discipline is in [`CI_PLAN.md`](CI_PLAN.md); the bug and
 optimization analysis is in [`ANALYSIS.md`](ANALYSIS.md). For the user-facing
-manual see [`ADiGatorUserGuide.pdf`](ADiGatorUserGuide.pdf) and the TOMS/CALGO
-papers in this directory.
+manual see [`userguide/ADiGatorUserGuide.pdf`](userguide/ADiGatorUserGuide.pdf)
+and the TOMS/CALGO papers in [`papers/`](papers/).
 
 > Positioning: this file answers *"why is it shaped this way?"*. It is **not**
 > a contract — when it touches a binding surface it links to [§Contracts](#contracts)
