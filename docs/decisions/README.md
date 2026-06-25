@@ -83,3 +83,8 @@ Contracts section (binding conventions), or for purely mechanical choices
   `matlabtest.coder.TestCase` codegen-equivalence into the V&V suite: re-base
   `SCodegenTest` (hand-rolled fallback kept) and add a sampled, skip-clean
   `oracleCodegenEquivalence` to the #38 campaign (issue #64).
+- [ADR-0015](ADR-0015-cada-benign-read-global-hygiene.md) — `@cada` benign read
+  methods (`subsref` `.`-access, `size`/`length`, `isempty`) declare the
+  transformation globals only on the paths that use them, so reading a returned
+  cada object no longer re-registers an empty `ADIGATOR`; the B16 hygiene asserts
+  tighten to strict-absent (R11, issue #54).

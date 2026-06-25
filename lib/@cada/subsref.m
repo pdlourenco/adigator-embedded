@@ -11,6 +11,28 @@ function y = subsref(x,s)
 %              column window on the internal 2D fold, supporting loop
 %              counters in any trailing position (roadmap R2, issue #11
 %              Level 2, PR #14).
+%   2026-06    Benign field reads served before the `global ADIGATOR`
+%              declaration so that touching a returned cada object after a
+%              transformation has finished does not re-register an empty
+%              ADIGATOR (R11, issue #54). A leading '.' subscript is always a
+%              benign property read (.id/.func/.deriv) - it returns a plain
+%              value (numeric/struct), so any further subscripts in the chain
+%              (e.g. '.deriv.nzlocs(:,2)' or '.func.size') apply to that value
+%              by the builtin and never need the transformation global. Only
+%              the overloaded () reference path (user-code indexing during a
+%              transformation) needs the global and falls through below.
+if strcmp(s(1).type,'.')
+  switch s(1).subs
+    case 'id',    y = x.id;
+    case 'func',  y = x.func;
+    case 'deriv', y = x.deriv;
+    otherwise,    error('invalid subscript reference for CADA')
+  end
+  if numel(s) > 1
+    y = subsref(y, s(2:end));   % builtin subsref on the now non-cada value
+  end
+  return
+end
 global ADIGATOR
 ssize = length(s);
 for scount = 1:ssize;

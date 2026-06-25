@@ -97,13 +97,13 @@ version = '1.5'; % v1.5
 %     callback below must NOT re-declare the transformation globals -- an
 %     onCleanup that re-declares a still-live global re-registers it empty -- so
 %     it touches only handles/paths.)
-%     NOTE: after adigator returns, a caller that reads one of the returned cada
-%     objects (e.g. adigatorGenJacFile reading adiout.func.size) re-registers an
-%     EMPTY `ADIGATOR` global, because every @cada method opens with `global
-%     ADIGATOR`. That empty name is outside adigator's control and carries no
-%     transformation state, so it is benign for B16; the hygiene pins tolerate a
-%     present-but-empty stray and fail only on a populated one. The @cada-layer
-%     fix that would stop the empty re-registration is tracked in issue #54.
+%     NOTE: after adigator returns, a caller reading one of the returned cada
+%     objects (e.g. adigatorGenJacFile reading adiout.func.size) no longer
+%     re-registers an empty `ADIGATOR`. The @cada read paths (subsref's '.'
+%     access, size/length, isempty) declare the transformation globals only
+%     where they use them (R11, issue #54, ADR-0015), so a successful transform
+%     leaves NO transformation global -- the hygiene pins assert strict
+%     name-absence.
 %   * The TEMP DIR and FILE HANDLES are released by an onCleanup registered once
 %     the temp dir is known (below). It captures what it needs BY VALUE and
 %     declares no global, so it fires on every exit without resurrecting the

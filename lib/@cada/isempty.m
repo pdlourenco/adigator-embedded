@@ -1,13 +1,18 @@
 function y = isempty(x)
 % CADA overloaded ISEMPTY function.
-global ADIGATOR
-Dbstuff = dbstack; 
+%
+% R11 (issue #54): the transformation global is declared only on the
+% generated-code (adigatortempfunc) path that uses it, so an external isempty()
+% of a returned cada object takes the benign 'y = false' branch below without
+% re-registering an empty ADIGATOR.
+Dbstuff = dbstack;
 if length(Dbstuff)>1
   CallingFile = Dbstuff(2).file;
 else
   CallingFile = [];
 end
 if length(CallingFile) > 12 && ~isempty(strfind(CallingFile,'adigatortempfunc'))
+  global ADIGATOR %#ok<GVMIS>
 %   if ADIGATOR.FORINFO.FLAG
 %     keyboard
 %     y = logical(length(x));
