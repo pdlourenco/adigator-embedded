@@ -26,7 +26,8 @@ gX = adigatorCreateDerivInput([Inf,3],struct('vodname','Y','vodsize',[Inf,4],...
 gU = adigatorCreateDerivInput([Inf,1],struct('vodname','Y','vodsize',[Inf,4],...
   'nzlocs',[1 4]));
 % Create Dynamics Vectorized Derivative File
-dyn_out = adigator('dynamics',{gX,gU},'dynamics_Y',adigatorOptions('overwrite',1));
+dyn_out = adigator('dynamics',{gX,gU},'dynamics_Y',adigatorOptions('overwrite',1,'path','generated'));
+addpath(fullfile(pwd,'generated'));
 % Can extract the sparsity pattern of JF(Y(t)) from dyn_out
 I = dyn_out{1}.deriv.nzlocs(:,1); J = dyn_out{1}.deriv.nzlocs(:,2);
 time(1) = toc;
@@ -76,7 +77,7 @@ gtf = adigatorCreateDerivInput([1 1],...
   struct('vodname','z','vodsize',[length(guess),1],...
   'nzlocs',[1 4*N+1]));
 % Call adigator
-adigator('vect_cons',{gx,gf,gtf,probinfo},'vect_cons_z',adigatorOptions('overwrite',1));
+adigator('vect_cons',{gx,gf,gtf,probinfo},'vect_cons_z',adigatorOptions('overwrite',1,'path','generated'));
 % We create a wrapper for this file in vect_conswrap.m
 % --------------------------- Call fmincon ------------------------------ %
 if solveflag
@@ -110,6 +111,8 @@ xlabel('time')
 ylabel('control')
 end
 
+
+rmpath(fullfile(pwd,'generated'));
 
 fprintf(['Total Time Supplying First Derivatives (vectorized): ',...
   num2str(sum(time)),'\n']);

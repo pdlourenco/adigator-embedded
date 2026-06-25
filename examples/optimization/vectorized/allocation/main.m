@@ -19,7 +19,8 @@ tic
 gU = adigatorCreateDerivInput([Inf 1], ...
     struct('vodname','U','vodsize',[Inf 1],'nzlocs',[1 1]));
 gP = adigatorCreateAuxInput([Inf 3]);
-adigator('alloc_terms',{gU,gP},'alloc_terms_dU',adigatorOptions('overwrite',1));
+adigator('alloc_terms',{gU,gP},'alloc_terms_dU',adigatorOptions('overwrite',1,'path','generated'));
+addpath(fullfile(pwd,'generated'));
 gentime = toc;
 
 % ----- evaluate and assemble for several (N, K) pairs ----------------------
@@ -51,3 +52,4 @@ for s = 1:size(sizes,1)
         'max grad err %8.3g, max Jacobian err %8.3g\n'], N, K, graderr, jacerr);
 end
 fprintf('Vectorized derivative file generation time (once, for all sizes): %.3g s\n', gentime);
+rmpath(fullfile(pwd,'generated'));

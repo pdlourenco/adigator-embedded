@@ -9,7 +9,7 @@ n = 2^5;
 
 opts = adigatorOptions();
 
-opts.path = 'test';
+opts.path = 'generated';
 opts.overwrite = 1;
 opts.embed_mode = 'l';
 

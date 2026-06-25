@@ -40,14 +40,15 @@ end
 % NOTE: fmincon is given the function basic_conswrap which builds the
 % Jacobian by calling basic_cons_z
 gz = adigatorCreateDerivInput([length(guess), 1],'z');
-outputs = adigator('basic_cons',{gz,probinfo},'basic_cons_z',adigatorOptions('overwrite',1));
+outputs = adigator('basic_cons',{gz,probinfo},'basic_cons_z',adigatorOptions('overwrite',1,'path','generated'));
+addpath(fullfile(pwd,'generated'));
 
 % -------------- Create Lagrangian Gradient Derivative File ------------- %
 % NOTE: fmincon is given the function basic_laggradwrap which builds the
 % Lagrangian Hessian by calling basic_laggrad_z
 glambda = adigatorCreateAuxInput(outputs{2}.func.size);
 gH1 = adigator('basic_laggrad',{gz,glambda,probinfo},'basic_laggrad_z',...
-  adigatorOptions('overwrite',1,'comments',0));
+  adigatorOptions('overwrite',1,'comments',0,'path','generated'));
 
 % --------------------------- Call fmincon ------------------------------ %
 if solveflag
@@ -82,6 +83,8 @@ plot(t,U,'-o');
 xlabel('time')
 ylabel('control')
 end
+
+rmpath(fullfile(pwd,'generated'));
 
 fprintf(['Total Time Supplying Second Derivatives (non-vectorized): ',...
   num2str(sum(time)),'\n']);

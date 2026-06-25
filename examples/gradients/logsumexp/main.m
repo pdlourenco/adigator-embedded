@@ -12,7 +12,9 @@ n = 50;
 
 gx = adigatorCreateDerivInput([n 1],'x');
 gw = adigatorCreateAuxInput([n 1]);
-adigatorGenRevGradFile('lse_cost',{gx,gw},adigatorOptions('overwrite',1));
+adigatorGenRevGradFile('lse_cost',{gx,gw}, ...
+    adigatorOptions('overwrite',1,'path','generated'));
+addpath(fullfile(pwd,'generated'));   % generated files land in ./generated
 
 x = randn(n,1);
 w = 0.5 + rand(n,1);
@@ -29,3 +31,4 @@ end
 fprintf('value error                 : %8.3g\n', abs(y - lse_cost(x,w)));
 fprintf('max |g - g_analytic|        : %8.3g\n', max(abs(g - ga)));
 fprintf('max |g - g_finite_diff|     : %8.3g\n', max(abs(g - gfd)));
+rmpath(fullfile(pwd,'generated'));

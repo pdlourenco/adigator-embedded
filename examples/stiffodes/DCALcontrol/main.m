@@ -32,10 +32,12 @@ end
 % Need 3rd time derivative of qd
 fprintf('\nGenerating third time derivative of qd..\n');
 opts = adigatorOptions('overwrite',1,'echo',0);
+opts.path = 'generated';
 opts2 = opts;
 opts2.comments = 0;
 t = adigatorCreateDerivInput([1 1],'t');
 adigator('getqd',{t},'getqd_dt',opts);
+addpath(fullfile(pwd,'generated'));
 t = struct('f',t,'dt',1);
 adigator('getqd_dt',{t},'getqd_dtdt',opts2);
 adigator('getqd_dtdt',{t},'getqd_dtdtdt',opts2);
@@ -197,6 +199,8 @@ xlabel('time (s)');
 ylabel('adaptive estimates');
 legend('p_2','p_2 est','p_3','p_3 est','f_d_2','f_d_2 est','Location','Best');
 end
+
+rmpath(fullfile(pwd,'generated'));
 
 end
 

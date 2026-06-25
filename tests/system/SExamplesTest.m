@@ -20,6 +20,7 @@ classdef SExamplesTest < matlab.unittest.TestCase
             tc.applyFixture(PathFixture(fullfile(root,'lib','cadaUtils')));
             tc.applyFixture(PathFixture(fullfile(root,'util')));
             tc.applyFixture(PathFixture(fullfile(root,'embedding')));
+            tc.applyFixture(PathFixture(fullfile(root,'tests','helpers')));
         end
     end
 
@@ -97,6 +98,58 @@ classdef SExamplesTest < matlab.unittest.TestCase
             % self-skips when MATLAB Coder is absent. Completing without
             % error is the assertion.
             runExample(tc, fullfile('examples','jacobians','structinput'));
+        end
+
+        function discoveryCoversEveryExample(tc)
+            % Completeness guard (issue #69): the SAME mechanical discovery that
+            % drives examples/runAllExamples (discoverExamples) must agree with
+            % this test's bookkeeping, so a newly added examples/**/main*.m
+            % cannot be silently un-run. Every discovered entry is either CURATED
+            % here (a numeric-assertion method above) or explicitly acknowledged
+            % as SMOKE-only (exercised by the runAllExamples sweep). The check is
+            % bidirectional: no stale acknowledgment (an id that no longer
+            % exists) and no un-acknowledged discovery (a new example missing
+            % from both lists).
+            curated = [ ...
+                "jacobians/arrowhead/main"
+                "jacobians/polydatafit/main"
+                "jacobians/structinput/main"
+                "optimization/pipg/main"
+                "stiffodes/brusselator/main"];
+            smokeOnly = [ ...
+                "gradients/logsumexp/main"
+                "hessians/logsumexp/main"
+                "jachesvecprods/main"
+                "jacobians/loopbound/main"
+                "jacobians/ndparam/main"
+                "optimization/fminconEx/main"
+                "optimization/fminuncEx/main"
+                "optimization/fsolveEx/main"
+                "optimization/ipoptEx/gl2main"
+                "optimization/vectorized/allocation/main"
+                "optimization/vectorized/brachistochrone/main_basic_1stderivs"
+                "optimization/vectorized/brachistochrone/main_basic_2ndderivs"
+                "optimization/vectorized/brachistochrone/main_noderivs"
+                "optimization/vectorized/brachistochrone/main_vect_1stderivs"
+                "optimization/vectorized/brachistochrone/main_vect_2ndderivs"
+                "optimization/vectorized/minimumclimb/main_1stderivs_nonvect"
+                "optimization/vectorized/minimumclimb/main_1stderivs_vect"
+                "optimization/vectorized/minimumclimb/main_2ndderivs_nonvect"
+                "optimization/vectorized/minimumclimb/main_2ndderivs_vect"
+                "stiffodes/DCALcontrol/main"
+                "stiffodes/burgers/main"];
+            ack = [curated; smokeOnly];
+            ids = string({discoverExamples().id}).';
+
+            for a = ack.'
+                tc.verifyTrue(any(ids == a), ...
+                    "acknowledged example no longer discovered (rename/removal?): " + a);
+            end
+            for d = ids.'
+                tc.verifyTrue(any(ack == d), ...
+                    "discovered example is neither curated nor smoke-acknowledged " + ...
+                    "in SExamplesTest - add it to one list: " + d);
+            end
         end
     end
 end

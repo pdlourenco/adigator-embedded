@@ -12,7 +12,7 @@ x = rand(N,1);
 
 opts = adigatorOptions();
 
-opts.path = 'test';
+opts.path = 'generated';
 opts.overwrite = 1;
 
 gx = adigatorCreateDerivInput([N, 1],'x'); % Create Deriv Input
