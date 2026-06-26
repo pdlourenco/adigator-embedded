@@ -123,7 +123,7 @@ classdef IOutputModesTest < matlab.unittest.TestCase
             vset = randn(3,3);
             for trial = 1:3
                 v = vset(:,trial);
-                [yv,jtv] = om_jtv_JtV(xv,A,c,v);
+                [jtv,yv] = om_jtv_JtV(xv,A,c,v);   % C-6: [Jtv, Fun]
                 tc.verifyEqual(yv, sin(A*xv)+c.*xv, ...
                     'AbsTol', 1e-12, 'RelTol', 1e-12);
                 tc.verifyEqual(jtv, JM.'*v, 'AbsTol', 1e-12, 'RelTol', 1e-12);

@@ -6,10 +6,11 @@ function output = adigatorGenJtVFile(UserFun,UserFunInputs,varargin)
 %
 % Generates <UserFun>_JtV.m with the signature
 %
-%   [y, jtv] = <UserFun>_JtV(<original inputs...>, v)
+%   [Jtv, Fun] = <UserFun>_JtV(<original inputs...>, v)
 %
-% where y = f(x,...) is the (vector) output of the user function and
-% jtv = J(x).'*v(:) is the transposed-Jacobian-vector product - the
+% (DESIGN Contract C-6: derivative first, value last) where Fun = f(x,...)
+% is the (vector) output of the user function and
+% Jtv = J(x).'*v(:) is the transposed-Jacobian-vector product - the
 % quantity gradient-based embedded solvers consume directly (ANALYSIS.md
 % 2.3, roadmap R5). v is a RUNTIME input the size of y: one generated
 % file serves every v, and the cost of jtv is one forward plus one

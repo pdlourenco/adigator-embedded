@@ -41,7 +41,7 @@ classdef IRevGradTest < matlab.unittest.TestCase
 
             rng(1);
             x = randn(nx,1); w = 0.5 + rand(nx,1);
-            [y,g] = rg_lse_RGrd(x,w);
+            [g,y] = rg_lse_RGrd(x,w);   % C-6: [Grd, Fun]
             tc.verifyEqual(y, log(sum(exp(w.*x))), ...
                 'AbsTol', 1e-14, 'RelTol', 1e-14);
             ga = w.*exp(w.*x)/sum(exp(w.*x));
@@ -66,7 +66,7 @@ classdef IRevGradTest < matlab.unittest.TestCase
 
             rng(2);
             x = randn(nx,1); A = randn(m,nx); b = randn(m,1);
-            [y,g] = rg_ls_RGrd(x,A,b);
+            [g,y] = rg_ls_RGrd(x,A,b);   % C-6: [Grd, Fun]
             r = A*x - b;
             tc.verifyEqual(y, sum(r.^2) + 0.5*sum(x.^2), ...
                 'AbsTol', 1e-13, 'RelTol', 1e-13);
@@ -92,7 +92,7 @@ classdef IRevGradTest < matlab.unittest.TestCase
 
             rng(3);
             x = randn(nx,1); cc = 0.5 + rand(2,1);
-            [y,g] = rg_struct_RGrd(x,cc);
+            [g,y] = rg_struct_RGrd(x,cc);   % C-6: [Grd, Fun]
             tc.verifyEqual(y, rg_struct(x,cc), 'AbsTol', 1e-13, 'RelTol', 1e-13);
             tc.verifyEqual(g, fdgrad(@(z) rg_struct(z,cc), x), ...
                 'AbsTol', 1e-5, 'RelTol', 1e-5);
@@ -118,7 +118,7 @@ classdef IRevGradTest < matlab.unittest.TestCase
 
             rng(4);
             x = 0.5 + rand(nx,1);
-            [y,g] = rg_prod_RGrd(x);
+            [g,y] = rg_prod_RGrd(x);   % C-6: [Grd, Fun]
             tc.verifyEqual(y, prod(x) + sum(x), 'AbsTol', 1e-13, 'RelTol', 1e-13);
             tc.verifyEqual(g, prod(x)./x + 1, 'AbsTol', 1e-12, 'RelTol', 1e-12);
         end

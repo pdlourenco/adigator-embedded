@@ -196,20 +196,21 @@ generator, including the matrix-free products as they land:
 - It is resolved **uniformly** by `adigatorResolveDerLevels(der_levels, maxlevel,
   caller)`; no generator may reimplement the policy.
 
-**Known deviation:** the standalone reverse prototype deviates on **both name
-and order** — it emits the value **first** and names outputs off the user's
-output variable rather than canonically: `adigatorGenRevGradFile` →
-`[<out>, <out>_grad]`, `adigatorGenJtVFile` → `[<out>, jtv]`. This predates the
-contract; R16 brings the reverse path into full compliance — canonical names and
-order, `[Grd, Fun]` / `[Jtv, Fun]`, honouring `DER_LEVELS` — when reverse gains
-embed-pipeline parity
+**Compliance.** The forward generators (`adigatorGenJacFile`,
+`adigatorGenHesFile`) and the reverse generators (`adigatorGenRevGradFile` →
+`[Grd, Fun]`, `adigatorGenJtVFile` → `[Jtv, Fun]`) all follow this contract. The
+reverse generators were value-first and named off the user output variable
+(`[<out>, <out>_grad]` / `[<out>, jtv]`) before **R16a**, which flipped them to
+the canonical names + order
 ([ADR-0016](decisions/ADR-0016-matrix-free-products-efficiency-path.md)).
 
 *Verified by:* `tests/integration/ILevelSelectTest.m` (`CI_PLAN.md` TS-I-05,
 `DER_LEVELS` selection across generators); the order is exercised by every test
-that consumes the wrappers positionally (`IShapeMatrixTest`, `IEmbedModesTest`).
-Rationale in [ADR-0005](decisions/ADR-0005-der-levels-output-selection.md)
-(roadmap R7a, issue #21). R16 adds a reverse cross-mode order check.
+that consumes the wrappers positionally — `IShapeMatrixTest`, `IEmbedModesTest`
+(forward), and `IRevGradTest`, `IOutputModesTest` (reverse `[Grd, Fun]` /
+`[Jtv, Fun]`). Rationale in
+[ADR-0005](decisions/ADR-0005-der-levels-output-selection.md) (roadmap R7a,
+issue #21).
 
 ## Constraints
 

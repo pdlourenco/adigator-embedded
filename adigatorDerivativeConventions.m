@@ -80,7 +80,6 @@
 % generators, resolved uniformly by adigatorResolveDerLevels (roadmap R7a,
 % issue #21).
 %
-% Deviation: the standalone reverse prototype deviates on both name and order -
-% value FIRST, names taken from the user output variable (adigatorGenRevGradFile
-% -> [<out>, <out>_grad]; adigatorGenJtVFile -> [<out>, jtv]); R16 aligns it to
-% the canonical names + order above (docs/decisions/ADR-0016).
+% The reverse generators comply too: adigatorGenRevGradFile -> [Grd, Fun],
+% adigatorGenJtVFile -> [Jtv, Fun]. (They were value-first and named off the
+% user output variable before R16a, which flipped them; docs/decisions/ADR-0016.)
