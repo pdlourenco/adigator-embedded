@@ -10,8 +10,9 @@ matrix algebra), [#73](https://github.com/pdlourenco/adigator-embedded/issues/73
 (all-axes showcase + comparison to C), and
 [#64](https://github.com/pdlourenco/adigator-embedded/issues/64) /
 [ADR-0014](ADR-0014-matlabtest-codegen-equivalence.md) (codegen-equivalence
-infrastructure). **Codifies the wrapper-output convention** — output order and
-`DER_LEVELS` level selection — as DESIGN §Contracts **C-6** and in
+infrastructure). **Codifies the wrapper-output convention** — canonical output
+names, output order, and `DER_LEVELS` level selection — as DESIGN §Contracts
+**C-6** and in
 `adigatorDerivativeConventions.m` (it was previously documented only in the
 generator headers): see §Decision item 5. The forward generators already comply;
 the standalone reverse prototype deviates (value-first) and is brought into
@@ -86,27 +87,31 @@ The full evidence table is in ANALYSIS §3.5.
    one track: `#56` sets the direction, `#73` builds the showcase/benchmark,
    `#64` supplies the codegen-equivalence machinery.
 
-5. **Derivative output order — codified as a contract; the new generators follow
-   it.** The wrappers are derivative(s)-highest-order-first with the function
-   value `Fun` last, and `DER_LEVELS` selects which levels appear. This was
-   documented only in the generator headers; this PR promotes it to **DESIGN
-   §Contracts C-6** and `adigatorDerivativeConventions.m`. It applies to **all**
-   derivative objects (not just the Hessian): Jacobian `[Jac, Fun]`, gradient
-   `[Grd, Fun]`, Hessian `[Hes, Grd, Fun]`, and `DER_LEVELS` trims the lower-order
-   companions for every one of them — resolved uniformly by
-   `adigatorResolveDerLevels` (e.g. `der_levels = [1 2]` on a Hessian ⇒
-   `[Hes, Grd]`; `[1]` on a Jacobian ⇒ `[Jac]`). Therefore:
+5. **Wrapper outputs — names, order, and level selection codified as a contract;
+   the new generators follow it.** Wrappers use canonical output **names** (`Fun`,
+   `Grd`, `Jac`, `Hes`, and products `Jv`, `Jtv`, `Hv`), uniform across every
+   generator; outputs are derivative(s)-highest-order-first with `Fun` last; and
+   `DER_LEVELS` selects which levels appear. This was documented only in the
+   generator headers; this PR promotes it to **DESIGN §Contracts C-6** and
+   `adigatorDerivativeConventions.m`. It applies to **all** derivative objects
+   (not just the Hessian): Jacobian `[Jac, Fun]`, gradient `[Grd, Fun]`, Hessian
+   `[Hes, Grd, Fun]`, and `DER_LEVELS` trims the lower-order companions for every
+   one of them — resolved uniformly by `adigatorResolveDerLevels` (e.g.
+   `der_levels = [1 2]` on a Hessian ⇒ `[Hes, Grd]`; `[1]` on a Jacobian ⇒
+   `[Jac]`). Therefore:
    - **`adigatorGenJvFile`** → `[Jv, Fun]` (mirrors `[Jac, Fun]`).
    - **`adigatorGenHvpFile`** → `[Hv, Grd, Fun]` (mirrors `[Hes, Grd, Fun]`),
      honouring `der_levels` to trim outputs.
-   - The R4/R5 prototype generators currently deviate — `_RGrd` emits
-     `[y, grad]` and `_JtV` emits `[y, jtv]` (value **first**). **Align them to
-     the convention** (`[Grd, Fun]`, `[Jtv, Fun]`) when reverse gains embed
-     parity (decision 3): the embedded reverse wrapper is emitted by the shared
-     wrapper generator and so is `[Grd, Fun]` by construction; the standalone
-     prototype signatures are flipped to match, updating `IRevGradTest` and the
-     `adigatorGenJtVFile` doc. Recorded as a deliberate (small) breaking change
-     to the prototype, for a uniform cross-mode signature that the comparison
+   - The R4/R5 prototype generators currently deviate on **both name and order** —
+     `_RGrd` emits `[<out>, <out>_grad]` and `_JtV` emits `[<out>, jtv]` (value
+     **first**, names off the user output variable). **Align them to the
+     convention** (canonical names + order: `[Grd, Fun]`, `[Jtv, Fun]`) when
+     reverse gains embed parity (decision 3): the embedded reverse wrapper is
+     emitted by the shared wrapper generator and so is `[Grd, Fun]` by
+     construction; the standalone prototype signatures are flipped to match,
+     updating `IRevGradTest` and the `adigatorGenJtVFile` doc. Recorded as a
+     deliberate (small) breaking change to the prototype, for a uniform
+     cross-mode signature that the comparison
      harness depends on.
 
 6. **Phasing is recorded as roadmap rows** (R12 reframed + R16–R19) so progress

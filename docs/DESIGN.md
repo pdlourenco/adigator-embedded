@@ -149,17 +149,34 @@ rather than returning a wrong derivative.
 *Verified by:* `tests/unit/UNormTest.m`;
 [ADR-0002](decisions/ADR-0002-norm-matrix-induced-errors.md).
 
-### C-6 — Wrapper outputs: order and level selection
+### C-6 — Wrapper outputs: names, order, and level selection
 
-This contract governs *what a generated derivative wrapper returns and in what
-order* — one surface with two facets (the shapes themselves are C-1).
+This contract governs *what a generated derivative wrapper returns, named how,
+and in what order* — one surface with three facets (the shapes themselves are
+C-1).
+
+**Names.** Each output uses a **canonical variable name, uniform across every
+generator** (forward, reverse, and the matrix-free products), so the same object
+is always called the same thing:
+
+| object | name | | object | name |
+|---|---|---|---|---|
+| function value | `Fun` | | J·v (R18) | `Jv` |
+| gradient | `Grd` | | Jᵀ·v | `Jtv` |
+| Jacobian | `Jac` | | H·v (R18) | `Hv` |
+| Hessian | `Hes` | | | |
+
+(Three-letter capitalised abbreviations for the assembled objects; the product
+names follow the same capitalised style. These names are positional in MATLAB —
+a caller may rebind them — but the *generated signature* uses the canonical name
+so docs, the comparison harness, and cross-mode reading stay consistent.)
 
 **Order.** Outputs are **highest-derivative-order first, with the function value
 `Fun` last**, for every derivative object:
 
 - Jacobian: `[Jac, Fun]`  (gradient of a scalar is the `m = 1` Jacobian: `[Grd, Fun]`)
 - Hessian: `[Hes, Grd, Fun]`
-- Matrix-free products (R18): J·v → `[Jv, Fun]`, H·v → `[Hv, Grd, Fun]`
+- Matrix-free products (R18): J·v → `[Jv, Fun]`, H·v → `[Hv, Grd, Fun]`, Jᵀ·v → `[Jtv, Fun]`
 
 **Level selection (`DER_LEVELS`).** The `DER_LEVELS` option selects *which* of
 those outputs a wrapper returns. The binding invariants — identical for **every**
@@ -179,10 +196,12 @@ generator, including the matrix-free products as they land:
 - It is resolved **uniformly** by `adigatorResolveDerLevels(der_levels, maxlevel,
   caller)`; no generator may reimplement the policy.
 
-**Known deviation:** the standalone reverse prototype emits the value **first** —
-`adigatorGenRevGradFile` → `[y, grad]`, `adigatorGenJtVFile` → `[y, jtv]`. This
-predates the contract; R16 brings the reverse path into compliance
-(`[Grd, Fun]` / `[Jtv, Fun]`, honouring `DER_LEVELS`) when reverse gains
+**Known deviation:** the standalone reverse prototype deviates on **both name
+and order** — it emits the value **first** and names outputs off the user's
+output variable rather than canonically: `adigatorGenRevGradFile` →
+`[<out>, <out>_grad]`, `adigatorGenJtVFile` → `[<out>, jtv]`. This predates the
+contract; R16 brings the reverse path into full compliance — canonical names and
+order, `[Grd, Fun]` / `[Jtv, Fun]`, honouring `DER_LEVELS` — when reverse gains
 embed-pipeline parity
 ([ADR-0016](decisions/ADR-0016-matrix-free-products-efficiency-path.md)).
 
