@@ -30,9 +30,12 @@ classdef SDerivShowcaseTest < matlab.unittest.TestCase
                 strjoin(arrayfun(@(r) sprintf('%s/%s/%s:%s',r.fn,r.DerType,r.mode,r.note), ...
                 bad, 'UniformOutput', false), ', ')));
 
-            % (b) invariants — inline emits no .mat
+            % (b) invariants — inline emits no .mat. This is a GENERATION
+            % property (independent of evaluation), so assert it for every cell
+            % that generated (matBytes >= 0), including coder-skipped ones - it
+            % holds even on a no-Coder runner.
             for r = report.rows
-                if strcmp(r.mode,'i') && ~startsWith(r.note,'skip')
+                if strcmp(r.mode,'i') && r.matBytes >= 0
                     tc.verifyEqual(r.matBytes, 0, ...
                         sprintf('inline cell %s/%s wrote a .mat', r.fn, r.DerType));
                 end
