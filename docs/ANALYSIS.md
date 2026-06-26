@@ -395,8 +395,17 @@ lower-order derivatives* of every intermediate. When the user only consumes
    is always 0 in `IEmbedSlimTest`/`SCodegenTest` (which is why `SCodegenTest`
    reports "collapsed 0 union copies" on the real `gapfun`). The collapse logic
    is exercised positively by the synthetic fixture in `IPeepholeDriverTest`
-   (TS-I-08); the pass is retained as a guard for the pattern (and for any
-   future re-vectorization post-pass, R12/issue #56, that would emit it).
+   (TS-I-08); the pass is retained as a guard for the pattern.
+
+   **Re-vectorization post-pass — shelved (R12, ADR-0016).** The natural
+   follow-on idea was a larger source-to-source pass fusing the
+   `scatter → matrix-op → flatten → gather` plumbing that `cadamtimesderiv`
+   emits. It was prototyped far enough to measure (§3.5) and then **shelved**:
+   the fusion precondition — an *identity* scatter — does not arise (the scatter
+   intrinsically maps the sparse nonzero-vector into structured positions of the
+   dense operand matrix), and the ROM cost it would chase is intrinsic to
+   assembled dense matrices, not removable by a peephole. The embedded-efficiency
+   lever is the matrix-free product family instead (§3.5).
 7. **Keep loops rolled (`unroll=0`) for code size**, but verify Coder
    compatibility of the rolled-loop Gator data (cell arrays indexed by loop
    counter): heterogeneous constant cells are supported by `coder.const`, but
@@ -516,3 +525,69 @@ adjoint — achieves the same result without touching ADiGator internals, and
 its restricted grammar makes it testable line-shape by line-shape. The cost
 is sensitivity to the printer's textual conventions; pinning it with golden
 files of generated code mitigates that.
+
+### 3.5 Measured determination: matrix-free products are the embedded-efficiency frontier
+
+The "vectorization / matrix algebra" question (#56) was settled by measuring
+this fork's actual generated code rather than by reasoning. Recorded here as the
+evidence behind [ADR-0016](decisions/ADR-0016-matrix-free-products-efficiency-path.md);
+it also reframes R12 and motivates R16–R19.
+
+**Method.** For representative functions across the three derivative objects,
+generate the derivative file(s) and measure two embedded-relevant quantities:
+generated **statement count** (≈ compiled-C size) and total **static-data
+elements** (the constant `Index*`/`Data*` tables ≈ constant ROM). Forward via
+`adigatorGenJacFile`/`adigatorGenHesFile`; reverse via `adigatorGenRevGradFile`
+(gradient) and `adigatorGenJtVFile` (J'·v).
+
+**Result (static-data elements ≈ ROM, n = 64).**
+
+| Object | sparse assembled | dense assembled | matrix-free product |
+|---|---|---|---|
+| Gradient (m=1) | — | fwd `_Grd` O(n): 83 | **`_RGrd`: 0** |
+| Jacobian (m×n) | fwd `_Jac` ∝nnz: 131 (diag), 507 (band) | fwd O(mn): 12,419 (n×n), 98,435 (8n×n) | **`_JtV` (J'·v): 0** |
+| Hessian (n×n) | fwd-o-fwd `_Hes`: 198 (diag) | fwd-o-fwd O(n²): 41,542 | H·v: not yet implemented |
+
+For matrix-bearing scalar costs the forward gradient's static data grows
+**O(n²)** (e.g. `sum((A·x)²)`: 323 → 1,263 → 4,923 → 19,443 for n = 10/20/40/80)
+while the reverse gradient stays at **0** with flat statement count. Reverse
+correctness was verified: reverse gradient = forward = analytic `(A+A')x` to
+~1e-10 (a harness note: the forward `_Grd` wrapper is `[Grd,Fun]` — derivative
+first — so the value is the *second* output; mixing this up looks like a forward
+bug but is not).
+
+**Reading.**
+
+1. **Forward already vectorizes** (statement count is flat in n — `exp(x)` is one
+   statement regardless of size). What it carries is the sparse-index ROM +
+   scatter/gather plumbing, so "re-vectorize the generated code" is the wrong
+   lever (§2.3, R12 shelved).
+2. **The cost is governed by density and assembled-vs-matrix-free, not by AD
+   mode.** Forward assembled data scales with `nnz` of the derivative. For
+   **sparse** J/H — the common embedded case (banded/structured constraint
+   Jacobians, structured Hessians) — forward + ADiGator's compile-time sparsity
+   exploitation is already lean (131 / 507 / 198). For **dense** assembled
+   matrices the O(n²) ROM is **intrinsic**: any representation of a dense n×n
+   matrix is n² numbers; reverse does not avoid it (it would need *m* adjoint
+   sweeps to assemble) and no peephole removes it.
+3. **Matrix-free products carry ~0 ROM regardless of density** — confirmed 0 for
+   `_RGrd` and `_JtV` across diagonal / dense-square / tall shapes. This is the
+   one broadly-applicable embedded win, and it spans all three objects (J·v,
+   J'·v, H·v), which is what matrix-free embedded solvers (Krylov, PIPG,
+   Newton-CG) actually consume.
+
+**Determination.** The assembled-matrix path is essentially solved (forward +
+sparsity for sparse; dense O(n²) is intrinsic; R7 slimming is the marginal
+lever). The open frontier is **completing the matrix-free product family**:
+gradient (`_RGrd`) ✓ and J'·v (`_JtV`) ✓ exist; the gaps are **H·v** (via
+forward-over-reverse — forward-differentiate the `_RGrd` file; the highest-
+leverage piece, bringing zero-ROM to second-order embedded solvers) and **J·v**
+(forward directional), then **rolled-loop reverse** (§3.3 Stage 3) so the
+products reach the rolled allocation-over-time anchor. Reverse first needs
+**embed-pipeline parity** (Stage 5) to be comparable through to C. These are the
+R16–R19 rows; the C-level confirmation of the ROM finding is delivered by the
+#73 all-axes harness over the #64/ADR-0014 codegen-equivalence machinery.
+
+H·v's zero-ROM is *inferred by analogy* to `_RGrd`/`_JtV` (forward-over/reverse
+over dense vectorized code); it is to be **measured** when implemented (R18), not
+assumed.
