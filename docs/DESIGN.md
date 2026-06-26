@@ -150,6 +150,33 @@ rather than returning a wrong derivative.
 *Verified by:* `tests/unit/UNormTest.m`;
 [ADR-0002](decisions/ADR-0002-norm-matrix-induced-errors.md).
 
+### C-6 — Wrapper output order
+
+A generated derivative wrapper returns its outputs **highest-derivative-order
+first, with the function value `Fun` last**, and `DER_LEVELS` selects *which*
+levels appear (default `[]` = all; the top level — the derivative the file is
+named for — is always returned). This holds for **every** derivative object:
+
+- Jacobian: `[Jac, Fun]`  (gradient of a scalar is the `m = 1` Jacobian: `[Grd, Fun]`)
+- Hessian: `[Hes, Grd, Fun]`
+- Matrix-free products (R18): J·v → `[Jv, Fun]`, H·v → `[Hv, Grd, Fun]`
+
+`DER_LEVELS` trims the lower-order companions, preserving order — e.g.
+`der_levels = [1 2]` on a Hessian file ⇒ `[Hes, Grd]`; `[1]` on a Jacobian file
+⇒ `[Jac]`. It is resolved uniformly for all generators by
+`adigatorResolveDerLevels` (`maxlevel` 1 for Jacobian/gradient, 2 for Hessian).
+
+*Known deviation:* the standalone reverse prototype emits the value **first** —
+`adigatorGenRevGradFile` → `[y, grad]`, `adigatorGenJtVFile` → `[y, jtv]`. This
+predates the contract; R16 brings the reverse path into compliance
+(`[Grd, Fun]` / `[Jtv, Fun]`) when reverse gains embed-pipeline parity
+([ADR-0016](decisions/ADR-0016-matrix-free-products-efficiency-path.md)).
+
+*Verified by:* `tests/integration/ILevelSelectTest.m` (`CI_PLAN.md` TS-I-05,
+`DER_LEVELS` selection); the order is exercised by every test that consumes the
+wrappers positionally (`IShapeMatrixTest`, `IEmbedModesTest`). R16 adds a reverse
+cross-mode order check.
+
 ## Constraints
 
 - **Minimum release R2022a** — the embedding layer uses `arguments` blocks

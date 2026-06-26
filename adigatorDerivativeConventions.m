@@ -52,7 +52,27 @@
 
 % all(c,r=1)                any(n,m=1) & ~all(n,m>1)		n*m x 1
 % all(c,r=1)                all(n,m>1)		                n x m
-% 
+%
 % any(c,r=1) & any(c,r>1)			                        r*c x n*m
 % all(c,r>1)	            any(n,m>1)		                r*c x n*m
 % all(c,r>1)	            all(n,m=1)		                r x c
+
+%%% GENERATED-FILE OUTPUT ORDER (see docs/DESIGN.md Contract C-6)
+% A generated derivative wrapper returns its outputs highest-derivative-order
+% first, with the function value Fun LAST:
+%
+%   Jacobian file : [Jac, Fun]            (gradient is the m=1 Jacobian: [Grd, Fun])
+%   Hessian file  : [Hes, Grd, Fun]
+%   J*v   (R18)   : [Jv, Fun]
+%   H*v   (R18)   : [Hv, Grd, Fun]
+%
+% The DER_LEVELS option (0 = Fun, 1 = first derivative, 2 = Hessian; default []
+% = all levels) selects WHICH levels appear, preserving this order and always
+% keeping the top level - e.g. der_levels = [1 2] on a Hessian file -> [Hes,
+% Grd]; [1] on a Jacobian file -> [Jac]. It applies to ALL derivative
+% generators, resolved uniformly by adigatorResolveDerLevels (roadmap R7a,
+% issue #21).
+%
+% Deviation: the standalone reverse prototype emits the value FIRST
+% (adigatorGenRevGradFile -> [y, grad]; adigatorGenJtVFile -> [y, jtv]); R16
+% aligns it to the convention above (docs/decisions/ADR-0016).

@@ -10,12 +10,11 @@ matrix algebra), [#73](https://github.com/pdlourenco/adigator-embedded/issues/73
 (all-axes showcase + comparison to C), and
 [#64](https://github.com/pdlourenco/adigator-embedded/issues/64) /
 [ADR-0014](ADR-0014-matlabtest-codegen-equivalence.md) (codegen-equivalence
-infrastructure). Records a decision on the derivative-output-order convention
-(today documented only in the generator headers, e.g. `adigatorGenHesFile.m`,
-not in `adigatorDerivativeConventions.m` — which covers shapes — nor in DESIGN
-§Contracts). This ADR does **not** edit DESIGN §Contracts; codifying the
-convention there is scheduled with the reverse-signature alignment in R16
-(see §Decision item 5).
+infrastructure). **Codifies the derivative-output-order convention** as DESIGN
+§Contracts **C-6** and in `adigatorDerivativeConventions.m` (it was previously
+documented only in the generator headers): see §Decision item 5. The forward
+generators already comply; the standalone reverse prototype deviates
+(value-first) and is brought into compliance in R16.
 
 ## Context
 
@@ -86,13 +85,16 @@ The full evidence table is in ANALYSIS §3.5.
    one track: `#56` sets the direction, `#73` builds the showcase/benchmark,
    `#64` supplies the codegen-equivalence machinery.
 
-5. **Derivative output order — the new generators follow the existing
-   convention.** The forward wrappers are derivative(s)-highest-order-first with
-   the function value `Fun` last, and `DER_LEVELS` selects which levels appear
-   (documented in the generator headers — `adigatorGenHesFile.m`: "The output of
-   Hessian file is [Hes, Grd, Fun]. The output of gradient file is [Grd, Fun]"):
-   Jacobian `[Jac, Fun]`, gradient `[Grd, Fun]`, Hessian `[Hes, Grd, Fun]` (e.g.
-   `der_levels = [1 2]` → `[Hes, Grd]`). Therefore:
+5. **Derivative output order — codified as a contract; the new generators follow
+   it.** The wrappers are derivative(s)-highest-order-first with the function
+   value `Fun` last, and `DER_LEVELS` selects which levels appear. This was
+   documented only in the generator headers; this PR promotes it to **DESIGN
+   §Contracts C-6** and `adigatorDerivativeConventions.m`. It applies to **all**
+   derivative objects (not just the Hessian): Jacobian `[Jac, Fun]`, gradient
+   `[Grd, Fun]`, Hessian `[Hes, Grd, Fun]`, and `DER_LEVELS` trims the lower-order
+   companions for every one of them — resolved uniformly by
+   `adigatorResolveDerLevels` (e.g. `der_levels = [1 2]` on a Hessian ⇒
+   `[Hes, Grd]`; `[1]` on a Jacobian ⇒ `[Jac]`). Therefore:
    - **`adigatorGenJvFile`** → `[Jv, Fun]` (mirrors `[Jac, Fun]`).
    - **`adigatorGenHvpFile`** → `[Hv, Grd, Fun]` (mirrors `[Hes, Grd, Fun]`),
      honouring `der_levels` to trim outputs.
