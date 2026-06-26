@@ -196,13 +196,9 @@ generator, including the matrix-free products as they land:
 - It is resolved **uniformly** by `adigatorResolveDerLevels(der_levels, maxlevel,
   caller)`; no generator may reimplement the policy.
 
-**Compliance.** The forward generators (`adigatorGenJacFile`,
-`adigatorGenHesFile`) and the reverse generators (`adigatorGenRevGradFile` →
-`[Grd, Fun]`, `adigatorGenJtVFile` → `[Jtv, Fun]`) all follow this contract. The
-reverse generators were value-first and named off the user output variable
-(`[<out>, <out>_grad]` / `[<out>, jtv]`) before **R16a**, which flipped them to
-the canonical names + order
-([ADR-0016](decisions/ADR-0016-matrix-free-products-efficiency-path.md)).
+**Compliance.** All derivative generators follow this contract — the forward
+`adigatorGenJacFile` / `adigatorGenHesFile` and the reverse
+`adigatorGenRevGradFile` (`[Grd, Fun]`) / `adigatorGenJtVFile` (`[Jtv, Fun]`).
 
 *Verified by:* `tests/integration/ILevelSelectTest.m` (`CI_PLAN.md` TS-I-05,
 `DER_LEVELS` selection across generators); the order is exercised by every test

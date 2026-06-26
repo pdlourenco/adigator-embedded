@@ -58,15 +58,17 @@
 % all(c,r>1)	            all(n,m=1)		                r x c
 
 %%% GENERATED-FILE OUTPUTS: NAMES + ORDER (see docs/DESIGN.md Contract C-6)
-% Canonical output variable names, uniform across every generator (forward,
-% reverse, matrix-free products) - the same object is always named the same:
+% Every generated derivative file - forward, reverse, and matrix-free product -
+% returns its outputs under these canonical variable names, the same object
+% always named the same:
 %
-%   Fun = function value      Jv  = J*v  (R18)
-%   Grd = gradient            Jtv = J.'*v
-%   Jac = Jacobian            Hv  = H*v  (R18)
+%   Fun = function value      Jv  = Jac*v   (directional derivative, R18)
+%   Grd = gradient            Jtv = Jac.'*v (transposed-Jacobian-vector product)
+%   Jac = Jacobian            Hv  = Hes*v   (Hessian-vector product, R18)
 %   Hes = Hessian
 %
-% A wrapper returns its outputs highest-derivative-order first, with Fun LAST:
+% where v is a runtime input vector. Outputs are ordered highest-derivative-
+% order first, with Fun LAST:
 %
 %   Jacobian file : [Jac, Fun]            (gradient is the m=1 Jacobian: [Grd, Fun])
 %   Hessian file  : [Hes, Grd, Fun]
@@ -79,7 +81,3 @@
 % Grd]; [1] on a Jacobian file -> [Jac]. It applies to ALL derivative
 % generators, resolved uniformly by adigatorResolveDerLevels (roadmap R7a,
 % issue #21).
-%
-% The reverse generators comply too: adigatorGenRevGradFile -> [Grd, Fun],
-% adigatorGenJtVFile -> [Jtv, Fun]. (They were value-first and named off the
-% user output variable before R16a, which flipped them; docs/decisions/ADR-0016.)
