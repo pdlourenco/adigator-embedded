@@ -98,11 +98,10 @@ For a function `f: Rⁿ → Rᵐ` evaluated through the wrappers:
 - Generalized matrix-input / matrix-output shapes follow the table in
   `adigatorDerivativeConventions.m`.
 
-The `DER_LEVELS` option (additive, default `[]` = all levels) selects *which*
-of these outputs a wrapper returns (`0` = function value, `1` = first
-derivative, `2` = Hessian; the top level is always returned) — it never changes
-the *shape* of an emitted output, so this contract is unaffected by default
-(roadmap R7a, issue #21; [ADR-0005](decisions/ADR-0005-der-levels-output-selection.md)).
+The `DER_LEVELS` option selects *which* of these outputs a wrapper returns but
+**never changes the shape** of an emitted output, so this shape contract is
+unaffected by it. Which outputs appear, in what order, and the selection
+invariants are governed by **C-6**.
 
 *Verified by:* `tests/integration/IShapeMatrixTest.m` (shape matrix; `CI_PLAN.md`
 TS-I-01), `ISecondDerivTest` (TS-I-04), `ILevelSelectTest` (TS-I-05, output
@@ -150,32 +149,48 @@ rather than returning a wrong derivative.
 *Verified by:* `tests/unit/UNormTest.m`;
 [ADR-0002](decisions/ADR-0002-norm-matrix-induced-errors.md).
 
-### C-6 — Wrapper output order
+### C-6 — Wrapper outputs: order and level selection
 
-A generated derivative wrapper returns its outputs **highest-derivative-order
-first, with the function value `Fun` last**, and `DER_LEVELS` selects *which*
-levels appear (default `[]` = all; the top level — the derivative the file is
-named for — is always returned). This holds for **every** derivative object:
+This contract governs *what a generated derivative wrapper returns and in what
+order* — one surface with two facets (the shapes themselves are C-1).
+
+**Order.** Outputs are **highest-derivative-order first, with the function value
+`Fun` last**, for every derivative object:
 
 - Jacobian: `[Jac, Fun]`  (gradient of a scalar is the `m = 1` Jacobian: `[Grd, Fun]`)
 - Hessian: `[Hes, Grd, Fun]`
 - Matrix-free products (R18): J·v → `[Jv, Fun]`, H·v → `[Hv, Grd, Fun]`
 
-`DER_LEVELS` trims the lower-order companions, preserving order — e.g.
-`der_levels = [1 2]` on a Hessian file ⇒ `[Hes, Grd]`; `[1]` on a Jacobian file
-⇒ `[Jac]`. It is resolved uniformly for all generators by
-`adigatorResolveDerLevels` (`maxlevel` 1 for Jacobian/gradient, 2 for Hessian).
+**Level selection (`DER_LEVELS`).** The `DER_LEVELS` option selects *which* of
+those outputs a wrapper returns. The binding invariants — identical for **every**
+generator, including the matrix-free products as they land:
 
-*Known deviation:* the standalone reverse prototype emits the value **first** —
+- Levels are `0` = function value, `1` = first derivative (gradient/Jacobian),
+  `2` = Hessian.
+- The valid request set is `0..maxlevel`, where `maxlevel` is the highest level
+  the generator produces (`1` for Jacobian/gradient, `2` for Hessian).
+- The **top level is always returned** — a file must return the derivative it is
+  named for; `DER_LEVELS` only chooses which *lower-order* companions accompany
+  it.
+- Default `[]` = all levels `0..maxlevel`, reproducing the historical signatures.
+- Selection **preserves the order above and never changes an emitted output's
+  shape** (C-1) — e.g. `der_levels = [1 2]` on a Hessian file ⇒ `[Hes, Grd]`;
+  `[1]` on a Jacobian file ⇒ `[Jac]`.
+- It is resolved **uniformly** by `adigatorResolveDerLevels(der_levels, maxlevel,
+  caller)`; no generator may reimplement the policy.
+
+**Known deviation:** the standalone reverse prototype emits the value **first** —
 `adigatorGenRevGradFile` → `[y, grad]`, `adigatorGenJtVFile` → `[y, jtv]`. This
 predates the contract; R16 brings the reverse path into compliance
-(`[Grd, Fun]` / `[Jtv, Fun]`) when reverse gains embed-pipeline parity
+(`[Grd, Fun]` / `[Jtv, Fun]`, honouring `DER_LEVELS`) when reverse gains
+embed-pipeline parity
 ([ADR-0016](decisions/ADR-0016-matrix-free-products-efficiency-path.md)).
 
 *Verified by:* `tests/integration/ILevelSelectTest.m` (`CI_PLAN.md` TS-I-05,
-`DER_LEVELS` selection); the order is exercised by every test that consumes the
-wrappers positionally (`IShapeMatrixTest`, `IEmbedModesTest`). R16 adds a reverse
-cross-mode order check.
+`DER_LEVELS` selection across generators); the order is exercised by every test
+that consumes the wrappers positionally (`IShapeMatrixTest`, `IEmbedModesTest`).
+Rationale in [ADR-0005](decisions/ADR-0005-der-levels-output-selection.md)
+(roadmap R7a, issue #21). R16 adds a reverse cross-mode order check.
 
 ## Constraints
 

@@ -10,11 +10,12 @@ matrix algebra), [#73](https://github.com/pdlourenco/adigator-embedded/issues/73
 (all-axes showcase + comparison to C), and
 [#64](https://github.com/pdlourenco/adigator-embedded/issues/64) /
 [ADR-0014](ADR-0014-matlabtest-codegen-equivalence.md) (codegen-equivalence
-infrastructure). **Codifies the derivative-output-order convention** as DESIGN
-§Contracts **C-6** and in `adigatorDerivativeConventions.m` (it was previously
-documented only in the generator headers): see §Decision item 5. The forward
-generators already comply; the standalone reverse prototype deviates
-(value-first) and is brought into compliance in R16.
+infrastructure). **Codifies the wrapper-output convention** — output order and
+`DER_LEVELS` level selection — as DESIGN §Contracts **C-6** and in
+`adigatorDerivativeConventions.m` (it was previously documented only in the
+generator headers): see §Decision item 5. The forward generators already comply;
+the standalone reverse prototype deviates (value-first) and is brought into
+compliance in R16.
 
 ## Context
 
