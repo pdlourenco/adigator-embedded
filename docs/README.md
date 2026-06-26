@@ -159,7 +159,7 @@ Testing / CI
 ADiGator is Copyright 2011–2017 Matthew J. Weinstein and Anil V. Rao,
 distributed under the GNU General Public License v3.0
 ([`COPYING.txt`](COPYING.txt)). The embeddable-generation extensions
-(2025–2026) are by Pedro Lourenço (GMV), under the same licence. Upstream
+(2025–2026) are by Pedro Lourenço (GMV) reachable at palourenco@gmv.com, under the same licence. Upstream
 contact: weinstein87@gmail.com.
 
 ## Upstream release history
