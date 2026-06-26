@@ -43,14 +43,24 @@ classdef SCodegenShowcaseTest < matlab.unittest.TestCase
                 end
             end
 
-            % headline: reverse gradient C < forward gradient C (same cost)
-            fwd = report.rows(strcmp({report.rows.DerType},'gradient'));
-            rev = report.rows(strcmp({report.rows.DerType},'gradient-reverse'));
-            tc.assertNotEmpty(fwd, 'forward gradient cell missing');
-            tc.assertNotEmpty(rev, 'reverse gradient cell missing');
+            % headline: reverse AD gradient C < forward AD gradient C (same
+            % cost), and the hand-coded analytical gradient is leaner still (the
+            % AD-vs-analytical floor, #73).
+            gr = report.rows(strcmp({report.rows.DerType},'gradient'));
+            fwd = gr(strcmp({gr.impl},'AD'));
+            ana = gr(strcmp({gr.impl},'analytic'));
+            rv = report.rows(strcmp({report.rows.DerType},'gradient-reverse'));
+            rev = rv(strcmp({rv.impl},'AD'));   % impl filter for symmetry (future-proof)
+            tc.assertNotEmpty(fwd, 'forward AD gradient cell missing');
+            tc.assertNotEmpty(rev, 'reverse AD gradient cell missing');
+            tc.assertNotEmpty(ana, 'analytical gradient reference missing');
             if fwd.ok && rev.ok
                 tc.verifyLessThan(rev.cBytes, fwd.cBytes, ...
                     'reverse gradient compiled C should be leaner than forward (§3.5)');
+            end
+            if fwd.ok && ana.ok
+                tc.verifyLessThanOrEqual(ana.cBytes, fwd.cBytes, ...
+                    'hand-coded analytical gradient should not be larger than forward AD');
             end
         end
     end

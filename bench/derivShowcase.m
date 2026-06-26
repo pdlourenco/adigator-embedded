@@ -52,6 +52,8 @@ ref.vfun_jacobian      = diag(cos(xv)+2*xv);        % d/dx [sin(x)+x.^2]
 ref.scostfun_gradientreverse = ref.scostfun_gradient;
 ref.vcostfun_gradient        = exp(xv)+2;           % vectorized (no subscripting)
 ref.vcostfun_gradientreverse = exp(xv)+2;
+ref.vcostfun_hessian         = diag(exp(xv));
+ref.vvecfun_jacobian         = diag(cos(xv)+2*xv);
 
 rows = struct('fn',{},'DerType',{},'mode',{},'slim',{},'unroll',{},...
     'derLevels',{},'codeLines',{},'matBytes',{},'idxTables',{},'idxElems',{},...
@@ -86,7 +88,11 @@ function cells = defaultGrid()
 % The curated, non-orthogonal grid. scostfun (scalar) covers gradient/Hessian/
 % reverse; vfun (vector) covers the Jacobian. embed x slim x unroll vary per the
 % axis being illustrated; reverse is unrolled-only (R16; rolled reverse is R19).
-mk = @(fn,dt,m,sl,ur,dl) struct('fn',fn,'DerType',dt,'mode',m,'slim',sl,'unroll',ur,'derLevels',dl);
+mk = @(fn,dt,m,sl,ur,dl) struct('fn',fn,'DerType',dt,'mode',m,'slim',sl,'unroll',ur,'derLevels',dl,'analytic','');
+% analytic reference (issue #73): a hand-coded derivative - the "do I even need
+% this tool?" baseline + the gold correctness oracle. Not a grid cell (no
+% embed/slim/unroll), so mode='ana', the rest sentinel.
+mka = @(fn,dt,ana) struct('fn',fn,'DerType',dt,'mode','ana','slim',-1,'unroll',-1,'derLevels',[],'analytic',ana);
 cells = mk('scostfun','gradient','c',0,0,[]);
 % gradient (forward): embed x unroll, slim on; + a slim off/on pair at 'i'
 cells(end+1) = mk('scostfun','gradient','l',1,0,[]);
@@ -110,6 +116,10 @@ cells(end+1) = mk('vfun','jacobian','i',1,1,[]);
 % carries the location index; the reverse carries ZERO static data (§3.5).
 cells(end+1) = mk('vcostfun','gradient','l',0,1,[]);
 cells(end+1) = mk('vcostfun','gradient-reverse','l',0,1,[]);
+% analytical references (hand-coded) - the AD-vs-analytical baseline
+cells(end+1) = mka('vcostfun','gradient','vcostfun_grad_analytic');
+cells(end+1) = mka('vcostfun','hessian','vcostfun_hess_analytic');
+cells(end+1) = mka('vvecfun','jacobian','vvecfun_jac_analytic');
 end
 
 %% --------------------------------------------------------------------- %%
@@ -120,19 +130,38 @@ r = struct('fn',c.fn,'DerType',c.DerType,'mode',c.mode,'slim',c.slim,...
 base = pwd; d = tempname; mkdir(d);
 restore = onCleanup(@() cd(base));
 try
-    cd(d);   % generate + evaluate from the cell's own folder (found before path)
-    opts = adigatorOptions('overwrite',1,'echo',0,'embed_mode',c.mode,...
-        'slim_embed',c.slim,'unroll',c.unroll);
-    if ~isempty(c.derLevels); opts.der_levels = c.derLevels; end
-    inputs = {adigatorCreateDerivInput([n 1],'x')};
-    adigatorGenDerFile_embedded(c.DerType, c.fn, inputs, opts);
+    if ~isempty(c.analytic)
+        % analytic reference: a hand-coded file (no ADiGator generation, no
+        % static data). Measure its code lines and confirm it evaluates to the
+        % reference derivative.
+        r.codeLines = countNonComment(which(c.analytic));
+        r.matBytes = 0; r.idxTables = 0; r.idxElems = 0;
+        [r.ok, r.note] = checkCorrectness(c, xv, ref);
+    else
+        cd(d);   % generate + evaluate from the cell's own folder (found before path)
+        opts = adigatorOptions('overwrite',1,'echo',0,'embed_mode',c.mode,...
+            'slim_embed',c.slim,'unroll',c.unroll);
+        if ~isempty(c.derLevels); opts.der_levels = c.derLevels; end
+        inputs = {adigatorCreateDerivInput([n 1],'x')};
+        adigatorGenDerFile_embedded(c.DerType, c.fn, inputs, opts);
 
-    [r.codeLines, r.matBytes, r.idxTables, r.idxElems] = measureComplexity(d);
-    [r.ok, r.note] = checkCorrectness(c, xv, ref);
+        [r.codeLines, r.matBytes, r.idxTables, r.idxElems] = measureComplexity(d);
+        [r.ok, r.note] = checkCorrectness(c, xv, ref);
+    end
 catch e
     r.note = ['GEN/EVAL error: ' e.message];
 end
 cd(base);
+end
+
+%% --------------------------------------------------------------------- %%
+function nstmt = countNonComment(file)
+% non-comment / non-blank line count of a .m file (the hand-code "size").
+nstmt = -1;
+if isempty(file) || ~isfile(file); return; end
+L = strtrim(readlines(file));
+L = L(strlength(L)>0 & ~startsWith(L,'%'));
+nstmt = numel(L);
 end
 
 %% --------------------------------------------------------------------- %%
@@ -180,7 +209,7 @@ function [ok, note] = checkCorrectness(c, xv, ref)
 ok = false;   % note is set on every return path below
 key = [c.fn '_' strrep(c.DerType,'-','')];   % gradient-reverse -> gradientreverse
 g = ref.(key);
-wrapper = wrapperName(c);
+if ~isempty(c.analytic); wrapper = c.analytic; else; wrapper = wrapperName(c); end
 clear(wrapper); clear('global',['ADiGator_',wrapper]); rehash;
 try
     out = cell(1,abs(nargout(wrapper)));
@@ -218,12 +247,15 @@ lines = [hdr; sep];
 for k = 1:numel(rows)
     r = rows(k);
     dl = '—'; if ~isempty(r.derLevels); dl = ['[' num2str(r.derLevels) ']']; end
-    lines(end+1,1) = string(sprintf("| %s | %s | %s | %d | %d | %s | %d | %d | %d | %d | %s |",...
-        r.fn, r.DerType, r.mode, r.slim, r.unroll, dl, r.codeLines, r.matBytes,...
+    sl = dash(r.slim); ur = dash(r.unroll);   % analytic rows use -1 sentinels
+    lines(end+1,1) = string(sprintf("| %s | %s | %s | %s | %s | %s | %d | %d | %d | %d | %s |",...
+        r.fn, r.DerType, r.mode, sl, ur, dl, r.codeLines, r.matBytes,...
         r.idxTables, r.idxElems, r.note)); %#ok<AGROW>
 end
 md = char(strjoin(lines, newline));
 end
+
+function s = dash(v); if v < 0; s = '—'; else; s = sprintf('%d',v); end; end
 
 %% --------------------------------------------------------------------- %%
 function c = addShowcasePaths()
@@ -231,6 +263,7 @@ here = fileparts(mfilename('fullpath'));
 root = fileparts(here);
 saved = path;
 addpath(root, fullfile(root,'lib'), fullfile(root,'lib','cadaUtils'),...
-    fullfile(root,'util'), fullfile(root,'embedding'), fullfile(here,'showcase'));
+    fullfile(root,'util'), fullfile(root,'embedding'), ...
+    fullfile(here,'showcase'), fullfile(here,'showcase','analytic'));
 c = onCleanup(@() path(saved));
 end

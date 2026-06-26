@@ -5,6 +5,12 @@ anchor function generated through every relevant axis, with its generated-code
 complexity measured and its value checked against the analytic derivative. This
 is the "which mode should I pick?" artifact.
 
+Each AD axis is also measured against a hand-coded **analytical** derivative —
+the "do I even need this tool?" baseline and the gold correctness oracle (#73).
+It's a reference *column*, not a grid cell: a hand derivative has no
+embed/slim/unroll variants, so it appears once per DerType with those fields
+blank (`mode = ana`, `—` elsewhere).
+
 Regenerate this table with:
 
 ```matlab
@@ -25,6 +31,10 @@ the runtime columns + a figure.
   subscripting). Its reverse adjoint references no index tables.
 - `vfun(x)` — vector output with a diagonal (sparse) Jacobian, for the Jacobian
   axis.
+- `vvecfun(x)` — a vectorized vector output (`sin(x)+x.^2`), the unrolled
+  Jacobian anchor at C level.
+- `showcase/analytic/*.m` — hand-coded analytical grd/jac/hes of the anchors,
+  the AD-vs-analytical reference (each FD-checked once by `SDerivShowcaseTest`).
 
 ## Snapshot (n = 6)
 
@@ -46,6 +56,9 @@ the runtime columns + a figure.
 | vfun | jacobian | i | 1 | 1 | — | 135 | 0 | 0 | 0 | ok |
 | vcostfun | gradient | l | 0 | 1 | — | 24 | 249 | 1 | 6 | ok |
 | vcostfun | gradient-reverse | l | 0 | 1 | — | 18 | 0 | 0 | 0 | ok |
+| vcostfun | gradient | ana | — | — | — | 4 | 0 | 0 | 0 | ok |
+| vcostfun | hessian | ana | — | — | — | 5 | 0 | 0 | 0 | ok |
+| vvecfun | jacobian | ana | — | — | — | 4 | 0 | 0 | 0 | ok |
 
 (Numbers are a snapshot; regenerate as above. `SDerivShowcaseTest` guards
 correctness + the headline relationships, not the exact figures.)
@@ -73,6 +86,16 @@ correctness + the headline relationships, not the exact figures.)
   number of variables the way a forward *dense* Jacobian/Hessian does (ANALYSIS
   §3.5). Use reverse (`gradient-reverse`) for objective gradients / first-order
   embedded solvers; forward for Jacobians and where `m ≈ n`.
+- **AD vs analytical** is the user-facing column ("do I even need this tool?").
+  A hand derivative is tiny here — `4`–`5` code lines vs the AD wrapper's `18`
+  (vectorized reverse) to `187` (rolled reverse) — and carries no data, because a
+  human writes the closed form directly. That's expected and is the *point*: for
+  a simple cost, hand-coding wins; AD's value is at scale, where the derivative
+  is large/sparse enough that deriving and maintaining it by hand becomes
+  impractical or silently drops sparsity. The crossover — not a win/lose — is the
+  story; see the C level for where reverse AD nearly matches the hand floor. The
+  analytical derivatives double as the **gold correctness oracle** (FD-checked
+  once, then the equivalence reference).
 
 ## C level (R17b)
 
@@ -88,16 +111,30 @@ rc = derivShowcaseC('n',8,'figPath','bench/showcase_scaling.png');
 
 Snapshot (inline mode, n = 8, MATLAB R2024a + MinGW):
 
-| function | DerType | unroll | C bytes | MEX≡analytic | MEX (ms) | MATLAB (ms) | compile (s) |
-|---|---|---:|---:|---|---:|---:|---:|
-| vcostfun | gradient | 1 | 19503 | yes | 0.002 | 0.141 | 13.6 |
-| vcostfun | gradient-reverse | 1 | 17940 | yes | 0.001 | 0.016 | 3.0 |
-| vcostfun | hessian | 1 | 20665 | yes | 0.002 | 0.099 | 3.4 |
-| vvecfun | jacobian | 1 | 19309 | yes | 0.003 | 0.069 | 2.1 |
-| vfun | jacobian | 0 | 20484 | yes | 0.003 | 0.186 | 2.7 |
+| function | DerType | impl | unroll | C bytes | MEX≡analytic | MEX (ms) | MATLAB (ms) | compile (s) |
+|---|---|---|---:|---:|---|---:|---:|---:|
+| vcostfun | gradient | AD | 1 | 19505 | yes | 0.003 | 0.118 | 13.5 |
+| vcostfun | gradient-reverse | AD | 1 | 17940 | yes | 0.002 | 0.006 | 2.8 |
+| vcostfun | gradient | analytic | — | 17766 | yes | 0.002 | 0.001 | 3.0 |
+| vcostfun | hessian | AD | 1 | 20666 | yes | 0.002 | 0.114 | 2.3 |
+| vcostfun | hessian | analytic | — | 18635 | yes | 0.003 | 0.002 | 2.2 |
+| vvecfun | jacobian | AD | 1 | 19309 | yes | 0.003 | 0.064 | 2.3 |
+| vfun | jacobian | AD | 0 | 20484 | yes | 0.004 | 0.190 | 2.7 |
+| vvecfun | jacobian | analytic | — | 17950 | yes | 0.003 | 0.002 | 2.6 |
 
-![compiled-C size and runtime vs n](showcase_scaling.png)
+![AD vs analytical compiled-C size and runtime vs n](showcase_scaling.png)
 
+- **AD vs analytical — reverse AD nearly matches the hand floor.** The hand-coded
+  analytical gradient is the smallest compiled C (≈17.8 k bytes) and the cheapest
+  to evaluate — it's the floor, what a user writes *without* this tool. The key
+  result: **reverse AD (≈17.9 k) lands right on that floor**, while forward AD
+  (≈19.5 k) sits above it; the analytical Hessian/Jacobian are likewise the floor
+  for their DerTypes. For these *simple* costs hand-coding is the cheapest, as
+  expected — the value of AD is the **crossover** at scale, where the derivative
+  is large/sparse enough that hand-deriving it becomes impractical or silently
+  drops sparsity, and reverse AD already matches hand-coded ROM with none of the
+  by-hand effort. (The analytical column is also the gold correctness oracle;
+  `SDerivShowcaseTest` FD-checks it once.)
 - **The §3.5 result carries to compiled C:** the reverse gradient's generated C
   is consistently **leaner** than the forward gradient's (≈17.9 k vs ≈19.5 k
   bytes, ~8 %), and the reverse builds faster — it has no nonzero-location
@@ -117,8 +154,8 @@ Snapshot (inline mode, n = 8, MATLAB R2024a + MinGW):
   axis reaches C here only for the Jacobian; the MATLAB-level table above covers
   the rest.
 - **MEX ≡ analytic exactly** on every cell (the embed-mode C-4 guarantee
-  compiled). The interpreted-MATLAB column still shows reverse (0.016 ms) cheaper
-  than forward (0.141 ms) — the interpreter pays per-statement overhead the
+  compiled). The interpreted-MATLAB column still shows reverse (0.006 ms) cheaper
+  than forward (0.118 ms) — the interpreter pays per-statement overhead the
   compiled code amortizes. (`SCodegenShowcaseTest` pins build + equivalence +
   reverse-is-leaner.)
 

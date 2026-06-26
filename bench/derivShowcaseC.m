@@ -50,14 +50,23 @@ end
 % reaches C where codegen permits. (Rolled scalar-cost gradient/Hessian do NOT
 % codegen - a separate concern, ANALYSIS §2.3(7) / roadmap R19 - so they are not
 % in the C table; the MATLAB-level R17a table covers them.)
-cells = struct(...
-    'fn',     {'vcostfun','vcostfun','vcostfun','vvecfun','vfun'},...
-    'DerType',{'gradient','gradient-reverse','hessian','jacobian','jacobian'},...
-    'unroll', {1,1,1,1,0});
-rows = struct('fn',{},'DerType',{},'unroll',{},'cBytes',{},'mexErr',{},...
+% Each AD cell is followed by the hand-coded ANALYTICAL reference for the same
+% DerType (issue #73): the "do I even need this tool?" baseline + the gold
+% correctness oracle. Analytic is a reference, not a grid cell - no
+% embed/slim/unroll variants (unroll shown as -1 / '—').
+mk = @(fn,dt,ur,impl,ana) struct('fn',fn,'DerType',dt,'unroll',ur,'impl',impl,'analytic',ana);
+cells = [ mk('vcostfun','gradient',         1, 'AD',      ''), ...
+          mk('vcostfun','gradient-reverse', 1, 'AD',      ''), ...
+          mk('vcostfun','gradient',        -1, 'analytic','vcostfun_grad_analytic'), ...
+          mk('vcostfun','hessian',          1, 'AD',      ''), ...
+          mk('vcostfun','hessian',         -1, 'analytic','vcostfun_hess_analytic'), ...
+          mk('vvecfun','jacobian',          1, 'AD',      ''), ...
+          mk('vfun','jacobian',             0, 'AD',      ''), ...
+          mk('vvecfun','jacobian',         -1, 'analytic','vvecfun_jac_analytic') ];
+rows = struct('fn',{},'DerType',{},'impl',{},'unroll',{},'cBytes',{},'mexErr',{},...
     'mexMs',{},'matMs',{},'compileS',{},'ok',{},'note',{});
 for ci = 1:numel(cells)
-    if o.verbose; fprintf('  building %-8s %-16s (n=%d)...\n',cells(ci).fn,cells(ci).DerType,o.n); end
+    if o.verbose; fprintf('  building %-8s %-16s %-9s (n=%d)...\n',cells(ci).fn,cells(ci).DerType,cells(ci).impl,o.n); end
     rows(end+1) = buildCell(cells(ci), o.n); %#ok<AGROW>
 end
 report.rows  = rows;
@@ -81,21 +90,27 @@ end
 
 %% --------------------------------------------------------------------- %%
 function r = buildCell(c, n)
-r = struct('fn',c.fn,'DerType',c.DerType,'unroll',c.unroll,'cBytes',-1,'mexErr',-1,...
+impl = 'AD'; if isfield(c,'impl'); impl = c.impl; end
+analytic = ''; if isfield(c,'analytic'); analytic = c.analytic; end
+r = struct('fn',c.fn,'DerType',c.DerType,'impl',impl,'unroll',c.unroll,'cBytes',-1,'mexErr',-1,...
     'mexMs',-1,'matMs',-1,'compileS',-1,'ok',false,'note','');
 base = pwd; d = tempname; mkdir(d);
 restore = onCleanup(@() cleanupBuild(base, d));
 xv = 0.3 + (1:n)'/10;
 ga = analyticRef(c.fn, c.DerType, xv);
-wrapper = wrapperNameC(c);
 try
     cd(d);
-    adigatorGenDerFile_embedded(c.DerType, c.fn, ...
-        {adigatorCreateDerivInput([n 1],'x')}, ...
-        adigatorOptions('overwrite',1,'echo',0,'embed_mode','i','unroll',c.unroll));
+    if ~isempty(analytic)
+        wrapper = analytic;   % hand-coded reference; no ADiGator generation
+    else
+        wrapper = wrapperNameC(c);
+        adigatorGenDerFile_embedded(c.DerType, c.fn, ...
+            {adigatorCreateDerivInput([n 1],'x')}, ...
+            adigatorOptions('overwrite',1,'echo',0,'embed_mode','i','unroll',c.unroll));
+    end
     clear(wrapper); rehash;
-    matf = @() feval(wrapper, xv);
-    r.matMs = 1e3*timeit(matf);
+    wf = str2func(wrapper);
+    r.matMs = 1e3*timeit(@() wf(xv));
 
     t0 = tic;
     codegen(wrapper,'-args',{zeros(n,1)});
@@ -128,35 +143,39 @@ end
 
 %% --------------------------------------------------------------------- %%
 function sweep = runSweep(ns, verbose)
-% Forward vs reverse gradient (vcostfun, inline) C size + MEX runtime vs n.
-sweep = struct('n',ns,'fwdC',nan(size(ns)),'revC',nan(size(ns)),...
-    'fwdMs',nan(size(ns)),'revMs',nan(size(ns)));
+% Forward AD vs reverse AD vs hand-coded analytical gradient (vcostfun, inline):
+% compiled-C size + MEX runtime vs n - the AD-vs-analytical crossover (#73).
+sweep = struct('n',ns,'fwdC',nan(size(ns)),'revC',nan(size(ns)),'anaC',nan(size(ns)),...
+    'fwdMs',nan(size(ns)),'revMs',nan(size(ns)),'anaMs',nan(size(ns)));
 for i = 1:numel(ns)
     if verbose; fprintf('  sweep n=%d ...\n',ns(i)); end
-    f = buildCell(struct('fn','vcostfun','DerType','gradient','unroll',1), ns(i));
-    rv = buildCell(struct('fn','vcostfun','DerType','gradient-reverse','unroll',1), ns(i));
+    f  = buildCell(struct('fn','vcostfun','DerType','gradient','unroll',1,'impl','AD','analytic',''), ns(i));
+    rv = buildCell(struct('fn','vcostfun','DerType','gradient-reverse','unroll',1,'impl','AD','analytic',''), ns(i));
+    an = buildCell(struct('fn','vcostfun','DerType','gradient','unroll',-1,'impl','analytic','analytic','vcostfun_grad_analytic'), ns(i));
     if f.ok;  sweep.fwdC(i)=f.cBytes;  sweep.fwdMs(i)=f.mexMs;  end
     if rv.ok; sweep.revC(i)=rv.cBytes; sweep.revMs(i)=rv.mexMs; end
+    if an.ok; sweep.anaC(i)=an.cBytes; sweep.anaMs(i)=an.mexMs; end
 end
 end
 
 function makeFigure(s, figPath)
-% Forward vs reverse gradient (vcostfun, inline) across a size range:
-%  left  - compiled-C size: roughly n-flat (n is a runtime array length, not
-%          unrolled code); reverse consistently leaner (no location map, §3.5).
-%  right - MEX runtime: both O(n) and essentially COMPARABLE - the reverse win
-%          is code size / ROM, not speed (issue #73's runtime comparison).
+% Forward AD vs reverse AD vs hand-coded analytical gradient (vcostfun, inline)
+% across a size range - the AD-vs-analytical crossover (#73):
+%  left  - compiled-C size: analytical is the floor, reverse AD nearly matches
+%          it, forward AD is larger; all roughly n-flat (vectorized).
+%  right - MEX runtime: all O(n) and essentially COMPARABLE - for this simple
+%          cost the difference is code size, not speed.
 fig = figure('Visible','off','Position',[100 100 820 340]);
 subplot(1,2,1);
-plot(s.n, s.fwdC, '-o', s.n, s.revC, '-s', 'LineWidth', 1.6, 'MarkerSize', 6);
+plot(s.n,s.fwdC,'-o', s.n,s.revC,'-s', s.n,s.anaC,'-^','LineWidth',1.6,'MarkerSize',6);
 grid on; set(gca,'XScale','log'); xlabel('n'); ylabel('generated C (bytes)');
-title('Compiled-C size'); legend('forward','reverse','Location','northwest');
-ylim([0 max([s.fwdC s.revC])*1.15]);
+title('Compiled-C size'); legend('forward AD','reverse AD','analytical','Location','northwest');
+ylim([0 max([s.fwdC s.revC s.anaC])*1.15]);
 subplot(1,2,2);
-loglog(s.n, s.fwdMs, '-o', s.n, s.revMs, '-s', 'LineWidth', 1.6, 'MarkerSize', 6);
+loglog(s.n,s.fwdMs,'-o', s.n,s.revMs,'-s', s.n,s.anaMs,'-^','LineWidth',1.6,'MarkerSize',6);
 grid on; xlabel('n'); ylabel('MEX eval (ms)');
-title('Compiled runtime (O(n), comparable)'); legend('forward','reverse','Location','northwest');
-sgtitle('vcostfun gradient: forward vs reverse, inline mode (R17b)');
+title('Compiled runtime (O(n), comparable)'); legend('forward AD','reverse AD','analytical','Location','northwest');
+sgtitle('vcostfun gradient: AD vs analytical, inline mode (R17b)');
 try
     exportgraphics(fig, figPath, 'Resolution', 120);
 catch
@@ -204,14 +223,15 @@ function s = ternstr(c,a,b); if c; s=a; else; s=b; end; end
 
 %% --------------------------------------------------------------------- %%
 function md = renderCTable(rows, n)
-hdr = sprintf("| function | DerType | unroll | C bytes (n=%d) | MEX≡analytic | MEX (ms) | MATLAB (ms) | compile (s) |",n);
-sep = "|---|---|---:|---:|---|---:|---:|---:|";
+hdr = sprintf("| function | DerType | impl | unroll | C bytes (n=%d) | MEX≡analytic | MEX (ms) | MATLAB (ms) | compile (s) |",n);
+sep = "|---|---|---|---:|---:|---|---:|---:|---:|";
 lines = [hdr; sep];
 for k = 1:numel(rows)
     r = rows(k);
     eq = '—'; if r.mexErr>=0; eq = ternstr(r.ok,'yes',sprintf('NO (%.0e)',r.mexErr)); end
-    lines(end+1,1) = string(sprintf("| %s | %s | %d | %s | %s | %s | %s | %s |",...
-        r.fn, r.DerType, r.unroll, fmt(r.cBytes,'%d'), eq, fmt(r.mexMs,'%.3f'),...
+    ur = '—'; if r.unroll>=0; ur = sprintf('%d',r.unroll); end
+    lines(end+1,1) = string(sprintf("| %s | %s | %s | %s | %s | %s | %s | %s | %s |",...
+        r.fn, r.DerType, r.impl, ur, fmt(r.cBytes,'%d'), eq, fmt(r.mexMs,'%.3f'),...
         fmt(r.matMs,'%.3f'), fmt(r.compileS,'%.1f'))); %#ok<AGROW>
 end
 md = char(strjoin(lines, newline));
@@ -227,6 +247,7 @@ here = fileparts(mfilename('fullpath'));
 root = fileparts(here);
 saved = path;
 addpath(root, fullfile(root,'lib'), fullfile(root,'lib','cadaUtils'),...
-    fullfile(root,'util'), fullfile(root,'embedding'), fullfile(here,'showcase'));
+    fullfile(root,'util'), fullfile(root,'embedding'), ...
+    fullfile(here,'showcase'), fullfile(here,'showcase','analytic'));
 c = onCleanup(@() path(saved));
 end
