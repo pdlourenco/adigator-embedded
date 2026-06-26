@@ -190,16 +190,39 @@ RevMat  = fullfile(OutDir,[RevName,'.mat']);
 if exist(RevFile,'file') && ~opts.overwrite
   error('adigator:revgrad:overwrite','%s exists; set overwrite',RevFile);
 end
+
+% R16b (issue #73): when the adjoint references no constant index tables the
+% gradient is fully vectorized (ANALYSIS §3.5: reverse gradients carry ~0 static
+% data). Emit NO data dependency in that case - drop the global/load/Gator1Data
+% boilerplate and the ADiGator_LoadData subfunction, and write no .mat - so the
+% file is a self-contained, zero-ROM function (and embeds cleanly: there is no
+% empty Gator1Data table for prune_adigator_mat to drop, which would otherwise
+% break the dangling reference).
+hasData = ~isempty(fieldnames(RevGator));
+if ~hasData
+  GlobalVar = ['ADiGator_',RevName];
+  t = strtrim(revtxt);
+  drop = strcmp(t,['global ',GlobalVar]) | ...
+         strcmp(t,['if isempty(',GlobalVar,'); ADiGator_LoadData(); end']) | ...
+         strcmp(t,['Gator1Data = ',GlobalVar,'.',RevName,'.Gator1Data;']);
+  ld = find(strcmp(t,'function ADiGator_LoadData()'),1);
+  if ~isempty(ld)
+    drop(ld:end) = true;               % the loader subfunction is emitted last
+    j = ld-1;                          % drop the blank line(s) just before it too
+    while j>=1 && isempty(t{j}); drop(j) = true; j = j-1; end
+  end
+  revtxt = revtxt(~drop);
+end
+
 fid = fopen(RevFile,'w');
 fprintf(fid,'%s\n',revtxt{:});
 fclose(fid);
-% .mat layout matches forward-generated files: <RevName>.Gator1Data
-revdata = struct();
-revdata.(RevName) = struct('Gator1Data',RevGator);
-if ~isfield(revdata,RevName)
-  error('adigator:revgrad:io','internal error assembling %s',RevMat);
+if hasData
+  % .mat layout matches forward-generated files: <RevName>.Gator1Data
+  revdata = struct();
+  revdata.(RevName) = struct('Gator1Data',RevGator);
+  save(RevMat,'-struct','revdata');
 end
-save(RevMat,'-struct','revdata');
 % the reverse file is self-contained: remove the forward intermediate
 delete(FwdFile); delete(FwdMat);
 clear('global',['ADiGator_',FwdName]);
@@ -210,7 +233,8 @@ if opts.echo
     'generated reverse gradient file: ''%s'';\n'],RevName);
 end
 output.FunctionFile = RevFile;
-output.MatFile      = RevMat;
+output.MatFile      = '';
+if hasData; output.MatFile = RevMat; end
 output.Path         = OutDir;
 end
 

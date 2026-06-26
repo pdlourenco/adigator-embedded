@@ -28,8 +28,10 @@ w = randn(2,1); z = randn(2,1);
 [H,G,f] = gapfun_Hes(w,z);                     % Hessian, gradient, value
 ```
 
-`DerType` is `'jacobian'`, `'gradient'` or `'hessian'`; the input cell mirrors
-the user function's argument order. For classic (non-embedded) use,
+`DerType` is `'jacobian'`, `'gradient'`, `'hessian'`, or `'gradient-reverse'`
+(a reverse-mode/adjoint gradient of a scalar cost, embedded through the same
+modes — fully-vectorized adjoints carry no static data at all); the input cell
+mirrors the user function's argument order. For classic (non-embedded) use,
 `adigatorGenJacFile` / `adigatorGenHesFile` remain available.
 
 ## Embed modes (`embed_mode`)
@@ -123,9 +125,13 @@ Output forms (issue #21 / roadmap R5)
   per-call dense projection.
 - `adigatorGenJtVFile`: computes J'*v in a single forward+adjoint sweep.
 
-Reverse mode (roadmap R4)
-- `adigatorGenRevGradFile`: a standalone reverse-mode gradient generator for
-  scalar costs with reductions.
+Reverse mode (roadmap R4 / R16)
+- `adigatorGenRevGradFile`: a reverse-mode gradient generator for scalar costs
+  with reductions. Emits `[Grd, Fun]` (C-6 order); a fully-vectorized adjoint
+  carries no static data (zero-ROM, ANALYSIS §3.5).
+- Embeddable via `adigatorGenDerFile_embedded('gradient-reverse', …)` (R16):
+  the self-contained reverse file goes through the same `c`/`l`/`i` pipeline as
+  the forward generators.
 
 Runtime-free growth dimensions
 - `loopbound` option (roadmap R3, issue #6): generate at (Nmax, Kmax) with
