@@ -88,3 +88,10 @@ Contracts section (binding conventions), or for purely mechanical choices
   transformation globals only on the paths that use them, so reading a returned
   cada object no longer re-registers an empty `ADIGATOR`; the B16 hygiene asserts
   tighten to strict-absent (R11, issue #54).
+- [ADR-0016](ADR-0016-matrix-free-products-efficiency-path.md) — measured
+  determination: matrix-free products (J·v, J'·v, H·v) are the embedded-efficiency
+  path (zero-ROM, density-independent); forward+sparsity stays for assembled
+  matrices (dense O(n²) is intrinsic); the re-vectorization peephole is shelved.
+  Ties #56 (direction) / #73 (all-axes comparison to C) / #64 (codegen-equivalence
+  infra); new `_Hvp`/`_Jv` generators follow the `[deriv…, Fun]` convention
+  (R12 reframed; R16–R19).

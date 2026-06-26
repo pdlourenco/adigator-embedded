@@ -26,7 +26,7 @@ code.
 Two review modes; the reviewer can run either or both.
 
 - **Verification — *did we build it right?*** Does the diff match the binding
-  contracts in [`DESIGN.md`](DESIGN.md) §Contracts (C-1..C-5), the conventions
+  contracts in [`DESIGN.md`](DESIGN.md) §Contracts (C-1..C-6), the conventions
   in `adigatorDerivativeConventions.m`, and the `Verified by:` tests in
   `CI_PLAN.md`? Findings are mechanical: a rule said X, the diff did Y.
 - **Validation — *did we build the right thing?*** Does the diff honour the
