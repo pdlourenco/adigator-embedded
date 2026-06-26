@@ -344,6 +344,48 @@ path, or the open-fid set changed.
    In inline mode each number costs ~20 source bytes; contiguous gathers
    (`1:n`) are very common.
 
+**What forward's index data *is*, and when it is removable.** Forward mode
+represents a derivative as a *nonzero vector plus a constant map of where those
+nonzeros live* in the assembled Jacobian/gradient. So a forward file carries,
+near-universally, a `y.dX_location` table; and — for *matrix-bearing* operations
+only (`mtimes`) — the `scatter → op → gather` projection tables. The two cases
+differ:
+
+- **Sparse derivatives** (the common embedded case): the location map *is* the
+  sparsity structure — genuine, O(nnz), not removable. Forward is already
+  near-optimal here.
+- **Dense derivatives:** the location map degenerates to the contiguous
+  identity. The forward gradient of a dense elementwise/reduction cost
+  (`sum(exp(x)+2x)`, n=6) carries a *single* table, `Index1 = [1 2 3 4 5 6]` —
+  the range `1:n` — with the body already fully vectorized
+  (`y.dx = exp(x).*x.dx + …`) and `Data1` empty. (A fully dense *Jacobian's*
+  location is likewise `1:(m·n)`, contiguous, just longer.) Two removals apply:
+  **(a)** item 4 *range-compression* stores it as `uint32(1:n)` regardless of
+  length; **(b)** *identity-location elimination* — when
+  `y.dX_location == 1:numel`, the wrapper's `J(location) = y.dX` is the identity,
+  so the table can drop and the wrapper emit `J = reshape(y.dX, …)` directly.
+  Unlike R12's matmul scatter (whose precondition, an identity *scatter*, never
+  arises — §3.5), the identity *location* genuinely does occur for dense outputs,
+  so (b) is a tractable wrapper-level peephole.
+
+**Priority: low.** Two distinct costs must not be conflated. The **location map**
+is O(nnz), but for a fully dense output it is the contiguous identity — cheaply
+range-compressed (item 4) or eliminated (b) at *any* length. The genuinely large
+**O(n²) ROM** of a dense *matrix-bearing* derivative is a different thing: the
+`scatter → op → gather` *projection plumbing* (§2.3, §3.5), whose scatter is
+structured (never identity), so it is **not** removable by a peephole — R12 was
+shelved for exactly this reason. So the location map is the only part this
+clean-up reaches, and it is small once range-compressed. On top of that,
+`jac_output='nonzeros'` (R5) already removes the per-call dense scatter (returns
+the nonzero vector, exports the pattern once), and a *fully* index-free forward
+dense gradient would mean re-deriving the dense closed form — which is exactly
+what reverse mode does (§3.5: the reverse gradient of such a cost carries **zero**
+static data). So forward dense-location elimination polishes the path one would
+switch away from; the matrix-free / reverse work (R16–R18) is the real answer for
+the dense case, while the sparse case genuinely needs its indices. Net: promote
+item 4 if forward dense/contiguous ROM ever binds; otherwise this is documented
+and deprioritized.
+
 ### 2.2 Dead code (the existing TODO)
 
 The generated `*_ADiGator*` file always computes the function value *and all
