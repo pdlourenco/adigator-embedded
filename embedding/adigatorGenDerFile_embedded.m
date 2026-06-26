@@ -28,8 +28,15 @@ function info = adigatorGenDerFile_embedded(DerType,UserFunName,UserFunInputs,va
 %                       the generated Jacobian, Hessian, gradient file.
 %
 %   Input:
-%       DerType         'jacobian', 'hessian', 'gradient' indicates the 
-%                       chosen derivative
+%       DerType         'jacobian', 'hessian', 'gradient', or
+%                       'gradient-reverse' indicates the chosen derivative.
+%                       'gradient-reverse' produces a REVERSE-mode (adjoint)
+%                       gradient <fn>_RGrd via adigatorGenRevGradFile, embedded
+%                       through the same c/l/i pipeline (roadmap R16, issue
+%                       #73); it requires a scalar cost and unrolled code, and
+%                       its file is self-contained (one file, no separate
+%                       wrapper) - fully vectorized adjoints carry no static
+%                       data at all (ANALYSIS §3.5).
 %       UserFunName     name of the user function to be differentiated
 %       UserFunInputs   cell with list of inputs to the function
 %                       can include differentiating variables or auxiliary
@@ -113,6 +120,20 @@ switch DerType
         info = adigatorGenHesFile(UserFunName,UserFunInputs,varargin{:});
     case 'gradient'
         info = adigatorGenJacFile(UserFunName,UserFunInputs,varargin{:},'Grd');
+    case 'gradient-reverse'
+        % R16b (issue #73): reverse-mode gradient through the embed pipeline.
+        % adigatorGenRevGradFile emits a SELF-CONTAINED <fn>_RGrd.m (the wrapper
+        % and the adjoint computation in one file) using the same
+        % global ADiGator_<fn> / ADiGator_LoadData / Gator*Data boilerplate the
+        % patch/prune stages expect, so it embeds with main == m: the pipeline
+        % patches the single file in place rather than embedding a derivative
+        % into a separate wrapper (see the selfContained branch below).
+        rev = adigatorGenRevGradFile(UserFunName,UserFunInputs,varargin{:});
+        [~,revname] = fileparts(rev.FunctionFile);
+        info = struct('GenFiles', struct(...
+            'main',rev.FunctionFile,'m',rev.FunctionFile,'mat',rev.MatFile,...
+            'name',revname,'dername',revname,'func',{{revname}},...
+            'path',rev.Path,'data',{{}},'datapath',{{}},'selfContained',true));
     otherwise
         error('Unsupported derivative type: %s', DerType);
 end
@@ -149,10 +170,31 @@ N_derivs = length(AdigatorGeneratedFiles);
 for derf = 1:N_derivs
     fprintf('Processing derivative #%d...\n',derf);
 
+    % R16b (issue #73): a self-contained derivative (the reverse _RGrd file)
+    % is both wrapper and computation in one file (main == m), so it is patched
+    % in place rather than embedded into a separate wrapper.
+    selfContained = isfield(AdigatorGeneratedFiles(derf),'selfContained') ...
+        && AdigatorGeneratedFiles(derf).selfContained;
+
+    % A self-contained file may carry NO static data (a fully-vectorized reverse
+    % gradient, ANALYSIS §3.5): no .mat, no global/load/Gator*Data. There is
+    % nothing to prune or embed - just stamp %#codegen in place and move on.
+    if selfContained && (isempty(AdigatorGeneratedFiles(derf).mat) ...
+            || ~isfile(AdigatorGeneratedFiles(derf).mat))
+        fprintf('\t self-contained, no static data: stamping %%#codegen.\n');
+        txt = adigator_patch_derivative(AdigatorGeneratedFiles(derf).main,...
+            AdigatorGeneratedFiles(derf).name,{AdigatorGeneratedFiles(derf).name},1);
+        writelines(txt,AdigatorGeneratedFiles(derf).main,'WriteMode','overwrite');
+        continue
+    end
+
     %%% R7b (issue #21): slim the derivative code BEFORE pruning so the
     %%% now-unreferenced Gator*Data index tables drop in the prune below.
     %%% Opt-in; conservative (leaves the file unsliced on any uncertainty).
-    if opts.slim_embed
+    %%% Reverse files (self-contained) are not sliced yet (the wrapper-demand
+    %%% model assumes a separate wrapper); reverse slimming is deferred (R18+).
+    slim = struct('sliced',false,'dropped',0,'collapsed',0,'checked',false,'reason','');
+    if opts.slim_embed && ~selfContained
         fprintf('\t Slimming derivative code (slim_embed)... ');
         slim = adigatorSlimEmbeddedDeriv(AdigatorGeneratedFiles(derf),UserFunInputs);
         if slim.sliced || slim.collapsed > 0
@@ -206,8 +248,9 @@ for derf = 1:N_derivs
         auxiliary_deriv_filecontents = adigator_patch_derivative(AdigatorGeneratedFiles(derf).m,AdigatorGeneratedFiles(derf).dername,AdigatorGeneratedFiles(derf).func,0,AdigatorGeneratedFiles(derf).data);
         fprintf('done.\n');
 
-        % cleanup (derivative file)
-        delete(AdigatorGeneratedFiles(derf).m);
+        % cleanup (derivative file) - kept for a self-contained file, which is
+        % rewritten in place by the embed step below
+        if ~selfContained; delete(AdigatorGeneratedFiles(derf).m); end
         % cleanup (static data file)
         delete(AdigatorGeneratedFiles(derf).mat);
     end
@@ -219,18 +262,25 @@ for derf = 1:N_derivs
         auxiliary_deriv_filecontents = adigator_patch_derivative(AdigatorGeneratedFiles(derf).m,AdigatorGeneratedFiles(derf).dername,AdigatorGeneratedFiles(derf).func,0);
         fprintf('done.\n');
 
-        % cleanup (remove derivative file)
-        delete(AdigatorGeneratedFiles(derf).m);
+        % cleanup (remove derivative file) - kept for a self-contained file,
+        % which is rewritten in place by the embed step below
+        if ~selfContained; delete(AdigatorGeneratedFiles(derf).m); end
     end
 
-    %%% embed derivative and data function into the main wrapper
+    %%% embed: forward embeds the patched derivative into a separate wrapper; a
+    %%% self-contained reverse file IS the wrapper, so write the already-patched
+    %%% (%#codegen + persistent/coder.load or inline-data) contents back in place.
     fprintf('\t Embed data and derivative functions... ');
-    % patch main wrapper with %#codegen
-    main_deriv_filecontents = adigator_patch_derivative(AdigatorGeneratedFiles(derf).main,AdigatorGeneratedFiles(derf).name,{AdigatorGeneratedFiles(derf).name},1);
-    % write to file
-    writelines(main_deriv_filecontents,AdigatorGeneratedFiles(derf).main,'WriteMode','overwrite');
-    writelines(["";""],AdigatorGeneratedFiles(derf).main,'WriteMode','append');
-    writelines(auxiliary_deriv_filecontents,AdigatorGeneratedFiles(derf).main,'WriteMode','append');
+    if selfContained
+        writelines(auxiliary_deriv_filecontents,AdigatorGeneratedFiles(derf).main,'WriteMode','overwrite');
+    else
+        % patch main wrapper with %#codegen
+        main_deriv_filecontents = adigator_patch_derivative(AdigatorGeneratedFiles(derf).main,AdigatorGeneratedFiles(derf).name,{AdigatorGeneratedFiles(derf).name},1);
+        % write to file
+        writelines(main_deriv_filecontents,AdigatorGeneratedFiles(derf).main,'WriteMode','overwrite');
+        writelines(["";""],AdigatorGeneratedFiles(derf).main,'WriteMode','append');
+        writelines(auxiliary_deriv_filecontents,AdigatorGeneratedFiles(derf).main,'WriteMode','append');
+    end
     if inline
         for dataf = 1:length(AdigatorGeneratedFiles(derf).data)
             tmp_data = readlines(AdigatorGeneratedFiles(derf).datapath{dataf});
