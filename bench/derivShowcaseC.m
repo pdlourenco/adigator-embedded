@@ -30,7 +30,7 @@ function report = derivShowcaseC(varargin)
 
 p = inputParser; p.FunctionName = 'derivShowcaseC';
 p.addParameter('n',8,@(x)isnumeric(x)&&isscalar(x)&&x>=2);
-p.addParameter('sweepN',[4 8 16 32],@(x)isnumeric(x));
+p.addParameter('sweepN',[256 1024 4096],@(x)isnumeric(x));
 p.addParameter('figPath','',@(x)ischar(x)||isstring(x));
 p.addParameter('reportPath','',@(x)ischar(x)||isstring(x));
 p.addParameter('verbose',true,@(x)islogical(x)&&isscalar(x));
@@ -46,13 +46,15 @@ if isempty(which('codegen')) || ~license('test','MATLAB_Coder')
 end
 
 % embeddable cells (inline mode; c can't codegen - global/load). Vectorized
-% anchors (codegen-friendly); a fixed-n point each: forward grd/hes/jac + the
-% reverse gradient. (The rolled-loop axis is the MATLAB-level R17a table;
-% rolled-loop codegen is a separate concern - ANALYSIS §2.3(7).)
-cells = struct('fn',{'vcostfun','vcostfun','vcostfun','vvecfun'},...
-               'DerType',{'gradient','gradient-reverse','hessian','jacobian'},...
-               'unroll',{1,1,1,1});
-rows = struct('fn',{},'DerType',{},'cBytes',{},'mexErr',{},...
+% anchors + one ROLLED Jacobian (vfun unroll=0) so the rolled-vs-unrolled axis
+% reaches C where codegen permits. (Rolled scalar-cost gradient/Hessian do NOT
+% codegen - a separate concern, ANALYSIS §2.3(7) / roadmap R19 - so they are not
+% in the C table; the MATLAB-level R17a table covers them.)
+cells = struct(...
+    'fn',     {'vcostfun','vcostfun','vcostfun','vvecfun','vfun'},...
+    'DerType',{'gradient','gradient-reverse','hessian','jacobian','jacobian'},...
+    'unroll', {1,1,1,1,0});
+rows = struct('fn',{},'DerType',{},'unroll',{},'cBytes',{},'mexErr',{},...
     'mexMs',{},'matMs',{},'compileS',{},'ok',{},'note',{});
 for ci = 1:numel(cells)
     if o.verbose; fprintf('  building %-8s %-16s (n=%d)...\n',cells(ci).fn,cells(ci).DerType,o.n); end
@@ -79,7 +81,7 @@ end
 
 %% --------------------------------------------------------------------- %%
 function r = buildCell(c, n)
-r = struct('fn',c.fn,'DerType',c.DerType,'cBytes',-1,'mexErr',-1,...
+r = struct('fn',c.fn,'DerType',c.DerType,'unroll',c.unroll,'cBytes',-1,'mexErr',-1,...
     'mexMs',-1,'matMs',-1,'compileS',-1,'ok',false,'note','');
 base = pwd; d = tempname; mkdir(d);
 restore = onCleanup(@() cleanupBuild(base, d));
@@ -139,17 +141,22 @@ end
 end
 
 function makeFigure(s, figPath)
-% Compiled-C size vs n, forward vs reverse gradient (vcostfun, inline). For a
-% vectorized cost the C is n-flat (n is a runtime array length); the reverse
-% gradient is consistently leaner (no nonzero-location map; ANALYSIS §3.5).
-% (MEX runtime at these sizes is at the timeit floor, so it is reported in the
-% table, not plotted.)
-fig = figure('Visible','off','Position',[100 100 520 360]);
-plot(s.n, s.fwdC, '-o', s.n, s.revC, '-s', 'LineWidth', 1.6, 'MarkerSize', 7);
-grid on; xlabel('n (number of variables)'); ylabel('generated C (bytes)');
-title({'vcostfun gradient: compiled-C size','forward vs reverse, inline mode (R17b)'});
-legend('forward gradient','reverse gradient','Location','east');
+% Forward vs reverse gradient (vcostfun, inline) across a size range:
+%  left  - compiled-C size: roughly n-flat (n is a runtime array length, not
+%          unrolled code); reverse consistently leaner (no location map, §3.5).
+%  right - MEX runtime: both O(n) and essentially COMPARABLE - the reverse win
+%          is code size / ROM, not speed (issue #73's runtime comparison).
+fig = figure('Visible','off','Position',[100 100 820 340]);
+subplot(1,2,1);
+plot(s.n, s.fwdC, '-o', s.n, s.revC, '-s', 'LineWidth', 1.6, 'MarkerSize', 6);
+grid on; set(gca,'XScale','log'); xlabel('n'); ylabel('generated C (bytes)');
+title('Compiled-C size'); legend('forward','reverse','Location','northwest');
 ylim([0 max([s.fwdC s.revC])*1.15]);
+subplot(1,2,2);
+loglog(s.n, s.fwdMs, '-o', s.n, s.revMs, '-s', 'LineWidth', 1.6, 'MarkerSize', 6);
+grid on; xlabel('n'); ylabel('MEX eval (ms)');
+title('Compiled runtime (O(n), comparable)'); legend('forward','reverse','Location','northwest');
+sgtitle('vcostfun gradient: forward vs reverse, inline mode (R17b)');
 try
     exportgraphics(fig, figPath, 'Resolution', 120);
 catch
@@ -170,6 +177,7 @@ switch [fn '_' strrep(dt,'-','')]
     case 'vcostfun_gradientreverse'; g = exp(xv)+2;
     case 'vcostfun_hessian';         g = diag(exp(xv));
     case 'vvecfun_jacobian';         g = diag(cos(xv)+2*xv);
+    case 'vfun_jacobian';            g = diag(cos(xv)+2*xv);
     otherwise; error('no ref for %s/%s',fn,dt);
 end
 end
@@ -196,14 +204,14 @@ function s = ternstr(c,a,b); if c; s=a; else; s=b; end; end
 
 %% --------------------------------------------------------------------- %%
 function md = renderCTable(rows, n)
-hdr = sprintf("| function | DerType | C bytes (n=%d) | MEX≡analytic | MEX (ms) | MATLAB (ms) | compile (s) |",n);
-sep = "|---|---|---:|---|---:|---:|---:|";
+hdr = sprintf("| function | DerType | unroll | C bytes (n=%d) | MEX≡analytic | MEX (ms) | MATLAB (ms) | compile (s) |",n);
+sep = "|---|---|---:|---:|---|---:|---:|---:|";
 lines = [hdr; sep];
 for k = 1:numel(rows)
     r = rows(k);
     eq = '—'; if r.mexErr>=0; eq = ternstr(r.ok,'yes',sprintf('NO (%.0e)',r.mexErr)); end
-    lines(end+1,1) = string(sprintf("| %s | %s | %s | %s | %s | %s | %s |",...
-        r.fn, r.DerType, fmt(r.cBytes,'%d'), eq, fmt(r.mexMs,'%.3f'),...
+    lines(end+1,1) = string(sprintf("| %s | %s | %d | %s | %s | %s | %s | %s |",...
+        r.fn, r.DerType, r.unroll, fmt(r.cBytes,'%d'), eq, fmt(r.mexMs,'%.3f'),...
         fmt(r.matMs,'%.3f'), fmt(r.compileS,'%.1f'))); %#ok<AGROW>
 end
 md = char(strjoin(lines, newline));

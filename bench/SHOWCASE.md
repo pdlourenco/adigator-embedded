@@ -88,27 +88,37 @@ rc = derivShowcaseC('n',8,'figPath','bench/showcase_scaling.png');
 
 Snapshot (inline mode, n = 8, MATLAB R2024a + MinGW):
 
-| function | DerType | C bytes | MEX≡analytic | MEX (ms) | MATLAB (ms) | compile (s) |
-|---|---|---:|---|---:|---:|---:|
-| vcostfun | gradient | 19505 | yes | 0.003 | 0.138 | 15.9 |
-| vcostfun | gradient-reverse | 17940 | yes | 0.004 | 0.016 | 2.9 |
-| vcostfun | hessian | 20669 | yes | 0.003 | 0.095 | 3.3 |
-| vvecfun | jacobian | 19309 | yes | 0.003 | 0.067 | 2.1 |
+| function | DerType | unroll | C bytes | MEX≡analytic | MEX (ms) | MATLAB (ms) | compile (s) |
+|---|---|---:|---:|---|---:|---:|---:|
+| vcostfun | gradient | 1 | 19503 | yes | 0.002 | 0.141 | 13.6 |
+| vcostfun | gradient-reverse | 1 | 17940 | yes | 0.001 | 0.016 | 3.0 |
+| vcostfun | hessian | 1 | 20665 | yes | 0.002 | 0.099 | 3.4 |
+| vvecfun | jacobian | 1 | 19309 | yes | 0.003 | 0.069 | 2.1 |
+| vfun | jacobian | 0 | 20484 | yes | 0.003 | 0.186 | 2.7 |
 
-![compiled-C size vs n](showcase_scaling.png)
+![compiled-C size and runtime vs n](showcase_scaling.png)
 
 - **The §3.5 result carries to compiled C:** the reverse gradient's generated C
   is consistently **leaner** than the forward gradient's (≈17.9 k vs ≈19.5 k
   bytes, ~8 %), and the reverse builds faster — it has no nonzero-location
   scatter to emit.
-- **Compiled-C size is `n`-flat for a vectorized cost** (the figure): `n` is a
-  runtime array length, not unrolled code, so the C does not grow with the
-  number of variables; the forward/reverse gap is a roughly constant offset.
-- **MEX ≡ MATLAB exactly** on every cell (the embed-mode C-4 guarantee compiled).
-  At these sizes the MEX runtime is at the `timeit` floor (~0.003 ms) so the
-  compiled-vs-compiled comparison is noise here; the *interpreted* MATLAB column
-  still shows reverse (0.016 ms) cheaper than forward (0.138 ms), reflecting its
-  smaller operation count. (`SCodegenShowcaseTest` pins build + equivalence +
-  reverse-is-leaner; the rolled-loop anchors are excluded from the C level —
-  rolled-loop codegen is a separate concern, ANALYSIS §2.3(7).)
+- **…but runtime is COMPARABLE, not a reverse win** (the figure's right panel,
+  and #73's runtime axis). Across `n` = 256 / 1024 / 4096 the compiled MEX times
+  are forward 0.006 / 0.014 / 0.045 ms vs reverse 0.006 / 0.010 / 0.045 ms — both
+  O(n) and within noise of each other. The reverse advantage is **code size and
+  ROM, not speed**; pick reverse to shrink the artifact, not to run faster.
+- **Compiled-C size is roughly `n`-flat for a vectorized cost** (left panel):
+  `n` is a runtime array length, not unrolled code, so the C barely grows with
+  the number of variables; the forward/reverse gap is a roughly constant offset.
+- **rolled vs unrolled, to C:** `vvecfun` (unrolled) vs `vfun` (rolled) Jacobian
+  both compile and match — the rolled file is a bit larger (20.5 k vs 19.3 k)
+  and slower to interpret. Note **rolled *scalar-cost* gradient/Hessian do not
+  codegen** (a separate concern, ANALYSIS §2.3(7) / roadmap R19), so the rolled
+  axis reaches C here only for the Jacobian; the MATLAB-level table above covers
+  the rest.
+- **MEX ≡ analytic exactly** on every cell (the embed-mode C-4 guarantee
+  compiled). The interpreted-MATLAB column still shows reverse (0.016 ms) cheaper
+  than forward (0.141 ms) — the interpreter pays per-statement overhead the
+  compiled code amortizes. (`SCodegenShowcaseTest` pins build + equivalence +
+  reverse-is-leaner.)
 
