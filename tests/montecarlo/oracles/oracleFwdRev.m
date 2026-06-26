@@ -43,9 +43,9 @@ adigatorGenJacFile(c.name, {ax}, struct('echo',0,'overwrite',1), 'Grd');
 outF = mcEval([c.name '_Grd'], 2, c.x0);
 gFwd = outF{1}(:);
 
-% reverse gradient: [value, grad] = <name>_RGrd(x)
+% reverse gradient: [grad, value] = <name>_RGrd(x)   (C-6: derivative first)
 outR = mcEval([c.name '_RGrd'], 2, c.x0);
-gRev = outR{2}(:);
+gRev = outR{1}(:);
 
 % forward vs reverse: different algorithms, so tight tolerance not bit-exact
 atol = 1e-8; rtol = 1e-8;
