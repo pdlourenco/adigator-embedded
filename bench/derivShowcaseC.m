@@ -11,7 +11,7 @@ function report = derivShowcaseC(varargin)
 %   report = derivShowcaseC('Name',value,...)
 % Options (defaults in brackets):
 %   n        [8]    problem size for the fixed-size cell table.
-%   sweepN   [[4 8 16 32]]  sizes for the forward-vs-reverse scaling figure
+%   sweepN   [[256 1024 4096]]  sizes for the forward-vs-reverse scaling figure
 %                   ([] to skip the figure).
 %   figPath  ['']   write the scaling figure (PNG) here.
 %   reportPath ['']  write the markdown table here.
