@@ -42,7 +42,11 @@ mirrors the user function's argument order. For classic (non-embedded) use,
 | `'l'` coderload | `.mat` via `coder.load` + `coder.const` | no (persistent) | compile-time only | yes | yes |
 | `'i'` inline *(embedded-generator default)* | emitted as source in a data function | no | no | no | yes |
 
-All three return numerically identical results (DESIGN §Contracts C-4).
+All three return numerically identical results (DESIGN §Contracts C-4). For a
+side-by-side "which mode (and forward vs reverse) should I pick?" comparison —
+code size, static-data ROM, compiled-C size and runtime across every axis — see
+[`bench/SHOWCASE.md`](../bench/SHOWCASE.md) (regenerate with `bench/derivShowcase`
+/ `bench/derivShowcaseC`).
 `adigatorGenDerFile_embedded` defaults to **`'i'` inline + `slim_embed` on** (calling it
 implies you want embeddable, optimized output); the classic generators default to `'c'`.
 
