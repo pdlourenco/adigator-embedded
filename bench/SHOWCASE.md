@@ -93,9 +93,9 @@ correctness + the headline relationships, not the exact figures.)
   a simple cost, hand-coding wins; AD's value is at scale, where the derivative
   is large/sparse enough that deriving and maintaining it by hand becomes
   impractical or silently drops sparsity. The crossover — not a win/lose — is the
-  story; see the C level for where reverse AD nearly matches the hand floor. The
-  analytical derivatives double as the **gold correctness oracle** (FD-checked
-  once, then the equivalence reference).
+  story (the compiled-footprint side of it lands in R17c). The analytical
+  derivatives double as the **gold correctness oracle** (FD-checked once, then the
+  equivalence reference).
 
 ## C level (R17b)
 
@@ -111,7 +111,7 @@ rc = derivShowcaseC('n',8,'figPath','bench/showcase_scaling.png');
 
 Snapshot (inline mode, n = 8, MATLAB R2024a + MinGW):
 
-| function | DerType | impl | unroll | C bytes | MEX≡analytic | MEX (ms) | MATLAB (ms) | compile (s) |
+| function | DerType | impl | unroll | C-source bytes¹ | MEX≡analytic | MEX (ms) | MATLAB (ms) | compile (s) |
 |---|---|---|---:|---:|---|---:|---:|---:|
 | vcostfun | gradient | AD | 1 | 19505 | yes | 0.003 | 0.118 | 13.5 |
 | vcostfun | gradient-reverse | AD | 1 | 17940 | yes | 0.002 | 0.006 | 2.8 |
@@ -122,40 +122,41 @@ Snapshot (inline mode, n = 8, MATLAB R2024a + MinGW):
 | vfun | jacobian | AD | 0 | 20484 | yes | 0.004 | 0.190 | 2.7 |
 | vvecfun | jacobian | analytic | — | 17950 | yes | 0.003 | 0.002 | 2.6 |
 
-![AD vs analytical compiled-C size and runtime vs n](showcase_scaling.png)
+> ¹ **This column is a sum of generated `.c`/`.h` *source* bytes — a poor ROM
+> proxy, dominated by comments and `initialize`/`terminate` boilerplate.** Do
+> **not** read the small forward-vs-reverse spread as a real footprint
+> difference: measuring the *compiled* object (Embedded Coder + `size` /
+> `-fstack-usage`) shows the vectorized forward/reverse/analytical footprints
+> **converge** (~192 / 192 / 176 ROM bytes), because the embeddable forms carry
+> ≈0 static data. The honest ROM / static-RAM / max-stack comparison is **R17c**
+> (the forms that would actually differ are blocked on the Embedded-Coder codegen
+> gaps in [#80](https://github.com/pdlourenco/adigator-embedded/issues/80)).
 
-- **AD vs analytical — reverse AD nearly matches the hand floor.** The hand-coded
-  analytical gradient is the smallest compiled C (≈17.8 k bytes) and the cheapest
-  to evaluate — it's the floor, what a user writes *without* this tool. The key
-  result: **reverse AD (≈17.9 k) lands right on that floor**, while forward AD
-  (≈19.5 k) sits above it; the analytical Hessian/Jacobian are likewise the floor
-  for their DerTypes. For these *simple* costs hand-coding is the cheapest, as
+![AD vs analytical C-source size (proxy¹) and runtime vs n](showcase_scaling.png)
+
+- **AD vs analytical is a *code-lines* story here, not a byte one.** The hand
+  derivative is 4–5 lines vs the AD wrapper's 18–187 (MATLAB-level table above),
+  and it carries no data. For these *simple* costs hand-coding is cheapest, as
   expected — the value of AD is the **crossover** at scale, where the derivative
-  is large/sparse enough that hand-deriving it becomes impractical or silently
-  drops sparsity, and reverse AD already matches hand-coded ROM with none of the
-  by-hand effort. (The analytical column is also the gold correctness oracle;
-  `SDerivShowcaseTest` FD-checks it once.)
-- **The §3.5 result carries to compiled C:** the reverse gradient's generated C
-  is consistently **leaner** than the forward gradient's (≈17.9 k vs ≈19.5 k
-  bytes, ~8 %), and the reverse builds faster — it has no nonzero-location
-  scatter to emit.
-- **…but runtime is COMPARABLE, not a reverse win** (the figure's right panel,
+  grows large/sparse enough that hand-deriving it becomes impractical or silently
+  drops sparsity. The analytical column also doubles as the gold correctness
+  oracle (`SDerivShowcaseTest` FD-checks it once). The compiled-footprint side of
+  this comparison lands in **R17c**.
+- **Runtime is COMPARABLE, not a reverse win** (the figure's right panel,
   and #73's runtime axis). Across `n` = 256 / 1024 / 4096 the compiled MEX times
   are forward 0.006 / 0.014 / 0.045 ms vs reverse 0.006 / 0.010 / 0.045 ms — both
-  O(n) and within noise of each other. The reverse advantage is **code size and
-  ROM, not speed**; pick reverse to shrink the artifact, not to run faster.
-- **Compiled-C size is roughly `n`-flat for a vectorized cost** (left panel):
-  `n` is a runtime array length, not unrolled code, so the C barely grows with
-  the number of variables; the forward/reverse gap is a roughly constant offset.
+  O(n) and within noise of each other. So whichever way the footprint comparison
+  lands (R17c), it is **not** bought with speed.
+- **Source size is roughly `n`-flat for a vectorized cost** (left panel): `n` is
+  a runtime array length, not unrolled code, so the generated source barely grows
+  with the number of variables. (Treat the small forward/reverse offset as
+  boilerplate, per the note above — the real ROM/RAM comparison is R17c.)
 - **rolled vs unrolled, to C:** `vvecfun` (unrolled) vs `vfun` (rolled) Jacobian
-  both compile and match — the rolled file is a bit larger (20.5 k vs 19.3 k)
-  and slower to interpret. Note **rolled *scalar-cost* gradient/Hessian do not
+  both compile and match. Note **rolled *scalar-cost* gradient/Hessian do not
   codegen** (a separate concern, ANALYSIS §2.3(7) / roadmap R19), so the rolled
   axis reaches C here only for the Jacobian; the MATLAB-level table above covers
   the rest.
 - **MEX ≡ analytic exactly** on every cell (the embed-mode C-4 guarantee
-  compiled). The interpreted-MATLAB column still shows reverse (0.006 ms) cheaper
-  than forward (0.118 ms) — the interpreter pays per-statement overhead the
-  compiled code amortizes. (`SCodegenShowcaseTest` pins build + equivalence +
-  reverse-is-leaner.)
+  compiled). (`SCodegenShowcaseTest` pins build + numeric equivalence; the
+  compiled memory comparison is R17c.)
 

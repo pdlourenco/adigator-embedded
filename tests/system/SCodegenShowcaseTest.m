@@ -1,9 +1,10 @@
 classdef SCodegenShowcaseTest < matlab.unittest.TestCase
     % SCodegenShowcaseTest  Guards the R17b C-level derivative showcase
     % (issue #73 item B): compiles the embeddable derivative cells through MATLAB
-    % Coder and asserts they build, the compiled MEX matches MATLAB, and the
-    % headline holds - the reverse gradient's compiled C is leaner than the
-    % forward gradient's (the §3.5 zero-ROM result carried through to C).
+    % Coder and asserts they build and the compiled MEX matches MATLAB. A
+    % source-byte size ordering is deliberately NOT asserted - the `cBytes`
+    % column is a boilerplate-dominated proxy; the honest compiled
+    % ROM/RAM/stack comparison is R17c.
     %
     % Heavyweight (each cell is a Coder build) and Coder-gated: on a runner
     % without MATLAB Coder the whole test skips cleanly via assumption, exactly
@@ -26,7 +27,7 @@ classdef SCodegenShowcaseTest < matlab.unittest.TestCase
     end
 
     methods (Test)
-        function cellsCompileMatchAndReverseIsLeaner(tc)
+        function cellsCompileAndMatch(tc)
             % sweepN = [] -> table cells only (no figure), fast as it gets here.
             report = derivShowcaseC('n',8,'sweepN',[],'verbose',false);
             tc.assumeTrue(report.available, ...
@@ -43,9 +44,12 @@ classdef SCodegenShowcaseTest < matlab.unittest.TestCase
                 end
             end
 
-            % headline: reverse AD gradient C < forward AD gradient C (same
-            % cost), and the hand-coded analytical gradient is leaner still (the
-            % AD-vs-analytical floor, #73).
+            % the forward / reverse / analytical gradient cells all build and
+            % match. NB: we deliberately do NOT assert a source-byte size
+            % ordering here - the `cBytes` column is a sum of generated source
+            % bytes (boilerplate-dominated), a poor ROM proxy; the real compiled
+            % ROM/RAM/stack comparison (Embedded Coder + size/-fstack-usage) is
+            % R17c, pinned there.
             gr = report.rows(strcmp({report.rows.DerType},'gradient'));
             fwd = gr(strcmp({gr.impl},'AD'));
             ana = gr(strcmp({gr.impl},'analytic'));
@@ -54,14 +58,8 @@ classdef SCodegenShowcaseTest < matlab.unittest.TestCase
             tc.assertNotEmpty(fwd, 'forward AD gradient cell missing');
             tc.assertNotEmpty(rev, 'reverse AD gradient cell missing');
             tc.assertNotEmpty(ana, 'analytical gradient reference missing');
-            if fwd.ok && rev.ok
-                tc.verifyLessThan(rev.cBytes, fwd.cBytes, ...
-                    'reverse gradient compiled C should be leaner than forward (§3.5)');
-            end
-            if fwd.ok && ana.ok
-                tc.verifyLessThanOrEqual(ana.cBytes, fwd.cBytes, ...
-                    'hand-coded analytical gradient should not be larger than forward AD');
-            end
+            tc.verifyTrue(fwd.ok && rev.ok && ana.ok, ...
+                'forward / reverse / analytical gradient must all build + match');
         end
     end
 end
