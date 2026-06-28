@@ -5,6 +5,15 @@ classdef UStripDeadOutputIndicesTest < matlab.unittest.TestCase
     % Gap A). The metadata (y.<order>_size / _location) is unread by the terminal
     % wrapper and its read-then-add-field shape breaks ERT, so it is deleted.
 
+    methods (TestClassSetup)
+        function addPaths(tc)
+            import matlab.unittest.fixtures.PathFixture
+            testDir = fileparts(mfilename('fullpath'));
+            repoRoot = fileparts(fileparts(testDir));
+            tc.applyFixture(PathFixture(fullfile(repoRoot,'embedding')));
+        end
+    end
+
     methods (Test)
         function stripsSizeAndLocationLines(tc)
             in = [ "y.dx = cada1td1;"
