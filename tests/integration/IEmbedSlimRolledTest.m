@@ -1,16 +1,21 @@
 classdef IEmbedSlimRolledTest < matlab.unittest.TestCase
-    % IEmbedSlimRolledTest  R10(a) end-to-end (issue #44 item 1): the slim_embed
-    % driver must now slice a MULTI-SUBFUNCTION generated file that contains a
-    % ROLLED for...end loop (unroll=0), which adigatorSlimDerivFile previously
-    % bailed on. Generates a 3-subfunction Jacobian whose middle subfunction sums
-    % via a rolled loop, with and without slim_embed, and asserts (a) the slice
-    % actually fired across the rolled file - the unread _location metadata is
-    % gone (proof the conservative bail is lifted), and (b) the slimmed
-    % derivative is numerically identical to the unslimmed baseline and to the
-    % analytic Jacobian. The generation-time slice + closure gate + numeric
-    % round-trip all run during the slim generation; the runtime check is the
-    % extra cross-check (coder.* resolves in base MATLAB on most runners; it is
-    % assumption-skipped where it does not).
+    % IEmbedSlimRolledTest  R10(a) end-to-end (issue #44 item 1): a
+    % MULTI-SUBFUNCTION generated file containing a ROLLED for...end loop
+    % (unroll=0) must generate and compute correctly through the full embedded
+    % pipeline. Generates a 3-subfunction Jacobian whose middle subfunction sums
+    % via a rolled loop, with and without slim_embed, and asserts (a) the dead
+    % output-index metadata is gone regardless of slim_embed (since #80 Gap A the
+    % embed pipeline strips it unconditionally), and (b) the result is
+    % numerically identical with/without slim and equal to the analytic Jacobian.
+    %
+    % NB: that unconditional strip subsumes the only end-to-end signal this test
+    % used to read (slim removing _location), so slim_embed 0 vs 1 now produce
+    % byte-identical output here. The R10a "rolled multi-subfunction slice fires,
+    % no conservative bail" coverage therefore lives where the strip cannot mask
+    % it - USlimDerivFileTest/slicesRolledLoopReadingCalleeResult drives
+    % adigatorSlimDerivFile directly. This test guards the end-to-end path
+    % (generation + ERT-clean output + numeric exactness; coder.* resolves in
+    % base MATLAB on most runners, assumption-skipped where it does not).
 
     methods (TestClassSetup)
         function addPaths(tc)
@@ -66,16 +71,26 @@ classdef IEmbedSlimRolledTest < matlab.unittest.TestCase
                 struct('embed_mode','l','path',bDir,'echo',0,'unroll',0,'slim_embed',1));
             rehash;
 
-            % (a) the slice fired across the rolled multi-subfunction file: the
-            %     baseline assigns the unread _location metadata, the slimmed
-            %     file no longer does (it would still be present if the rolled
-            %     multi-subfunction file had been conservatively bailed)
+            % (a) the unread _location metadata is gone from the rolled
+            %     multi-subfunction file regardless of slim_embed: since #80
+            %     (Gap A) the embed pipeline strips the dead, ERT-breaking
+            %     output-index metadata UNCONDITIONALLY. That strip subsumes the
+            %     only end-to-end signal this test used to read - so slim_embed=0
+            %     and slim_embed=1 now produce byte-identical output here, and
+            %     this integration test no longer distinguishes them. The R10a
+            %     "rolled multi-subfunction slice fires (no conservative bail)"
+            %     coverage lives where it is actually observable, isolated from
+            %     the embed strip:
+            %     USlimDerivFileTest/slicesRolledLoopReadingCalleeResult drives
+            %     adigatorSlimDerivFile directly. What this test still
+            %     guards is the END-TO-END path: the rolled file generates
+            %     through the full embed pipeline, is ERT-clean, and is exact.
             txtA = readlines(fullfile(aDir,'mfE_Jac.m'));
             txtB = readlines(fullfile(bDir,'mfE_Jac.m'));
-            tc.verifyTrue(any(contains(txtA,'_location')), ...
-                'baseline derivative code should assign _location');
+            tc.verifyFalse(any(contains(txtA,'_location')), ...
+                'dead _location metadata must be stripped even without slim_embed (#80)');
             tc.verifyFalse(any(contains(txtB,'_location')), ...
-                'slim_embed must remove the unread _location from the rolled file');
+                'dead _location metadata must be stripped from the slimmed rolled file');
 
             % (b) numeric result unchanged and equal to the analytic Jacobian
             rng(3); xv = randn(3,1);
