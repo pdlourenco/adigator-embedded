@@ -1,0 +1,5 @@
+# Shell scripts and git hooks must stay LF-terminated regardless of the
+# checkout platform / core.autocrlf, or they fail to execute under sh
+# (a CRLF shebang line is not a valid interpreter path). (#82)
+.githooks/** text eol=lf
+*.sh text eol=lf

@@ -1,0 +1,29 @@
+#!/bin/sh
+# ADiGator-embedded pre-push hook (issue #82).
+#
+# Runs the clean-path PR-gate-equivalent suite (tests/ci_prepush.m: lint + unit
+# + integration) in a fresh `matlab -batch` before every push, so a "works on
+# my machine" pass on a dirty/genpath'd path cannot slip through to CI (the
+# PR #81 failure mode). matlab -batch starts clean, so each test class must
+# supply its own source paths - which is exactly what this enforces.
+#
+# Opt in (per clone):   git config core.hooksPath .githooks
+# Bypass (discouraged): git push --no-verify
+#
+# Skips cleanly when MATLAB is not on PATH (doc-only machines, the web
+# container) - CI still runs the gate there.
+
+if ! command -v matlab >/dev/null 2>&1; then
+  echo "pre-push: matlab not found on PATH; skipping local CI gate (CI will run it)." >&2
+  exit 0
+fi
+
+echo "pre-push: running clean-path CI gate (tests/ci_prepush.m)..." >&2
+if matlab -batch "addpath('tests'); ci_prepush"; then
+  echo "pre-push: CI gate passed." >&2
+  exit 0
+else
+  echo "pre-push: CI gate FAILED - push aborted." >&2
+  echo "          Fix the failures, or bypass with 'git push --no-verify' (discouraged)." >&2
+  exit 1
+fi

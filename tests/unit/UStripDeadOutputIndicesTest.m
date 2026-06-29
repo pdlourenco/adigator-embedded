@@ -1,18 +1,12 @@
-classdef UStripDeadOutputIndicesTest < matlab.unittest.TestCase
+classdef UStripDeadOutputIndicesTest < AdigatorTestCase
     % UStripDeadOutputIndicesTest  Unit test for adigatorStripDeadOutputIndices,
     % the embed-pipeline pass that removes the dead output-index metadata so the
     % embeddable derivative codegens under strict Embedded Coder (ERT) (#80,
     % Gap A). The metadata (y.<order>_size / _location) is unread by the terminal
     % wrapper and its read-then-add-field shape breaks ERT, so it is deleted.
-
-    methods (TestClassSetup)
-        function addPaths(tc)
-            import matlab.unittest.fixtures.PathFixture
-            testDir = fileparts(mfilename('fullpath'));
-            repoRoot = fileparts(fileparts(testDir));
-            tc.applyFixture(PathFixture(fullfile(repoRoot,'embedding')));
-        end
-    end
+    %
+    % Subclasses AdigatorTestCase (#82) for the repo source paths (incl.
+    % embedding/, where adigatorStripDeadOutputIndices lives).
 
     methods (Test)
         function stripsSizeAndLocationLines(tc)
