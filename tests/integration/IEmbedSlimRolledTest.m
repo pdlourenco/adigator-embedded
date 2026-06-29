@@ -1,21 +1,22 @@
 classdef IEmbedSlimRolledTest < matlab.unittest.TestCase
-    % IEmbedSlimRolledTest  R10(a) end-to-end (issue #44 item 1): a
-    % MULTI-SUBFUNCTION generated file containing a ROLLED for...end loop
-    % (unroll=0) must generate and compute correctly through the full embedded
-    % pipeline. Generates a 3-subfunction Jacobian whose middle subfunction sums
-    % via a rolled loop, with and without slim_embed, and asserts (a) the dead
-    % output-index metadata is gone regardless of slim_embed (since #80 Gap A the
-    % embed pipeline strips it unconditionally), and (b) the result is
-    % numerically identical with/without slim and equal to the analytic Jacobian.
+    % IEmbedSlimRolledTest  R10(a) (issue #44 item 1): a MULTI-SUBFUNCTION
+    % generated file containing a ROLLED for...end loop (unroll=0) must slice
+    % (not conservatively bail) and generate + compute correctly through the
+    % full embedded pipeline. Generates a 3-subfunction Jacobian whose middle
+    % subfunction sums via a rolled loop, and asserts (a) the dead output-index
+    % metadata is gone regardless of slim_embed (since #80 Gap A the embed
+    % pipeline strips it unconditionally); (a2) the rolled multi-subfunction
+    % slice actually FIRES (asserted directly via the slim engine on the raw
+    % classic-mode file - immune to the strip); and (b) the result is numerically
+    % identical with/without slim and equal to the analytic Jacobian.
     %
-    % NB: that unconditional strip subsumes the only end-to-end signal this test
-    % used to read (slim removing _location), so slim_embed 0 vs 1 now produce
-    % byte-identical output here. The R10a "rolled multi-subfunction slice fires,
-    % no conservative bail" coverage therefore lives where the strip cannot mask
-    % it - USlimDerivFileTest/slicesRolledLoopReadingCalleeResult drives
-    % adigatorSlimDerivFile directly. This test guards the end-to-end path
-    % (generation + ERT-clean output + numeric exactness; coder.* resolves in
-    % base MATLAB on most runners, assumption-skipped where it does not).
+    % Why (a2) is engine-level: #80's unconditional strip subsumes the old
+    % end-to-end signal (slim_embed 0 vs 1 now produce byte-identical embed
+    % output here), so "did the rolled slice fire" can only be observed before
+    % the strip. (a2) reads sliced=true from adigatorSlimDerivFile directly;
+    % USlimDerivFileTest/slicesRolledLoopReadingCalleeResult covers the same
+    % property in isolation. (coder.* resolves in base MATLAB on most runners,
+    % assumption-skipped where it does not.)
 
     methods (TestClassSetup)
         function addPaths(tc)
@@ -74,23 +75,33 @@ classdef IEmbedSlimRolledTest < matlab.unittest.TestCase
             % (a) the unread _location metadata is gone from the rolled
             %     multi-subfunction file regardless of slim_embed: since #80
             %     (Gap A) the embed pipeline strips the dead, ERT-breaking
-            %     output-index metadata UNCONDITIONALLY. That strip subsumes the
-            %     only end-to-end signal this test used to read - so slim_embed=0
-            %     and slim_embed=1 now produce byte-identical output here, and
-            %     this integration test no longer distinguishes them. The R10a
-            %     "rolled multi-subfunction slice fires (no conservative bail)"
-            %     coverage lives where it is actually observable, isolated from
-            %     the embed strip:
-            %     USlimDerivFileTest/slicesRolledLoopReadingCalleeResult drives
-            %     adigatorSlimDerivFile directly. What this test still
-            %     guards is the END-TO-END path: the rolled file generates
-            %     through the full embed pipeline, is ERT-clean, and is exact.
+            %     output-index metadata UNCONDITIONALLY. (This strip subsumes the
+            %     old end-to-end signal - slim_embed 0 vs 1 now produce
+            %     byte-identical output here - which is why the rolled slice is
+            %     proven directly at the engine level in (a2) instead.)
             txtA = readlines(fullfile(aDir,'mfE_Jac.m'));
             txtB = readlines(fullfile(bDir,'mfE_Jac.m'));
             tc.verifyFalse(any(contains(txtA,'_location')), ...
                 'dead _location metadata must be stripped even without slim_embed (#80)');
             tc.verifyFalse(any(contains(txtB,'_location')), ...
                 'dead _location metadata must be stripped from the slimmed rolled file');
+
+            % (a2) R10a, asserted directly and immune to the embed strip: the
+            %      rolled multi-subfunction slice actually FIRES (it is not
+            %      conservatively bailed). Classic mode runs the generator but
+            %      skips embedding, leaving the raw _ADiGator file; feeding it to
+            %      the slicer must report sliced=true. (Engine-level here because
+            %      the embed artifact can no longer show it, per (a);
+            %      USlimDerivFileTest/slicesRolledLoopReadingCalleeResult covers
+            %      the same property in isolation.)
+            cDir = fullfile(base,'classic');
+            adigatorGenDerFile_embedded('jacobian','mfE', ...
+                {adigatorCreateDerivInput([3 1],'x')}, ...
+                struct('embed_mode','c','path',cDir,'echo',0,'unroll',0));
+            adi = readlines(fullfile(cDir,'mfE_ADiGatorJac.m'));
+            [~, slinfo] = adigatorSlimDerivFile(adi, {'f','dx'});
+            tc.verifyTrue(slinfo.sliced, ...
+                'rolled multi-subfunction slice must fire (R10a) - not conservatively bailed');
 
             % (b) numeric result unchanged and equal to the analytic Jacobian
             rng(3); xv = randn(3,1);
