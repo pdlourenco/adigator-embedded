@@ -29,8 +29,11 @@ classdef UTestPathHygieneTest < AdigatorTestCase
                     txt = fileread(fullfile(files(k).folder, files(k).name));
                     % only consider files that actually declare a test class
                     if isempty(regexp(txt, 'classdef\s+\w+\s*<', 'once')); continue; end
+                    % match AdigatorTestCase anywhere in the superclass list
+                    % (e.g. `classdef X < SomeMixin & AdigatorTestCase`), on the
+                    % classdef line only (no comments, no newline crossing).
                     extendsBase = ~isempty(regexp(txt, ...
-                        'classdef\s+\w+\s*<\s*AdigatorTestCase\>', 'once'));
+                        'classdef\s+\w+\s*<[^%\n]*\<AdigatorTestCase\>', 'once'));
                     hasSetup = ~isempty(regexp(txt, ...
                         'methods\s*\(\s*TestClassSetup\s*\)', 'once'));
                     if ~(extendsBase || hasSetup)

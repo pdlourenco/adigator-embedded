@@ -27,12 +27,14 @@ hand-rolls its own path fixture, so a new class can silently forget it (issue
 Three coupled changes (issue #82):
 
 1. **Clean-path pre-push hook** — `.githooks/pre-push` runs `tests/ci_prepush.m`
-   (lint + unit + integration, the CI PR gate) in a fresh `matlab -batch`, so
-   the path is clean. Opt in per clone with `git config core.hooksPath
-   .githooks`; skips cleanly when MATLAB is not on `PATH`; bypassable only via
-   the explicit `git push --no-verify`. `ci_prepush` is the fast PR-gate
-   equivalent; `ci_local` remains the full local gate (adds the Coder-gated
-   system suite).
+   (lint + unit + integration — the *unit-level* CI PR gate) in a fresh
+   `matlab -batch`, so the path is clean. Opt in per clone with `git config
+   core.hooksPath .githooks`; skips cleanly when MATLAB is not on `PATH`;
+   bypassable only via the explicit `git push --no-verify`. It does **not** run
+   CI's coverage ratchet (`ci_coverage`) — coverage instrumentation roughly
+   doubles the runtime and a slow hook invites `--no-verify`, so the ratchet
+   stays CI-only (run `ci_coverage` manually for coverage-sensitive changes).
+   `ci_local` remains the full local gate (adds the Coder-gated system suite).
 2. **Shared test base class** — `tests/AdigatorTestCase.m` applies the standard
    source-path `PathFixture` set (root, lib, lib/cadaUtils, util, embedding) in
    `TestClassSetup`. New test classes subclass it instead of hand-rolling the
@@ -47,8 +49,9 @@ Three coupled changes (issue #82):
 ## Consequences
 
 - A clean-path local invocation (the hook, or `matlab -batch "addpath('tests');
-  ci_prepush"`) reproduces CI's pass/fail; the dirty-path divergence that bit
-  #81 is gone for anyone who enables the hook.
+  ci_prepush"`) reproduces CI's lint + unit + integration pass/fail (the
+  coverage ratchet runs only in CI); the dirty-path divergence that bit #81 is
+  gone for anyone who enables the hook.
 - A new test class that forgets its path setup is caught **locally and in CI**
   by the guard, immediately and by name.
 - The hook is opt-in (git cannot force `core.hooksPath`) and complements — does

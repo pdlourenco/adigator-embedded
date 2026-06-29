@@ -32,8 +32,10 @@ The code requires real MATLAB (R2022a+, [ADR-0003](decisions/ADR-0003-r2022a-min
 The license-free way to get the CI verdict before pushing is to run the suites
 in a MATLAB session. Two entry points:
 
-- `tests/ci_prepush.m` — the **fast PR-gate equivalent** (lint + unit +
-  integration), what the pre-push hook runs.
+- `tests/ci_prepush.m` — the **fast pre-push gate** (lint + unit + integration),
+  what the hook runs. CI additionally runs the coverage ratchet (`ci_coverage`);
+  that stays **CI-only** so the hook stays fast — run `ci_coverage` manually for
+  coverage-sensitive changes.
 - `tests/ci_local.m` — the **full local gate** (adds the Coder-gated system
   suite).
 

@@ -1,9 +1,12 @@
 function results = ci_prepush()
-%CI_PREPUSH  Fast, clean-path PR-gate equivalent for the pre-push hook (#82).
+%CI_PREPUSH  Fast, clean-path pre-push gate for the git hook (#82).
 %
-% Runs the same gate as CI's PR runner - lint + unit + integration - and
-% NOTHING that is not on that gate (the system/Coder suite is the heavier,
-% Coder-gated extended run; use ci_local for the full local gate including it).
+% Runs the unit-level CI PR gate - lint + unit + integration. It does NOT run
+% CI's coverage ratchet (ci_coverage): instrumenting coverage roughly doubles
+% the runtime, and a slow hook invites `--no-verify` (ADR-0017), so the ratchet
+% stays CI-only - run ci_coverage manually if you changed coverage-sensitive
+% code. The system/Coder suite is likewise the heavier extended run; use
+% ci_local for the full local gate (adds system).
 %
 % The point is the CLEAN PATH: invoke it in a FRESH `matlab -batch` so only
 % `tests/` is on the path and each test class supplies its own source paths
