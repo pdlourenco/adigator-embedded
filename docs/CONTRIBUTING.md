@@ -30,11 +30,41 @@ The ceremony costs more than the signal. Note the outcome in the PR description:
 
 The code requires real MATLAB (R2022a+, [ADR-0003](decisions/ADR-0003-r2022a-minimum-release.md)).
 The license-free way to get the CI verdict before pushing is to run the suites
-in your existing MATLAB session — `tests/ci_local.m` is the entry point (lint +
-unit + integration) for exactly this, optionally wired as a git pre-push hook
-(see `CI_PLAN.md` §3.3). The `matlab.unittest` suite lives under
-`tests/{unit,integration,system}`; `unit_tests/test_unarymath_rules.m` remains
-as the legacy finite-difference rule harness it was built from.
+in a MATLAB session. Two entry points:
+
+- `tests/ci_prepush.m` — the **fast PR-gate equivalent** (lint + unit +
+  integration), what the pre-push hook runs.
+- `tests/ci_local.m` — the **full local gate** (adds the Coder-gated system
+  suite).
+
+**Run them on a clean path** — in a fresh `matlab -batch`, not against a dirty
+interactive session and never via `addpath(genpath(...))`. CI uses a clean path
+(`matlab-actions/run-tests`, no `genpath`), so a dirty-path run can pass locally
+while CI goes red on a test class missing its `PathFixture` (this is real —
+[ADR-0017](decisions/ADR-0017-prepush-clean-path-testing.md), the PR #81 lesson):
+
+```
+matlab -batch "addpath('tests'); ci_prepush"
+```
+
+Wire it as a **pre-push hook** (recommended, [ADR-0017](decisions/ADR-0017-prepush-clean-path-testing.md)) so it runs automatically:
+
+```
+git config core.hooksPath .githooks
+```
+
+The hook skips cleanly where MATLAB is absent and is bypassable only via the
+explicit `git push --no-verify`. It complements — does not replace — the §2
+pre-push reviewer subagent.
+
+**Writing tests:** subclass **`AdigatorTestCase`** (`tests/AdigatorTestCase.m`)
+instead of `matlab.unittest.TestCase` — it puts the repo source folders on the
+path for you, so a class can't silently rely on a dirty path. A class needing
+extra paths adds its own `TestClassSetup` on top. `UTestPathHygieneTest`
+enforces that every `tests/{unit,integration}` class does one or the other. The
+suite lives under `tests/{unit,integration,system}`;
+`unit_tests/test_unarymath_rules.m` remains the legacy finite-difference rule
+harness it was built from.
 
 Note: the MATLAB suite **cannot** run in a Claude-Code-on-the-web container
 (MATLAB is licensed and not provisioned there) — it runs in GitHub Actions
