@@ -1,11 +1,13 @@
 classdef IEmbedSlimTest < matlab.unittest.TestCase
     % IEmbedSlimTest  Roadmap R7b/R7c end-to-end (issue #21): the slim_embed
     % option in the embedded pipeline. Generates a structurally sparse
-    % Jacobian with and without slim_embed and checks that slimming (a) removes
-    % the unread '_location' metadata from the generated derivative code (R7b
-    % field-slice), (b) does not enlarge the pruned data, (c) leaves the numeric
-    % result unchanged in coderload mode, and (d) leaves it unchanged in both
-    % coderload and inline modes with the R7c union-copy peephole in the path.
+    % Jacobian with and without slim_embed and checks that (a) the unread
+    % '_location' metadata is gone regardless of slim_embed (since #80 Gap A the
+    % embed pipeline strips that dead, ERT-breaking metadata unconditionally),
+    % (b) slim_embed does not enlarge the pruned data (its remaining distinct
+    % effect), (c) leaves the numeric result unchanged in coderload mode, and
+    % (d) leaves it unchanged in both coderload and inline modes with the R7c
+    % union-copy peephole in the path.
     % The generation-time slice + closure gate + peephole + numeric round-trip
     % cross-check all run during the slim generation itself (in base MATLAB,
     % before the embed patching), so a successful slim generation already
@@ -51,13 +53,17 @@ classdef IEmbedSlimTest < matlab.unittest.TestCase
                 struct('embed_mode','l','path',bDir,'echo',0,'slim_embed',1));
             rehash;
 
-            % (a) the slimmed derivative code drops the unread _location metadata
+            % (a) the unread _location metadata is gone REGARDLESS of slim_embed.
+            % Since #80 (Gap A) the embed pipeline strips the dead output-index
+            % metadata unconditionally (it breaks strict Embedded Coder codegen),
+            % so both the slim and no-slim derivative code drop it; slim_embed's
+            % distinct effect is now the data pruning in (b).
             txtA = readlines(fullfile(aDir,'es_fun_Jac.m'));
             txtB = readlines(fullfile(bDir,'es_fun_Jac.m'));
-            tc.verifyTrue(any(contains(txtA,'_location')), ...
-                'baseline derivative code should assign _location');
+            tc.verifyFalse(any(contains(txtA,'_location')), ...
+                'dead _location metadata must be stripped even without slim_embed (#80)');
             tc.verifyFalse(any(contains(txtB,'_location')), ...
-                'slim_embed must remove the unread _location assignment');
+                'dead _location metadata must be stripped with slim_embed too');
 
             % (b) the pruned data is no larger (drops the now-unreferenced index)
             nA = numGatorFields(fullfile(aDir,'es_fun_ADiGatorJac.mat'));

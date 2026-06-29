@@ -169,6 +169,10 @@ N_derivs = length(AdigatorGeneratedFiles);
 % go through each derivative
 for derf = 1:N_derivs
     fprintf('Processing derivative #%d...\n',derf);
+    % cleared each iteration so a stale value from a prior derivative can never
+    % leak into the embed/ERT-clean step below (the inline/coderload branch sets
+    % it for this derivative).
+    auxiliary_deriv_filecontents = strings(0,1);
 
     % R16b (issue #73): a self-contained derivative (the reverse _RGrd file)
     % is both wrapper and computation in one file (main == m), so it is patched
@@ -265,6 +269,21 @@ for derf = 1:N_derivs
         % cleanup (remove derivative file) - kept for a self-contained file,
         % which is rewritten in place by the embed step below
         if ~selfContained; delete(AdigatorGeneratedFiles(derf).m); end
+    end
+
+    %%% #80 (Gap A): strip the dead output-index metadata so the embeddable file
+    %%% codegens under strict Embedded Coder (ERT). The core printer emits each
+    %%% order's size/location by reading the previous order's field on the output
+    %%% struct (y.dxdx_size = [y.dx_size, ...]); ERT forbids adding a field after
+    %%% the struct is read. These fields are dead in the terminal wrapper
+    %%% (hardcoded index lists), so we remove them rather than rewrite dead code
+    %%% to be legal. slim_embed=1 already removes them via slicing; this makes it
+    %%% unconditional for the embeddable modes. (Classic mode 'c' returns before
+    %%% this point, so the raw form stays observable there.)
+    % (empty only on a path that produced no derivative subfunction; the
+    % inline/coderload branch above always sets it for an embeddable mode.)
+    if ~isempty(auxiliary_deriv_filecontents)
+        auxiliary_deriv_filecontents = adigatorStripDeadOutputIndices(auxiliary_deriv_filecontents);
     end
 
     %%% embed: forward embeds the patched derivative into a separate wrapper; a
