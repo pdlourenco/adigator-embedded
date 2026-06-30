@@ -74,7 +74,7 @@ Full reference: [`adigatorOptions.m`](../adigatorOptions.m).
 | [`userguide/`](userguide/) | the user's guide ([PDF](userguide/ADiGatorUserGuide.pdf)) and its LaTeX source |
 | [`DESIGN.md`](DESIGN.md) | architecture rationale + the binding output contracts |
 | [`ANALYSIS.md`](ANALYSIS.md) | bug catalogue (B1–B16) + optimisation / reverse-mode analysis |
-| [`ROADMAP.md`](ROADMAP.md) | development roadmap (R1–R20) |
+| [`ROADMAP.md`](ROADMAP.md) | development roadmap (R1–R21) |
 | [`CI_PLAN.md`](CI_PLAN.md) | CI strategy + requirement/test traceability |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | contributor mechanics, pre-push review, ADR policy |
 | [`decisions/`](decisions/) | architecture decision records (ADR-0001 …) |
