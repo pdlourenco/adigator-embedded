@@ -1,4 +1,4 @@
-classdef SCasadiOracleTest < matlab.unittest.TestCase
+classdef SCasadiOracleTest < AdigatorTestCase
     % SCasadiOracleTest  Independent-oracle check (#87): ADiGator's generated
     % derivative vs CasADi, on the SAME unmodified source m-file.
     %
@@ -33,19 +33,17 @@ classdef SCasadiOracleTest < matlab.unittest.TestCase
     end
 
     methods (TestClassSetup)
-        function addPaths(tc)
+        function setUpCasadiOracle(tc)
+            % AdigatorTestCase (base, #86) already puts root/lib/cadaUtils/util/
+            % embedding on the path. Add the showcase battery's home, then gate on
+            % CasADi. bench/ is added HERE, immediately before casadiAvailable() is
+            % called, so there is NO ordering dependency on the base setup (a
+            % separate TestClassSetup method): the skip-clean guarantee holds
+            % regardless of the order MATLAB runs the hierarchy's setup methods.
             import matlab.unittest.fixtures.PathFixture
             root = fileparts(fileparts(fileparts(mfilename('fullpath'))));   % tests/system -> root
-            tc.applyFixture(PathFixture(root));
-            tc.applyFixture(PathFixture(fullfile(root, 'lib')));
-            tc.applyFixture(PathFixture(fullfile(root, 'lib', 'cadaUtils')));
-            tc.applyFixture(PathFixture(fullfile(root, 'util')));
-            tc.applyFixture(PathFixture(fullfile(root, 'embedding')));
             tc.applyFixture(PathFixture(fullfile(root, 'bench')));
             tc.applyFixture(PathFixture(fullfile(root, 'bench', 'showcase')));
-        end
-
-        function requireCasadi(tc)
             tc.assumeTrue(casadiAvailable(), ...
                 'CasADi MATLAB interface not available - skipping independent oracle (set CASADI_DIR).');
         end
