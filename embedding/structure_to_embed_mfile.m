@@ -106,16 +106,20 @@ if isstruct(val)
         if aliasOf(i) > 0
             fprintf(fid, '%s%s = %s;\n', pad, sub_lhs, tname(aliasOf(i)));
         elseif needsTemp(i)
-            % Temp namespace: flatten the field path to one identifier. This is
-            % collision-free as long as field names are underscore-free (else two
-            % distinct paths could flatten to the same temp name). ADiGator data
-            % leaves are Index*/Data* (underscore-free); assert it so a future
-            % reuse with an underscore-bearing eligible field name fails loudly
-            % here rather than silently colliding two temps. (Only reachable for
-            % eligible leaf arrays - struct levels like the function-name field are
-            % never eligible, so an underscore in a function name is unaffected.)
+            % Temp namespace: flatten the field path to one identifier. Two
+            % distinct paths could flatten to the same temp name only if a field
+            % name contains '_' (e.g. S.a_b.Index1 vs S.a.b_Index1). This is a
+            % LEAF-name guard - it asserts the eligible array's own name (Index*/
+            % Data*, underscore-free) and deliberately does NOT assert ancestor
+            % levels, because the function-name level legitimately carries
+            % underscores (e.g. ADiGator_setfun) and a full-path assert would
+            % false-trip. An ancestor-level flatten-collision is thus not caught
+            % here, but it is unreachable for ADiGator data (ancestors are
+            % GatorNData / a function name; no two real paths collide). The guard
+            % fails loud on the reachable leaf sub-case instead of silently
+            % colliding two temps.
             assert(~contains(flds{i}, '_'), 'structure_to_embed_mfile:tempNameClash', ...
-                'de-dup temp naming needs underscore-free field names; got ''%s''', flds{i});
+                'de-dup temp leaf name must be underscore-free; got ''%s''', flds{i});
             tname(i) = "c_" + regexprep(sub_lhs, '\W', '_');
             emit_value(fid, tname(i), v, indent);   % <temp> = <literal>;
             fprintf(fid, '%s%s = %s;\n', pad, sub_lhs, tname(i));
