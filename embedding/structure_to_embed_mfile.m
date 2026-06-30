@@ -73,30 +73,58 @@ if isstring(val), val = char(val); end
 if isstruct(val)
     fprintf(fid, '%s%s = struct();\n', pad, lhs);
     flds = fieldnames(val);
+    nF = numel(flds);
     % v1.5 (ANALYSIS.md §2.1): deduplicate identical sibling arrays. ADiGator
     % frequently stores the same index vector under several Index* names;
-    % emitting an alias assignment instead of repeating the literal shrinks
-    % the generated source (and lets the compiler pool the constant).
-    seen = cell(0,2); % {emitted lhs, value}
-    for i = 1:numel(flds)
-        v = val.(flds{i});
-        sub_lhs = lhs + "." + flds{i};
-        alias = '';
-        if (isnumeric(v) || islogical(v)) && ~issparse(v) && numel(v) >= 16
-            for s = 1:size(seen,1)
-                if strcmp(class(seen{s,2}), class(v)) && isequaln(seen{s,2}, v)
-                    alias = seen{s,1};
-                    break
-                end
+    % emitting one copy and aliasing the rest shrinks the generated source and
+    % lets the compiler pool the constant.
+    %
+    % ERT-safety (#80): the shared copy is bound to a LOCAL temp and the aliases
+    % reference that temp - NOT the sibling struct field. `S.x.B = S.x.A` would
+    % read the struct and then ADD field B, which strict Embedded Coder rejects
+    % ("addition of new fields after a structure has been read or used"). Routing
+    % through a temp keeps the single-copy benefit while emitting no read-then-add.
+    % Fields with no duplicate are emitted exactly as before (no temp, no churn).
+    eligible = @(x) (isnumeric(x) || islogical(x)) && ~issparse(x) && numel(x) >= 16;
+    aliasOf = zeros(nF,1);   % aliasOf(i)=j -> field i duplicates earlier field j
+    for i = 1:nF
+        vi = val.(flds{i});
+        if ~eligible(vi); continue; end
+        for j = 1:i-1
+            vj = val.(flds{j});
+            if eligible(vj) && strcmp(class(vj), class(vi)) && isequaln(vj, vi)
+                aliasOf(i) = j; break
             end
         end
-        if ~isempty(alias)
-            fprintf(fid, '%s%s = %s;\n', pad, sub_lhs, alias);
+    end
+    needsTemp = false(nF,1);          % the "first of a duplicate group" gets a temp
+    needsTemp(aliasOf(aliasOf > 0)) = true;
+    tname = strings(nF,1);
+    for i = 1:nF
+        v = val.(flds{i});
+        sub_lhs = lhs + "." + flds{i};
+        if aliasOf(i) > 0
+            fprintf(fid, '%s%s = %s;\n', pad, sub_lhs, tname(aliasOf(i)));
+        elseif needsTemp(i)
+            % Temp namespace: flatten the field path to one identifier. Two
+            % distinct paths could flatten to the same temp name only if a field
+            % name contains '_' (e.g. S.a_b.Index1 vs S.a.b_Index1). This is a
+            % LEAF-name guard - it asserts the eligible array's own name (Index*/
+            % Data*, underscore-free) and deliberately does NOT assert ancestor
+            % levels, because the function-name level legitimately carries
+            % underscores (e.g. ADiGator_setfun) and a full-path assert would
+            % false-trip. An ancestor-level flatten-collision is thus not caught
+            % here, but it is unreachable for ADiGator data (ancestors are
+            % GatorNData / a function name; no two real paths collide). The guard
+            % fails loud on the reachable leaf sub-case instead of silently
+            % colliding two temps.
+            assert(~contains(flds{i}, '_'), 'structure_to_embed_mfile:tempNameClash', ...
+                'de-dup temp leaf name must be underscore-free; got ''%s''', flds{i});
+            tname(i) = "c_" + regexprep(sub_lhs, '\W', '_');
+            emit_value(fid, tname(i), v, indent);   % <temp> = <literal>;
+            fprintf(fid, '%s%s = %s;\n', pad, sub_lhs, tname(i));
         else
-            emit_value(fid, sub_lhs, v, indent);
-            if (isnumeric(v) || islogical(v)) && ~issparse(v) && numel(v) >= 16
-                seen(end+1,:) = {char(sub_lhs), v}; %#ok<AGROW>
-            end
+            emit_value(fid, sub_lhs, v, indent);     % unique field: unchanged
         end
     end
     return
