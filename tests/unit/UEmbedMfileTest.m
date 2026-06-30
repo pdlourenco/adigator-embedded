@@ -66,19 +66,30 @@ classdef UEmbedMfileTest < matlab.unittest.TestCase
         end
 
         function dedupAliasesRepeatedSiblings(tc)
-            % ANALYSIS.md §2.1: identical sibling arrays emitted once,
-            % aliased thereafter; different class must NOT alias
+            % ANALYSIS.md §2.1: identical sibling arrays emitted once and
+            % aliased thereafter; different class must NOT alias. ERT-safety
+            % (#80): the shared copy is bound to a LOCAL temp and aliases
+            % reference that temp - never the sibling struct field. `S.x.B =
+            % S.x.A` reads the struct then adds field B, which strict Embedded
+            % Coder rejects ("addition of new fields after a structure has been
+            % read or used").
             big = uint32(7:3:7+3*29); % 30 elements, above dedup threshold
             S.Gator1Data.Index1 = big;
             S.Gator1Data.Index2 = big;          % identical -> alias
             S.Gator1Data.Index3 = double(big);  % same values, other class
             fpath = structure_to_embed_mfile('data_dedup_ut', S, pwd);
-            txt = readlines(fpath);
-            tc.verifyTrue(any(strtrim(txt) == ...
-                "S.Gator1Data.Index2 = S.Gator1Data.Index1;"), ...
-                'duplicate sibling array was not aliased');
-            tc.verifyFalse(any(contains(txt, ...
-                "Index3 = S.Gator1Data.Index1")), ...
+            txt = strtrim(readlines(fpath));
+            % the single shared copy is bound to a temp; both fields reference it
+            tc.verifyTrue(any(startsWith(txt, "c_S_Gator1Data_Index1 = uint32(")), ...
+                'shared array not bound to a local temp');
+            tc.verifyTrue(any(txt == "S.Gator1Data.Index2 = c_S_Gator1Data_Index1;"), ...
+                'duplicate sibling array was not aliased to the temp');
+            % ERT-safety invariant: no struct field is aliased to another struct
+            % field (that would be a read-then-add).
+            tc.verifyFalse(any(~cellfun(@isempty, regexp(txt, '\.Index\d+ = S\.', 'once'))), ...
+                'alias must reference a temp, not a sibling struct field (ERT read-then-add)');
+            % different class must not alias
+            tc.verifyFalse(any(contains(txt, "Index3 = c_S_Gator1Data_Index1")), ...
                 'array of different class must not be aliased');
             rehash;
             S2 = data_dedup_ut();
