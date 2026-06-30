@@ -106,10 +106,16 @@ if isstruct(val)
         if aliasOf(i) > 0
             fprintf(fid, '%s%s = %s;\n', pad, sub_lhs, tname(aliasOf(i)));
         elseif needsTemp(i)
-            % temp namespace: flatten the (unique) field path. ADiGator data is
-            % S.GatorNData.{Index,Data}M - underscore-free leaf names, <=3 levels -
-            % so the flattened name is collision-free; revisit if a leaf name ever
-            % contains an underscore (two distinct paths could then collide).
+            % Temp namespace: flatten the field path to one identifier. This is
+            % collision-free as long as field names are underscore-free (else two
+            % distinct paths could flatten to the same temp name). ADiGator data
+            % leaves are Index*/Data* (underscore-free); assert it so a future
+            % reuse with an underscore-bearing eligible field name fails loudly
+            % here rather than silently colliding two temps. (Only reachable for
+            % eligible leaf arrays - struct levels like the function-name field are
+            % never eligible, so an underscore in a function name is unaffected.)
+            assert(~contains(flds{i}, '_'), 'structure_to_embed_mfile:tempNameClash', ...
+                'de-dup temp naming needs underscore-free field names; got ''%s''', flds{i});
             tname(i) = "c_" + regexprep(sub_lhs, '\W', '_');
             emit_value(fid, tname(i), v, indent);   % <temp> = <literal>;
             fprintf(fid, '%s%s = %s;\n', pad, sub_lhs, tname(i));
