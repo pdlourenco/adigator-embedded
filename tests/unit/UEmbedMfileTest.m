@@ -73,20 +73,28 @@ classdef UEmbedMfileTest < matlab.unittest.TestCase
             % S.x.A` reads the struct then adds field B, which strict Embedded
             % Coder rejects ("addition of new fields after a structure has been
             % read or used").
-            big = uint32(7:3:7+3*29); % 30 elements, above dedup threshold
+            big = uint32(7:3:7+3*29);  % 30 elements, above dedup threshold
+            dat = 3.5*ones(20,1);      % a Data* duplicate (not just Index*)
             S.Gator1Data.Index1 = big;
             S.Gator1Data.Index2 = big;          % identical -> alias
-            S.Gator1Data.Index3 = double(big);  % same values, other class
+            S.Gator1Data.Index3 = double(big);  % same values, other class -> no alias
+            S.Gator1Data.Data1  = dat;
+            S.Gator1Data.Data2  = dat;          % identical Data* -> alias
+            S.Nested.A = big;
+            S.Nested.B = big;                   % duplicate in a NESTED, non-Gator struct
             fpath = structure_to_embed_mfile('data_dedup_ut', S, pwd);
-            txt = strtrim(readlines(fpath));
-            % the single shared copy is bound to a temp; both fields reference it
+            txt = cellstr(strtrim(readlines(fpath)));   % cellstr -> regexp returns a cell
+            has = @(s) any(strcmp(txt, s));
+            % each shared copy is bound to a temp; duplicates reference the temp -
+            % across Index*, Data*, and a nested struct.
             tc.verifyTrue(any(startsWith(txt, "c_S_Gator1Data_Index1 = uint32(")), ...
                 'shared array not bound to a local temp');
-            tc.verifyTrue(any(txt == "S.Gator1Data.Index2 = c_S_Gator1Data_Index1;"), ...
-                'duplicate sibling array was not aliased to the temp');
-            % ERT-safety invariant: no struct field is aliased to another struct
-            % field (that would be a read-then-add).
-            tc.verifyFalse(any(~cellfun(@isempty, regexp(txt, '\.Index\d+ = S\.', 'once'))), ...
+            tc.verifyTrue(has('S.Gator1Data.Index2 = c_S_Gator1Data_Index1;'), 'Index* not aliased to temp');
+            tc.verifyTrue(has('S.Gator1Data.Data2 = c_S_Gator1Data_Data1;'),   'Data* not aliased to temp');
+            tc.verifyTrue(has('S.Nested.B = c_S_Nested_A;'),                    'nested dup not aliased to temp');
+            % ERT-safety invariant: NO struct field is aliased to ANOTHER struct
+            % field (any field, not just Index*) - that would be a read-then-add.
+            tc.verifyFalse(any(~cellfun('isempty', regexp(txt, '= S\.\w', 'once'))), ...
                 'alias must reference a temp, not a sibling struct field (ERT read-then-add)');
             % different class must not alias
             tc.verifyFalse(any(contains(txt, "Index3 = c_S_Gator1Data_Index1")), ...

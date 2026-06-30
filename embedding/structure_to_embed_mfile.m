@@ -106,6 +106,10 @@ if isstruct(val)
         if aliasOf(i) > 0
             fprintf(fid, '%s%s = %s;\n', pad, sub_lhs, tname(aliasOf(i)));
         elseif needsTemp(i)
+            % temp namespace: flatten the (unique) field path. ADiGator data is
+            % S.GatorNData.{Index,Data}M - underscore-free leaf names, <=3 levels -
+            % so the flattened name is collision-free; revisit if a leaf name ever
+            % contains an underscore (two distinct paths could then collide).
             tname(i) = "c_" + regexprep(sub_lhs, '\W', '_');
             emit_value(fid, tname(i), v, indent);   % <temp> = <literal>;
             fprintf(fid, '%s%s = %s;\n', pad, sub_lhs, tname(i));
