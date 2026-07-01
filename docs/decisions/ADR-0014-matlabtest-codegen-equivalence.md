@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted — 2026-06-24
+Accepted — 2026-06-24. **Amended 2026-07-01** (#80 R20c): the campaign oracle
+and the re-based `SCodegenTest` are **born ERT** — the build targets Embedded
+Coder (`coder.config('lib','ecoder',true)`), not plain MATLAB Coder `lib` — so
+the whole codegen-equivalence surface exercises the strict target per REQ-T-10.
+(`SCodegenTest`'s ERT lib build landed in PR #92; see Decision 1 / 2.)
 
 ## Context
 
@@ -66,7 +70,13 @@ and **skip-clean** wherever MATLAB Test, MATLAB Coder, or R2023a+ is absent:
    (`struct('name','pass','skipped','message')`) and the *same* skip-clean
    discipline `oracleCrossMode` already uses for `coder.*`. Per case: generate
    the `'i'` (or `'l'`) wrapper for case `c`, then Build→Execute→
-   `verifyExecutionMatchesMATLAB` over `c.x0` plus a few random inputs. The skip
+   `verifyExecutionMatchesMATLAB` over `c.x0` plus a few random inputs. **Born
+   ERT** (amended 2026-07-01, #80 R20c / REQ-T-10): the oracle's build targets
+   **Embedded Coder** (`coder.config('lib','ecoder',true)` — configure
+   `matlabtest.coder.TestCase` with the `ecoder` config, or pass it to the
+   fallback `codegen`) from the start, so the Monte-Carlo campaign compiles
+   through the strict ERT target, never plain `lib` — which tolerates ERT-illegal
+   struct-field patterns and was masking real embedded-codegen gaps. The skip
    is gated on `license('test','MATLAB_Test')` (and the R2023a+ check); it is
    wired into `mcCampaign` as an opt-in oracle.
 
