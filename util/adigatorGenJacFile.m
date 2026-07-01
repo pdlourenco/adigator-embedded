@@ -210,13 +210,15 @@ InputStr1(end) = [];
 
 % roadmap R7a (issue #21): DER_LEVELS selects which derivative levels the
 % wrapper returns. This generator produces level 1 (the first derivative,
-% named Jac here for both the Jacobian and gradient appendices) and level 0
-% (the function value Fun). The first derivative is always returned, so
+% named by the file appendix - Grd for a gradient, Jac for a Jacobian, per
+% C-6; the gradient path calls this generator with NameAppendix='Grd') and
+% level 0 (the function value Fun). The first derivative is always returned, so
 % DER_LEVELS only toggles whether Fun accompanies it; the default ([]) keeps
-% the historical [Jac,Fun] signature.
+% the [<deriv>,Fun] signature. The emission block below assigns the same
+% NameAppendix variable, so the signature and body names always match.
 jacLevels = adigatorResolveDerLevels(opts.der_levels, 1, 'adigatorGenJacFile');
 wantFun   = ismember(0, jacLevels);
-jacOut    = {'Jac'};
+jacOut    = {NameAppendix};   % C-6: Grd (gradient) / Jac (Jacobian), via the appendix
 if wantFun; jacOut{end+1} = 'Fun'; end
 functionstr = ['function [',strjoin(jacOut,','),'] = ',JacFileName,'(',InputStr1,')\n'];
 
@@ -348,32 +350,32 @@ if strcmp(opts.jac_output,'nonzeros')
   % output.JacobianLocs/JacobianStructure. No per-call dense allocation
   % or scatter - embedded first-order solvers assemble (or never form)
   % the Jacobian themselves.
-  fprintf(fid,['Jac = ',dy,'(:);\n']);
+  fprintf(fid,[NameAppendix,' = ',dy,'(:);\n']);
 elseif dydxnnz == dydxnumel % all elements are nonzero
     if dydxsize(1) == 1 % the function is a scalar, use the Gradient convention if user selected
         if strcmp(NameAppendix,'Jac') % Use Jacobian convention
-            fprintf(fid,['Jac = reshape(',dy,',[%1.0f %1.0f]);\n'],[dydxsize(1) dydxsize(2)]);
+            fprintf(fid,[NameAppendix,' = reshape(',dy,',[%1.0f %1.0f]);\n'],[dydxsize(1) dydxsize(2)]);
         else
-            fprintf(fid,['Jac = reshape(',dy,',[%1.0f %1.0f]);\n'],[dydxsize(2) dydxsize(1)]);
+            fprintf(fid,[NameAppendix,' = reshape(',dy,',[%1.0f %1.0f]);\n'],[dydxsize(2) dydxsize(1)]);
         end
     else % the function is not a scalar -> use the Jacobian convention
-        fprintf(fid,['Jac = reshape(',dy,',[%1.0f %1.0f]);\n'],dydxsize);
+        fprintf(fid,[NameAppendix,' = reshape(',dy,',[%1.0f %1.0f]);\n'],dydxsize);
     end
 elseif dydxsize(1) == 1 && dydxsize(2) == 1 % function and variable are scalars
-  fprintf(fid,['Jac = ',dy,';\n']);
+  fprintf(fid,[NameAppendix,' = ',dy,';\n']);
 elseif dydxsize(1) == 1 % function is scalar -> use Gradient convention if user selected Gradient
     if strcmp(NameAppendix,'Jac') % Use Jacobian convention
-        fprintf(fid,'Jac = zeros(1,%1.0f);',dydxsize(2));
+        fprintf(fid,[NameAppendix,' = zeros(1,%1.0f);'],dydxsize(2));
     else
-        fprintf(fid,'Jac = zeros(%1.0f,1);',dydxsize(2));
+        fprintf(fid,[NameAppendix,' = zeros(%1.0f,1);'],dydxsize(2));
     end
-    fprintf(fid,['Jac(',scatteridx,') = ',dy,';\n']);
+    fprintf(fid,[NameAppendix,'(',scatteridx,') = ',dy,';\n']);
 elseif dydxsize(2) == 1 % variable is scalar -> use Jacobian convention
-  fprintf(fid,'Jac = zeros(%1.0f,1);',dydxsize(1));
-  fprintf(fid,['Jac(',scatteridx,') = ',dy,';\n']);
+  fprintf(fid,[NameAppendix,' = zeros(%1.0f,1);'],dydxsize(1));
+  fprintf(fid,[NameAppendix,'(',scatteridx,') = ',dy,';\n']);
 elseif embedscatter % matrix Jacobian, embed modes: literal linear scatter
-  fprintf(fid,'Jac = zeros(%1.0f,%1.0f);\n',dydxsize);
-  fprintf(fid,['Jac(',scatteridx,') = ',dy,';\n']);
+  fprintf(fid,[NameAppendix,' = zeros(%1.0f,%1.0f);\n'],dydxsize);
+  fprintf(fid,[NameAppendix,'(',scatteridx,') = ',dy,';\n']);
 else % Jacobian is a matrix -> Jacobian convention (classic runtime indexing)
   dyloc = [dy,'_location'];
   if ~any(ysize == 1)
@@ -399,11 +401,11 @@ else % Jacobian is a matrix -> Jacobian convention (classic runtime indexing)
   end
   if dydxnumel >= 250 && dydxnnz/dydxnumel <= 3/4 && opts.embed_mode == 'c' % v1.5 - only allow sparse matrices if in classic mode (no embed)
     % Project Sparse
-    fprintf(fid,['Jac = sparse(',rowstr,',',colstr,',',dy,',%1.0f,%1.0f);\n'],dydxsize);
+    fprintf(fid,[NameAppendix,' = sparse(',rowstr,',',colstr,',',dy,',%1.0f,%1.0f);\n'],dydxsize);
   else
     % Project Full
-    fprintf(fid,'Jac = zeros(%1.0f,%1.0f);\n',dydxsize);
-    fprintf(fid,['Jac((',colstr,'-1)*%1.0f+',rowstr,') = ',dy,';\n'],dydxsize(1));
+    fprintf(fid,[NameAppendix,' = zeros(%1.0f,%1.0f);\n'],dydxsize);
+    fprintf(fid,[NameAppendix,'((',colstr,'-1)*%1.0f+',rowstr,') = ',dy,';\n'],dydxsize(1));
   end
 end
 if wantFun % roadmap R7a (issue #21): emit Fun only when level 0 is requested
