@@ -112,3 +112,13 @@ Contracts section (binding conventions), or for purely mechanical choices
   form (default for k≥3) + a dense `[M·Nᵏ⁻¹ × N]` fold generalizing the Hessian
   rule; symmetry dedup deferred; staged scalar→matrix. Convention binds C-1;
   implementation is roadmap R22 (issue #85, needs #84).
+- [ADR-0021](ADR-0021-deprecate-coderload-split-inline-data.md) — **Accepted**:
+  deprecate the coderload `'l'` mode (fork-only, fails ERT, footprint converges
+  with `'i'`) and add a split-inline (derivative + data) form so large-data
+  source size is no reason to keep it; binds C-4 (deprecation + split-form
+  invariants), removal R17-gated; implementation roadmap R24 (issue #83).
+- [ADR-0022](ADR-0022-generalized-der-output-nonzeros.md) — **Accepted**:
+  generalize `jac_output` → a single `der_output ∈ {matrix, nonzeros}` option +
+  a `*Locs` family across DerTypes (Hessian-nonzeros/`HessianLocs` first); binds
+  C-6 (a fourth facet) + extends C-2, with a documented option×DerType×mode N/A
+  matrix; implementation roadmap R25 (issue #84; prerequisite for R22/#85).
