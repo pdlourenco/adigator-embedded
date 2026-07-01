@@ -97,6 +97,11 @@ For a function `f: Rⁿ → Rᵐ` evaluated through the wrappers:
   `(x₁−1)·m + y`.
 - Generalized matrix-input / matrix-output shapes follow the table in
   `adigatorDerivativeConventions.m`.
+- **Higher order (order `k > 2`)** is not yet contracted: the proposed order-`k`
+  convention — native nonzeros/`*Locs` form (default for `k ≥ 3`) plus a dense
+  `[M·Nᵏ⁻¹ × N]` fold generalizing the vector-Hessian rule — is in
+  [ADR-0020](decisions/ADR-0020-nth-derivative-output-conventions.md) (**Proposed**,
+  issue #85); it binds here on ratification.
 
 The `DER_LEVELS` option selects *which* of these outputs a wrapper returns but
 **never changes the shape** of an emitted output, so this shape contract is
