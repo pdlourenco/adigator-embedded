@@ -362,6 +362,12 @@ dydxdxnnz  = size(dydxdxlocs,1);
 n = prod(xsize);
 m = prod(ysize);
 dydxdx = [ystr,'.d',vodname,'d',vodname];
+if strcmp(opts.der_output,'nonzeros')
+% #84/R25 (ADR-0022): return the Hessian nonzero VECTOR in dydxdx order; the
+% constant pattern is exported once via output.HessianLocs (the JacobianLocs
+% analog, set below). No per-call dense allocation or scatter, mode-independent.
+fprintf(Hfid,['Hes = ',dydxdx,'(:);\n']);
+else
 % v1.5 (ANALYSIS.md §2.1): in embed modes, compute the Hessian scatter
 % indices at generation time and emit a literal vector instead of the
 % runtime _location arithmetic. dydxdxlocs(:,1) indexes the first-derivative
@@ -460,6 +466,7 @@ else
     fprintf(Hfid,['Hes(',ind,') = ',dydxdx,';\n']);
   end
 end
+end  % #84/R25: close the der_output nonzeros/matrix branch for the Hessian output
 
 % If dydx has => 250 elements and has <= 75% nonzeros, project into sparse
 % matrix, otherwise project into full matrix.
@@ -600,10 +607,16 @@ if n == 1
   HesPat = zeros(ysize);
   HesPat(HesLocs1(:,1)) = 1;
   output.HessianStructure = sparse(HesPat);
+  % #84/R25 (ADR-0022): HessianLocs is the [row col] pattern in dydxdx nonzero
+  % order (the JacobianLocs analog), exported once for der_output='nonzeros'.
+  [hlr_,hlc_] = ind2sub(size(HesPat), HesLocs1(:,1));
+  output.HessianLocs = [hlr_(:) hlc_(:)];
 else
   HesRow   = (HesLocs1(:,2)-1)*m+HesLocs1(:,1);
   HesCol   = dydxdxlocs(:,2);
   output.HessianStructure = sparse(HesRow,HesCol,ones(dydxdxnnz,1),m*n,n);
+  % #84/R25 (ADR-0022): [row col] into the [m*n x n] Hessian, dydxdx order.
+  output.HessianLocs = [HesRow(:) HesCol(:)];
 end
 
 fprintf(['\n<strong>adigatorGenHesFile</strong> successfully generated Hessian wrapper file: ''',HesFileName,''';\n\n']);

@@ -13,6 +13,7 @@ classdef IOutputModesTest < matlab.unittest.TestCase
             tc.applyFixture(PathFixture(fullfile(root,'lib')));
             tc.applyFixture(PathFixture(fullfile(root,'lib','cadaUtils')));
             tc.applyFixture(PathFixture(fullfile(root,'util')));
+            tc.applyFixture(PathFixture(fullfile(root,'embedding')));  % adigatorGenHesFile -> updatestruct (#84 hessianNonzerosMode)
         end
     end
 
@@ -65,6 +66,51 @@ classdef IOutputModesTest < matlab.unittest.TestCase
             wtxt = fileread('om_fun2_Jac.m');
             tc.verifyFalse(contains(wtxt,'Jac = zeros'), ...
                 'nonzeros wrapper must not allocate a dense Jacobian');
+        end
+
+        function hessianNonzerosMode(tc)
+            % #84/R25 (ADR-0022): der_output='nonzeros' Hessian returns the
+            % nonzero vector in output.HessianLocs order; scattering it via the
+            % exported pattern reproduces the dense Hessian, cross-checked vs FD
+            % (the Verified-by test).
+            writeFcn('om_hfun',  {'function y = om_hfun(x)', ...
+                    'y = x(1)^2 + x(2)*x(3) + sin(x(3));', 'end'});
+            writeFcn('om_hfun2', {'function y = om_hfun2(x)', ...
+                    'y = x(1)^2 + x(2)*x(3) + sin(x(3));', 'end'});
+            gx = @() adigatorCreateDerivInput([3 1],'x');
+            outM = adigatorGenHesFile('om_hfun', {gx()}, ...
+                struct('overwrite',1,'echo',0));                       % dense
+            outN = adigatorGenHesFile('om_hfun2',{gx()}, ...
+                struct('overwrite',1,'echo',0,'der_output','nonzeros'));% nonzeros
+            rehash;
+
+            xv = randn(3,1);
+            [HM,~,FM]   = om_hfun_Hes(xv);
+            [vals,~,FN] = om_hfun2_Hes(xv);
+            tc.verifyEqual(FN, FM, 'AbsTol', 0);
+
+            locs = outN.HessianLocs;
+            tc.verifySize(vals, [size(locs,1) 1]);
+            HM = full(HM);
+            tc.verifyEqual(vals, HM(sub2ind(size(HM),locs(:,1),locs(:,2))), ...
+                'AbsTol', 1e-13, 'RelTol', 1e-13);
+            % patterns agree between the two modes
+            tc.verifyEqual(full(outN.HessianStructure), full(outM.HessianStructure));
+            % scattering the nonzeros via HessianLocs reproduces the dense Hessian
+            HS = zeros(size(HM));
+            HS(sub2ind(size(HM),locs(:,1),locs(:,2))) = vals;
+            tc.verifyEqual(HS, HM, 'AbsTol', 0);
+            % Verified-by (R25): the reconstructed Hessian matches finite differences
+            g   = @(v) [2*v(1); v(3); v(2)+cos(v(3))];   % analytic gradient of the body
+            Hfd = zeros(3); e = 1e-6;
+            for j = 1:3
+                ej = zeros(3,1); ej(j) = e;
+                Hfd(:,j) = (g(xv+ej) - g(xv-ej))/(2*e);
+            end
+            tc.verifyEqual(HS, Hfd, 'AbsTol', 1e-5);
+            % the nonzeros wrapper performs no dense projection
+            tc.verifyFalse(contains(fileread('om_hfun2_Hes.m'),'Hes = zeros'), ...
+                'nonzeros Hessian wrapper must not allocate a dense Hessian');
         end
 
         function nonzerosGradientConvention(tc)
