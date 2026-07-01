@@ -13,8 +13,10 @@ function result = gap_interproc_equiv()
 %
 % The fixtures are generated in INLINE embed mode (capture_gen_dialect), so
 % slim_embed actually runs: the slimmed variant (slim1) is a genuinely sliced
-% interprocedural file (the main function's unread f.dz_location/f.dz_size and
-% their index table drop), not a byte-copy of slim0. Inline embedding wraps the
+% interprocedural file, not a byte-copy of slim0 - it drops the now-unreferenced
+% Index7 index table. (The f.dz_location/f.dz_size metadata *lines* themselves
+% are stripped from BOTH variants by the embed-mode output-index strip, #81, so
+% slim1's observable distinction is the pruned index table.) Inline embedding wraps the
 % constant data in coder.const(...) (identity outside codegen); this core adds
 % a coder.const shim (tests/offline/octave_shims) only where coder.const is
 % unavailable, so the fixtures run license-free in Octave and on Coder-less
