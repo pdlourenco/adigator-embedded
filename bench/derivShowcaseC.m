@@ -18,10 +18,13 @@ function report = derivShowcaseC(varargin)
 %   verbose  [true]
 %
 % Returns .rows (per-cell C-level results), .table, .sweep (n-sweep data),
-% .nFail, .available (false if MATLAB Coder is absent -> everything skip-clean).
+% .nFail, .available (false if MATLAB Coder / Embedded Coder is absent ->
+% everything skip-clean).
 %
-% Non-gating, heavyweight (each cell is a Coder build, seconds to a minute). On a
-% machine without Coder this returns immediately with .available = false.
+% The embeddable (i) cells build through Embedded Coder (ERT) - the strict target
+% (#80 R20b); plain MATLAB Coder was masking ERT-only gaps. Non-gating, heavyweight
+% (each cell is a Coder build, seconds to a minute). On a machine without Coder /
+% Embedded Coder this returns immediately with .available = false.
 %
 % Copyright GMV.  2026-06  PEDRO LOURENÇO (PADL) (roadmap R17b, issue #73)
 % Distributed under the GNU General Public License version 3.0
@@ -39,17 +42,19 @@ p.parse(varargin{:}); o = p.Results;
 cleanup = addShowcaseCPaths(); %#ok<NASGU>
 
 report = struct('rows',[],'table','','sweep',[],'nFail',0,'available',true);
-if isempty(which('codegen')) || ~license('test','MATLAB_Coder')
+if isempty(which('codegen')) || ~license('test','MATLAB_Coder') || ...
+        ~license('test','RTW_Embedded_Coder')
     report.available = false;
-    if o.verbose; fprintf('derivShowcaseC: MATLAB Coder not available - skipping.\n'); end
+    if o.verbose; fprintf('derivShowcaseC: MATLAB Coder + Embedded Coder not available - skipping.\n'); end
     return
 end
 
 % embeddable cells (inline mode; c can't codegen - global/load). Vectorized
 % anchors + one ROLLED Jacobian (vfun unroll=0) so the rolled-vs-unrolled axis
-% reaches C where codegen permits. (Rolled scalar-cost gradient/Hessian do NOT
-% codegen - a separate concern, ANALYSIS §2.3(7) / roadmap R19 - so they are not
-% in the C table; the MATLAB-level R17a table covers them.)
+% reaches C. (Rolled scalar-cost gradient/Hessian now ERT-codegen too since #80
+% Path A - pinned by SRolledErtCodegenTest - but are not yet added as C showcase
+% cells here; that is a coverage follow-up. The MATLAB-level R17a table covers
+% them.)
 % Each AD cell is followed by the hand-coded ANALYTICAL reference for the same
 % DerType (issue #73): the "do I even need this tool?" baseline + the gold
 % correctness oracle. Analytic is a reference, not a grid cell - no
@@ -121,7 +126,7 @@ try
     r.mexMs  = 1e3*timeit(@() mexf(xv));
     clear([wrapper '_mex']);
 
-    cfg = coder.config('lib'); cfg.GenerateReport = false;
+    cfg = coder.config('lib','ecoder',true); cfg.GenerateReport = false;  % Embedded Coder / ERT (#80 R20b)
     codegen(wrapper,'-config',cfg,'-args',{zeros(n,1)},'-d','clib');
     r.cBytes = sumCBytes(fullfile(d,'clib'));
 
