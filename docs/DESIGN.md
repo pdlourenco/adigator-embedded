@@ -151,6 +151,15 @@ stays `double` is a hard assertion (`dataFieldsStayDouble`).
 `load`; `'i'` additionally contains no `.mat` and no `coder.load`. All three
 modes return numerically identical results.
 
+*Under review:* `'l'` (coderload) is proposed for **deprecation** — it does not
+codegen under Embedded Coder and its compiled footprint converges with `'i'` —
+with inline gaining a **split-data** (two-file) form so large-data source size
+is no reason to keep it; the split form holds these same invariants (both files
+source; no `global`/`load`/`.mat`/`coder.load`). See
+[ADR-0021](decisions/ADR-0021-deprecate-coderload-split-inline-data.md)
+(**Proposed**, issue #83, roadmap R24); this contract changes here on
+ratification (pending the R17 large-data measurement).
+
 *Verified by:* `CI_PLAN.md` REQ-T-04 / TS-I-02 (static text checks + cross-mode
 numeric equality).
 
@@ -214,6 +223,16 @@ generator, including the matrix-free products as they land:
 **Compliance.** All derivative generators follow this contract — the forward
 `adigatorGenJacFile` / `adigatorGenHesFile` and the reverse
 `adigatorGenRevGradFile` (`[Grd, Fun]`) / `adigatorGenJtVFile` (`[Jtv, Fun]`).
+
+*Proposed extension — output form.* Today the `matrix`-vs-`nonzeros` output form
+is contracted only for the Jacobian/gradient (`jac_output`, with the pattern in
+`output.JacobianLocs`). A generalized **`der_output ∈ {matrix, nonzeros}`**
+option + a **`*Locs` family** (`HessianLocs` first) would add an *output-form*
+facet here and extend C-2/C-3's "possible-nonzeros + exported pattern" statement
+to every DerType, governed by a documented option×DerType×mode N/A matrix. See
+[ADR-0022](decisions/ADR-0022-generalized-der-output-nonzeros.md) (**Proposed**,
+issue #84, roadmap R25; the Hessian-nonzeros phase is the R22/#85 prerequisite);
+it binds here on ratification.
 
 *Verified by:* `tests/integration/ILevelSelectTest.m` (`CI_PLAN.md` TS-I-05,
 `DER_LEVELS` selection across generators); the order is exercised by every test
