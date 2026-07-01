@@ -24,10 +24,16 @@ DerTypes and modes:
   second-order locations `dydxdxlocs` internally but **every branch projects to
   dense** — `Hes = zeros(...)`); **reverse-grad / `JtV`** (return a
   vector/product); and **n-th order** (#85).
-- **Naming nit** (to fix as part of phase 1): the `nonzeros` branch writes the
-  output variable literally as `Jac` regardless of `NameAppendix`, so a
-  *gradient*'s nonzeros wrapper would emit `Jac = …` rather than the C-6 `Grd` —
-  verify it is renamed downstream or fix it.
+- **Naming deviation (confirmed live, fixed in phase 1):** the forward gradient
+  (`'gradient'` → `adigatorGenJacFile(...,'Grd')`,
+  `embedding/adigatorGenDerFile_embedded.m:122`) returns its first output named
+  literally `Jac`, **not** the C-6 `Grd` — `jacOut = {'Jac'}` is unconditional
+  (`util/adigatorGenJacFile.m:219`) and nothing renames it downstream (the
+  `'Grd'` appendix sets only the file *name*). This holds in **every** output
+  form (matrix *and* `nonzeros`), so it is broader than the `nonzeros` branch and
+  is a *live* C-6 name-facet deviation today — cosmetic (callers consume the
+  output positionally, so numerics are unaffected), but a real contract drift.
+  Phase 1 fixes it (maintainer disposition on PR #95: fold into R25 phase 1).
 - **Value.** `nonzeros` (nonzero vector + pattern exported once, no per-call
   dense projection) pays off where the derivative is **sparse**: the **Hessian**
   (`n×n` or vector-function `[m·n × n]`, frequently very sparse) is the biggest
@@ -72,7 +78,9 @@ vector/product — N/A or the result itself).
    gap **and** the hard prerequisite for R22 (#85) being usable at `k ≥ 3`. The
    locations already exist internally (`dydxdxlocs`), so this is a new emit
    branch over an existing computation, not new sparsity theory. Fix the
-   `Jac`-vs-`Grd` naming nit in the same change.
+   confirmed-live `Jac`→`Grd` forward-gradient naming deviation in the same
+   change — emit the canonical output name per `NameAppendix` + a C-6
+   name-assertion test.
 2. **Audit + document** the full option × DerType × mode matrix (the table),
    N/A cells named.
 3. **Fill** the remaining sensible gaps.
