@@ -2,12 +2,15 @@
 
 ## Status
 
-Proposed — 2026-07-01 (issue #85). **Awaiting maintainer ratification before it
-binds `DESIGN §Contracts C-1` and `adigatorDerivativeConventions.m`.** The design
-converged in PR #94 discussion: the row order is now *derived* from
-derivative-vector/matrix **multiplication compatibility** (Decision 2 + 6), not
-free-chosen — so the only items still open for ratification are cosmetic (`Der{k}`
-spelling; human display of a folded block).
+Accepted — 2026-07-01 (issue #85). Ratified by the maintainer; the order-`k`
+convention below now **binds** `DESIGN §Contracts C-1` and
+`adigatorDerivativeConventions.m` (the binding restatement lands in this PR). The
+row order is *derived* from derivative-vector/matrix **multiplication
+compatibility** (Decision 2 + 6), not free-chosen. Implementation — the
+`'nth-derivative'` `DerType` + `n` option, the `Der{k}` outputs, and the
+host-side `dvp`/`unfold` utilities — is roadmap **R22**: the convention binds
+now and each staged slice lands its `Verified by:` test as it is built
+(Decision 5).
 
 ## Context
 
@@ -126,12 +129,12 @@ compatibility**, not pinned to Taylor.
   (never form the derivative). `dvp` contracts an **already-emitted** object —
   companion, not duplicate.
 
-Lands as: this ADR (the specification); once accepted, `C-1` +
-`adigatorDerivativeConventions.m` gain the binding order-`n` restatement, a
-`'nth-derivative'` `DerType` + `n` option, the `Der{k}` C-6 names, the host-side
-`dvp`/`unfold` utilities (Decision 6), and per-stage tests (analytic
-n-th-derivative of a scalar polynomial + FD + shape asserts).
-Roadmap **R22** (issue #85). The dense fold and nonzeros default depend on #84
+Lands as: this ADR (the specification). On acceptance (now), `C-1` +
+`adigatorDerivativeConventions.m` gain the binding order-`n` restatement (this
+PR). The `'nth-derivative'` `DerType` + `n` option, the `Der{k}` C-6 names, the
+host-side `dvp`/`unfold` utilities (Decision 6), and per-stage tests (analytic
+n-th-derivative of a scalar polynomial + FD + shape asserts) are the
+implementation, roadmap **R22** (issue #85). The dense fold and nonzeros default depend on #84
 (the `der_output`/`*Locs` generalization); Hessian-nonzeros (#84 phase 1) is the
 concrete prerequisite.
 

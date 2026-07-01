@@ -82,8 +82,10 @@
 % generators, resolved uniformly by adigatorResolveDerLevels (roadmap R7a,
 % issue #21).
 
-%%% HIGHER-ORDER (n-th) DERIVATIVES  (PROPOSED - see decisions/ADR-0020, issue #85)
-% Not yet binding; ratify ADR-0020 before implementing. Here n = the requested
+%%% HIGHER-ORDER (n-th) DERIVATIVES  (see docs/DESIGN.md C-1, decisions/ADR-0020, issue #85)
+% Binding convention (ADR-0020 ratified). The 'nth-derivative' DerType + n option
+% and the host-side dvp/unfold utilities are the R22 implementation; each staged
+% slice lands its Verified-by test as built. Here n = the requested
 % top order and k a general order 1..n. With N = numel(x) and M = numel(f)
 % (unrolled; N=n*m for a matrix VARIABLE shape, M=r*c for a matrix output), the
 % k-th derivative D^k f has entries (i; j1..jk), output i in 1..M, deriv vars
@@ -100,7 +102,7 @@
 %        (unvec(result) = size(f); trailing deriv dim = columns, so D*V contracts
 %         one order, permute-free)
 %    k=1 -> [M x N] (Jacobian); k=2 -> row=(j1-1)*M+i -> [M*N x N] (vector Hessian,
-%    the (x1-1)*M+y rule). Scalar-function gradient keeps its N x 1 column transpose.
+%    the (x1-1)*M+y rule). Scalar-function gradient keeps its N x 1 column.
 %  - dvp(D,V): derivative-vector/matrix product, V is N x s; contracts the trailing
 %    dim -> order-(k-1) fold via a bare reshape (permute-free). Taylor term / HVP /
 %    directional derivative are all callers. unfold(D): N-D view [M x N x ... x N]
