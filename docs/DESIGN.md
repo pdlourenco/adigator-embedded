@@ -129,7 +129,12 @@ A generated derivative file returns the function value `y.f` and the derivative
 nonzeros `y.dX`: the vector of possible nonzeros of the *unrolled* Jacobian
 (size `[prod(ysize) × prod(xsize)]`, column-major on both sides), ordered by
 ascending linear index. `y.dX_location` has one column per dimension listed in
-`y.dX_size`.
+`y.dX_size`. Under `der_output='nonzeros'` this possible-nonzeros +
+exported-pattern statement generalizes beyond the Jacobian: each supporting
+DerType exports its constant pattern once via its `*Locs` companion
+(`HessianLocs`, …), the tuples carrying one column per dimension
+([ADR-0022](decisions/ADR-0022-generalized-der-output-nonzeros.md); the
+higher-order `*Locs` of ADR-0020 drop in on this).
 
 *Verified by:* `CI_PLAN.md` TS-U-03 (structural ops vs. dense FD).
 
@@ -151,14 +156,19 @@ stays `double` is a hard assertion (`dataFieldsStayDouble`).
 `load`; `'i'` additionally contains no `.mat` and no `coder.load`. All three
 modes return numerically identical results.
 
-*Under review:* `'l'` (coderload) is proposed for **deprecation** — it does not
-codegen under Embedded Coder and its compiled footprint converges with `'i'` —
-with inline gaining a **split-data** (two-file) form so large-data source size
-is no reason to keep it; the split form holds these same invariants (both files
-source; no `global`/`load`/`.mat`/`coder.load`). See
-[ADR-0021](decisions/ADR-0021-deprecate-coderload-split-inline-data.md)
-(**Proposed**, issue #83, roadmap R24); this contract changes here on
-ratification (pending the R17 large-data measurement).
+**Deprecation ([ADR-0021](decisions/ADR-0021-deprecate-coderload-split-inline-data.md),
+ratified).** `'l'` (coderload) is **deprecated**: it does not codegen under
+Embedded Coder and its compiled footprint converges with `'i'` (the #79
+source-bytes-≠-ROM lesson). While present it emits a one-time deprecation
+warning and stays numerically identical (the invariant above holds). Inline
+gains a **split-data** two-file form (`split_data`, default off) — derivative
+and data as separate source files — so large-data source size is no reason to
+keep `'l'`; the split form holds these same C-4 invariants (both files source;
+no `global`/`load`/`.mat`/`coder.load`). **Removal is gated on the R17
+large-data measurement** (#73): if a real embedded regime needs `'l'`'s compact
+source that split-inline cannot match, the deprecation is revisited (fix `'l'`'s
+ERT codegen instead). Implementation is roadmap **R24**; the split form's C-4
+invariants + cross-mode numeric equality land its `Verified by:` test.
 
 *Verified by:* `CI_PLAN.md` REQ-T-04 / TS-I-02 (static text checks + cross-mode
 numeric equality).
@@ -176,8 +186,8 @@ rather than returning a wrong derivative.
 ### C-6 — Wrapper outputs: names, order, and level selection
 
 This contract governs *what a generated derivative wrapper returns, named how,
-and in what order* — one surface with three facets (the shapes themselves are
-C-1).
+in what order, and in what form* — one surface with four facets (the shapes
+themselves are C-1).
 
 **Names.** Each output uses a **canonical variable name, uniform across every
 generator** (forward, reverse, and the matrix-free products), so the same object
@@ -224,15 +234,19 @@ generator, including the matrix-free products as they land:
 `adigatorGenJacFile` / `adigatorGenHesFile` and the reverse
 `adigatorGenRevGradFile` (`[Grd, Fun]`) / `adigatorGenJtVFile` (`[Jtv, Fun]`).
 
-*Proposed extension — output form.* Today the `matrix`-vs-`nonzeros` output form
-is contracted only for the Jacobian/gradient (`jac_output`, with the pattern in
-`output.JacobianLocs`). A generalized **`der_output ∈ {matrix, nonzeros}`**
-option + a **`*Locs` family** (`HessianLocs` first) would add an *output-form*
-facet here and extend C-2/C-3's "possible-nonzeros + exported pattern" statement
-to every DerType, governed by a documented option×DerType×mode N/A matrix. See
-[ADR-0022](decisions/ADR-0022-generalized-der-output-nonzeros.md) (**Proposed**,
-issue #84, roadmap R25; the Hessian-nonzeros phase is the R22/#85 prerequisite);
-it binds here on ratification.
+**Output form ([ADR-0022](decisions/ADR-0022-generalized-der-output-nonzeros.md),
+ratified).** A fourth facet: each wrapper's derivative outputs may be emitted in
+**`matrix`** or **`nonzeros`** form per the **`der_output ∈ {matrix, nonzeros}`**
+option, applied per derivative level (`jac_output` is a back-compat alias for
+the first-derivative level). In `nonzeros` form the constant sparsity pattern is
+exported once via a **`*Locs` family** — `HessianLocs` the `output.JacobianLocs`
+analog, one per DerType that supports nonzeros. Which `(der_output × DerType ×
+mode)` cells are supported vs **N/A** is a documented matrix (DESIGN + README),
+N/A cells named by design (e.g. `classic + slim`; `nonzeros` of a dense
+gradient; `nonzeros` of reverse-grad/`JtV`). Implementation is roadmap **R25**,
+**Hessian-nonzeros first** (the R22/#85 prerequisite); each phase lands its
+`Verified by:` test (`HessianLocs` reconstructs the dense Hessian vs dense FD —
+the TS-U-03 analog).
 
 *Verified by:* `tests/integration/ILevelSelectTest.m` (`CI_PLAN.md` TS-I-05,
 `DER_LEVELS` selection across generators); the order is exercised by every test

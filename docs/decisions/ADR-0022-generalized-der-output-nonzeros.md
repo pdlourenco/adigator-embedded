@@ -2,12 +2,12 @@
 
 ## Status
 
-Proposed — 2026-07-01 (issue #84). **Awaiting maintainer ratification before it
-extends `DESIGN §Contracts C-2 / C-3 / C-6`.** The maintainer accepted the three
-design points (#84): a single generalized option, contract-surface treatment,
-and N/A cells as an explicit design choice. This ADR records the specification;
-on ratification the contract restatement + the Hessian-nonzeros implementation
-(phase 1) land, which is the concrete prerequisite for R22 (#85).
+Accepted — 2026-07-01 (issue #84). Ratified by the maintainer; the generalized
+output-form convention now **binds** `DESIGN §Contracts C-6` (a fourth facet)
+and extends **C-2** (the binding restatement lands in this PR; **C-3 needs no
+change** — it governs the `Index*`/`Data*` downcast layout, orthogonal to output
+form). Implementation is roadmap **R25**, Hessian-nonzeros first (the R22/#85
+prerequisite); each phase lands its `Verified by:` test.
 
 ## Context
 
@@ -57,14 +57,17 @@ once (consistent with the C-2/C-3 data/pattern split). `jac_output` stays as a
 **back-compat alias** for the first-derivative level. Rejected the alternative
 of per-type options (`hes_output`, …) as option sprawl.
 
-**2 — Treat it as a contract change (C-2 / C-3 / C-6).** On ratification:
+**2 — Treat it as a contract change (C-6 + C-2; C-3 unchanged).** On
+ratification:
 - **C-6** gains an *output-form* facet: alongside names/order/levels, each
   wrapper's outputs may be emitted in `matrix` or `nonzeros` form per
   `der_output`, with the `*Locs` pattern companion.
-- **C-2 / C-3** extend the "vector of possible nonzeros + exported pattern"
+- **C-2** extends the "vector of possible nonzeros + exported pattern"
   statement from the Jacobian to **every DerType that supports nonzeros**, the
   `*Locs` tuples carrying one column per dimension (which is exactly what lets
   the higher-order `*Locs` of ADR-0020 drop in).
+- **C-3 needs no change** — it governs the `Index*`/`Data*` downcast layout,
+  orthogonal to output form.
 
 **3 — N/A cells are an explicit, documented design choice.** Publish an
 **option × DerType × mode matrix** (DESIGN + README) with the N/A cells *named*,

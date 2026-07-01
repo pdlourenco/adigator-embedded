@@ -2,12 +2,12 @@
 
 ## Status
 
-Proposed — 2026-07-01 (issue #83). **Awaiting maintainer ratification before it
-changes `DESIGN §Contracts C-4` and the README embed-mode table.** Two coupled
-calls: retire `'l'`, and give inline (`'i'`) a two-file escape hatch so its only
-remaining rationale — compact *source* for large constant data — is covered
-without `'l'`. The deprecate call is gated on the R17 large-data measurement
-(#73) confirming no embedded regime where `'l'` beats `'i'`.
+Accepted — 2026-07-01 (issue #83). Ratified by the maintainer; the deprecation
+direction and the split-inline C-4 invariants now **bind** `DESIGN §Contracts
+C-4` and the README embed-mode table (the binding restatement lands in this PR).
+`'l'`'s **removal** stays gated on the R17 large-data measurement (#73) — only
+the deprecation + split-form invariants bind now. Implementation is roadmap
+**R24**.
 
 ## Context
 
