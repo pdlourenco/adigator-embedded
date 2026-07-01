@@ -344,7 +344,10 @@ else
   scatteridx = [dy,'_location']; % single-column cases only (see below)
 end
 %v1.5:	process this to output Jacobians and Gradients correctly, as shown above
-if strcmp(opts.jac_output,'nonzeros')
+% #84/R25: der_output is canonical, jac_output the back-compat alias. adigatorOptions
+% syncs them, but a RAW options struct (bypassing adigatorOptions) sets only one, so
+% honor either here (an explicit 'nonzeros' in either selects the nonzeros form).
+if strcmp(opts.der_output,'nonzeros') || strcmp(opts.jac_output,'nonzeros')
   % roadmap R5 (ANALYSIS.md 2.3): return the nonzero vector in nzlocs
   % order; the constant sparsity pattern is exported once through
   % output.JacobianLocs/JacobianStructure. No per-call dense allocation
