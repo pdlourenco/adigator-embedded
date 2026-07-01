@@ -97,6 +97,21 @@ For a function `f: Rⁿ → Rᵐ` evaluated through the wrappers:
   `(x₁−1)·m + y`.
 - Generalized matrix-input / matrix-output shapes follow the table in
   `adigatorDerivativeConventions.m`.
+- **Higher order (order `k > 2`)** — for the order-`k` derivative of `f`
+  (`M = numel(f)`, `N = numel(x)`, unrolled) two forms are contracted: the
+  **native** vector of possible nonzeros, with `y.dX_location` carrying `k+1`
+  columns (output + `k` derivative dims) and the pattern exported via the
+  `der_output`/`*Locs` family — the default for `k ≥ 3` (the dense object has
+  `M·Nᵏ` entries); and an optional **dense fold** of size `[M·Nᵏ⁻¹ × N]` with
+  `col = j_k` and `row = i + (j₁−1)·M + (j₂−1)·M·N + … + (j_{k−1}−1)·M·Nᵏ⁻²`
+  (`i` fastest, column-major), which reduces to the **Jacobian** at `k = 1` and to
+  the vector-function Hessian rule above at `k = 2`. The row order is *derived*
+  from derivative-vector/matrix multiplication compatibility — contracting the
+  trailing `col` dim is permute-free. The full convention, the `dvp`/`unfold`
+  host utilities, the `Der{k}` output names, and the deferred symmetry dedup are
+  in [ADR-0020](decisions/ADR-0020-nth-derivative-output-conventions.md)
+  (**Accepted**, issue #85). The convention binds now; its per-stage
+  `Verified by:` tests land with the **R22** implementation.
 
 The `DER_LEVELS` option selects *which* of these outputs a wrapper returns but
 **never changes the shape** of an emitted output, so this shape contract is

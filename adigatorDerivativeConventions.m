@@ -81,3 +81,33 @@
 % Grd]; [1] on a Jacobian file -> [Jac]. It applies to ALL derivative
 % generators, resolved uniformly by adigatorResolveDerLevels (roadmap R7a,
 % issue #21).
+
+%%% HIGHER-ORDER (n-th) DERIVATIVES  (see docs/DESIGN.md C-1, decisions/ADR-0020, issue #85)
+% Binding convention (ADR-0020 ratified). The 'nth-derivative' DerType + n option
+% and the host-side dvp/unfold utilities are the R22 implementation; each staged
+% slice lands its Verified-by test as built. Here n = the requested
+% top order and k a general order 1..n. With N = numel(x) and M = numel(f)
+% (unrolled; N=n*m for a matrix VARIABLE shape, M=r*c for a matrix output), the
+% k-th derivative D^k f has entries (i; j1..jk), output i in 1..M, deriv vars
+% j_l in 1..N, and is symmetric in j1..jk.
+%
+%  - Native/default form: the vector of possible nonzeros (C-2) with one location
+%    column per dimension (output + k deriv dims) + an exported pattern via the
+%    der_output='nonzeros' / *Locs family (issue #84). DEFAULT for k>=3 (the dense
+%    object is M*N^k).
+%  - Optional dense fold (vec(x)->columns, vec(f)->output block, column-major with
+%    i fastest and the last deriv dim as columns):
+%        size = [M*N^(k-1)  x  N]
+%        row  = i + (j1-1)*M + (j2-1)*M*N + ... + (j_{k-1}-1)*M*N^(k-2),  col = j_k
+%        (unvec(result) = size(f); trailing deriv dim = columns, so D*V contracts
+%         one order, permute-free)
+%    k=1 -> [M x N] (Jacobian); k=2 -> row=(j1-1)*M+i -> [M*N x N] (vector Hessian,
+%    the (x1-1)*M+y rule). Scalar-function gradient keeps its N x 1 column.
+%  - dvp(D,V): derivative-vector/matrix product, V is N x s; contracts the trailing
+%    dim -> order-(k-1) fold via a bare reshape (permute-free). Taylor term / HVP /
+%    directional derivative are all callers. unfold(D): N-D view [M x N x ... x N]
+%    for inspection. Storage stays the flat fold (embedded); dvp/unfold are host-side.
+%  - Names (C-6): Der{k} for k>=3 (Grd/Jac keep k=1, Hes keeps k=2); the
+%    'nth-derivative' file returns [Der{n}, ..., Hes, Grd, Fun], der_levels-selectable.
+%  - Symmetry (C(N+k-1,k) unique tuples) is a later efficiency dedup, not correctness.
+% Staged: scalar/scalar -> scalar-var -> scalar-fn-of-vector-var -> vector -> matrix.
