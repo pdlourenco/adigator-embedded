@@ -3,14 +3,18 @@ classdef SCodegenTest < matlab.unittest.TestCase
     %
     % CI plan: TS-S-02, validates REQ-T-05: the inline-mode ('i') generated
     % gradient file must pass codegen, and the compiled MEX must reproduce
-    % the MATLAB results exactly. A static-library build is also generated
-    % to prove embedded-C viability (no MEX-only constructs). Run for both the
+    % the MATLAB results exactly (REQ-T-05, MATLAB Coder). Where Embedded Coder is
+    % licensed, an Embedded Coder (ERT) static-library build is also generated to
+    % prove embedded-C viability under the strict target (#80 R20b, REQ-T-10 -
+    % plain Coder was masking ERT-only gaps). Run for both the
     % full embedded data and the slim_embed=true slice-before-prune shrunk data
     % (issue #21), to prove the dropped Index7 leaves the compiled result
     % unchanged.
     %
-    % Skips via assumption when MATLAB Coder is not licensed/installed
-    % (PR-gate runners); the extended products job runs it.
+    % Skips via assumption when MATLAB Coder is not licensed/installed (PR-gate
+    % runners). The ERT lib build is separately guarded on Embedded Coder, so a
+    % Coder-only runner still checks the MEX equivalence; the extended products
+    % job (Coder + Embedded Coder) exercises both.
 
     methods (TestClassSetup)
         function addPaths(tc)
@@ -30,6 +34,10 @@ classdef SCodegenTest < matlab.unittest.TestCase
         function workInTempFolder(tc)
             import matlab.unittest.fixtures.WorkingFolderFixture
             tc.applyFixture(WorkingFolderFixture);
+            % Coder is the floor: the MEX runtime-equivalence check (REQ-T-05)
+            % needs only MATLAB Coder. The ERT static-lib build (REQ-T-10) is
+            % separately guarded on Embedded Coder below, so a Coder-only runner
+            % still verifies the equivalence at its true license floor.
             tc.assumeTrue(license('test','MATLAB_Coder') && ...
                 ~isempty(which('codegen')), ...
                 'TS-S-02 requires MATLAB Coder');
@@ -84,13 +92,18 @@ classdef SCodegenTest < matlab.unittest.TestCase
                 'gradient differs from analytic value');
             clear gapfun_Grd_mex % release the MEX before folder teardown
 
-            % static-library build: embedded-C viability (generation only)
-            cfg = coder.config('lib');
-            cfg.GenerateReport = false;
-            codegen('gapfun_Grd', '-config', cfg, ...
-                '-args', {zeros(2,1), zeros(2,1)}, '-d', 'codegen_lib');
-            tc.verifyTrue(isfolder('codegen_lib'), ...
-                'lib codegen did not produce an output folder');
+            % static-library build through Embedded Coder (ERT): embedded-C
+            % viability under the strict target (#80 R20b, REQ-T-10). Guarded on
+            % the Embedded Coder license so a Coder-only runner still checks the
+            % MEX equivalence above (REQ-T-05) - only the ERT lib build needs it.
+            if license('test', 'RTW_Embedded_Coder')
+                cfg = coder.config('lib', 'ecoder', true);
+                cfg.GenerateReport = false;
+                codegen('gapfun_Grd', '-config', cfg, ...
+                    '-args', {zeros(2,1), zeros(2,1)}, '-d', 'codegen_lib');
+                tc.verifyTrue(isfolder('codegen_lib'), ...
+                    'lib codegen did not produce an output folder');
+            end
         end
     end
 end
