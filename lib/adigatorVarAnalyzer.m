@@ -361,6 +361,13 @@ elseif isnumeric(x)
   if ~structflag
     x = adigatorMakeNumeric(x);
     x = adigatorStructAnalyzer(x,xStr,0);
+    % B17 (ANALYSIS.md Sec 1.3c): a numeric (non-cada) field reaching here is a
+    % compile-time constant with no derivative, and its owning struct is printed
+    % verbatim (not lifted into the `.f` value convention). Mark the field cada
+    % derivative-free so cadafuncname prints a bare `struct.field` reference
+    % instead of an unbacked `struct.field.f`. A derivative-carrying field is a
+    % cada and takes the isa(x,'cada') branch above, so it is untouched.
+    ADIGATOR.VARINFO.NAMELOCS(x.id,3) = Inf;
   elseif ~isempty(x)
     x = adigatorMakeNumeric(x);
   end
