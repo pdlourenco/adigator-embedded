@@ -24,8 +24,9 @@ constants used in arithmetic** (`cadamatprint.m`).
 > every bug **B1–B16** is **Fixed**, **Mitigated**, or **Won't-fix (benign)**.
 > (B16, §1.3b, was surfaced by the issue-#38 Monte-Carlo hygiene fuzzer and
 > fixed in ROADMAP R9 B.3.) **B17–B21** (§1.3c) are a newer batch triaged from a
-> local (proprietary) embedded field report — **B17/B19/B20/B21 are open**
-> (B18 no longer reproduces); they are the subject of ROADMAP R26. Where a
+> local (proprietary) embedded field report — **B17/B19/B21 are open, B20 is a
+> documented limitation** (B18 no longer reproduces); they are the subject of
+> ROADMAP R26. Where a
 > description below names a file/line (e.g. B1's old
 > `adigatorGenDerFile_embedded.m` location), §1.5 records where the code
 > actually lives now (`embedding/prune_adigator_mat.m`).
