@@ -141,6 +141,30 @@ classdef IOutputModesTest < matlab.unittest.TestCase
             tc.verifyEqual(full(outN.HessianStructure), full(outM.HessianStructure));
         end
 
+        function jacOutputDoesNotFlipHessian(tc)
+            % #84/R25 (ADR-0022, decision b): jac_output is a level-1 alias and
+            % must NOT flip the Hessian's form - even through adigatorOptions (the
+            % primary API, whose cross-sync was removed). jac_output='nonzeros'
+            % gives a nonzeros first derivative but a DENSE Hessian; only
+            % der_output='nonzeros' flips the Hessian.
+            writeFcn('om_ls', {'function y = om_ls(x)', ...
+                    'y = x(1)^2 + x(2)*x(3);', 'end'});
+            gx = @() adigatorCreateDerivInput([3 1],'x');
+            optJ = adigatorOptions('overwrite',1,'echo',0,'jac_output','nonzeros');
+            adigatorGenJacFile('om_ls',{gx()}, optJ);
+            adigatorGenHesFile('om_ls',{gx()}, optJ);
+            rehash;
+            tc.verifyFalse(contains(fileread('om_ls_Jac.m'),'Jac = zeros'), ...
+                'jac_output=nonzeros must give a nonzeros first derivative');
+            tc.verifyTrue(contains(fileread('om_ls_Hes.m'),'Hes = zeros'), ...
+                'jac_output (level-1 alias) must NOT flip the Hessian to nonzeros');
+            % der_output DOES reach the Hessian
+            optD = adigatorOptions('overwrite',1,'echo',0,'der_output','nonzeros');
+            adigatorGenHesFile('om_ls',{gx()}, optD); rehash;
+            tc.verifyFalse(contains(fileread('om_ls_Hes.m'),'Hes = zeros'), ...
+                'der_output=nonzeros must flip the Hessian to the nonzeros form');
+        end
+
         function nonzerosGradientConvention(tc)
             % scalar function (Grd convention): values match the gradient
             % nonzeros in pattern order

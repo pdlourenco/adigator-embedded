@@ -240,15 +240,19 @@ for i = 1:nargin/2
       end
       options.loopbound = value;
       case {'jac_output','der_output'} % roadmap R5 (ANALYSIS.md 2.3) / #84 R25 (ADR-0022)
-      % der_output is the canonical per-DerType output form; jac_output is the
-      % back-compat alias. Setting either keeps both in sync.
+      % der_output is the canonical GLOBAL output form (all levels); jac_output
+      % is a pure FIRST-DERIVATIVE-level alias. Set ONLY the named option - NO
+      % cross-sync (#84/R25, ADR-0022 per-level intent): so jac_output never
+      % reaches the Hessian (adigatorGenHesFile reads der_output only), while
+      % adigatorGenJacFile reads `der_output || jac_output` so a level-1
+      % jac_output still gives a nonzeros Jacobian/gradient without flipping the
+      % Hessian's form. der_output='nonzeros' still flips every level.
       value = lower(char(value));
       if ~any(strcmp(value,{'matrix','nonzeros'}))
         error('adigator:jacOutput',...   % legacy id kept for both aliases
           '%s must be ''matrix'' (default) or ''nonzeros''', field);
       end
-      options.jac_output = value;
-      options.der_output = value;
+      options.(field) = value;   % set ONLY the named option - no cross-sync
       case 'der_levels' % roadmap R7a (issue #21)
       % shape/range check only; the level-vs-maxlevel and mandatory-top-level
       % checks need the derivative type, so they live in the generators'
