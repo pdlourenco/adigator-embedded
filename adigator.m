@@ -273,7 +273,7 @@ for CFcount = 1:NUMcf
   FunctionInfo(FunCount).File.Name = FILENAME;
   FunctionInfo(FunCount).File.fid  = FID;
   FunctionInfo(FunCount).File.Path = CalledFunctions{CFcount};
-  
+
   % -----Parse the users function line of the file----
   [OutNames,InNames,~,FunEvalLoc,EvalMajorLineCount] = parsefuncIO(FID,1,0);
   % This is an actual function file so it better have a function line
@@ -333,7 +333,19 @@ for CFcount = 1:NUMcf
     FunctionInfo(FunCount).PreviousDerivData = [];
     FunctionInfo(FunCount).DERNUMBER         = 1;
   end
-  
+
+  % Embed modes ('l'/'i') require dependency-free, embeddable output (C-4), so
+  % reject cell arrays / user `load` / user `global` in the differentiated
+  % source up front with a clear error instead of emitting non-embeddable code
+  % (B21/B22, ADR-0023). Only USER source is scanned: a previously-generated
+  % ADiGator derivative file (PrevDerFlag) carries ADiGator's own global/load
+  % boilerplate that the embed pipeline strips, so it is skipped. Classic mode
+  % ('c') is unaffected.
+  if ~PrevDerFlag && ...
+      (strcmp(ADIGATOR.OPTIONS.EMBED_MODE,'l') || strcmp(ADIGATOR.OPTIONS.EMBED_MODE,'i'))
+    adigatorScanEmbedUnsupported(CalledFunctions{CFcount});
+  end
+
   % -----Get FlowInfo-----
   FlowInfo = struct('Type','main',...
     'StartLocation',[EvalMajorLineCount,1,1,FunEvalLoc],...
