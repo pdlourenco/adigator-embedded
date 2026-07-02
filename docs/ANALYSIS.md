@@ -352,11 +352,16 @@ open).** The B17 fix guards struct fields; a numeric element of a constant
 **not** marked derivative-free. Reproduced on HEAD (found during the B17
 review, #102): `C = {M, g}; y = C{1}*x + C{2}*x;` emits `C{1}.f` and crashes at
 runtime (`Dot indexing is not supported … C{1}.f`) — identical silent-broken-
-codegen class to B17, cell instead of struct. *Fix:* mirror B17 — mark constant
-cell elements derivative-free so they print bare — as a fast-follow to #102 with
-its own cell pinning test. Note `structParse`'s per-field constant marking must
-apply on the `structflag=1` (cell/nested) path too, not only the top-level
-struct arm.
+codegen class to B17, cell instead of struct. **Scope is the whole
+`structflag=1` constant path, not just flat cells:** `structParse` recurses cell
+elements (`iscell`, line ~407), **struct-array fields** (`numel(x)>1`, line
+~382), and structs-nested-in-cells all with `structflag=1`, none of which the
+B17 `~structflag` marking reaches. So a constant *struct array* (`P(i).M`)
+exhibits the same crash. *Fix:* mirror B17 — mark the constant `structflag=1`
+numeric arm derivative-free so those references print bare — as a fast-follow to
+#102. Its pinning test must exercise **flat cell + struct-array + nested-in-cell**
+provenance (a flat-`{M,g}` test alone would leave the struct-array corner
+unpinned).
 
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
