@@ -23,10 +23,11 @@ constants used in arithmetic** (`cadamatprint.m`).
 > **current disposition is tracked in [§1.5 Fix disposition log](#15-fix-disposition-log)**:
 > every bug **B1–B16** is **Fixed**, **Mitigated**, or **Won't-fix (benign)**.
 > (B16, §1.3b, was surfaced by the issue-#38 Monte-Carlo hygiene fuzzer and
-> fixed in ROADMAP R9 B.3.) **B17–B21** (§1.3c) are a newer batch triaged from a
-> local (proprietary) embedded field report — **B17 is now fixed** (the §1.3c
-> description predates the fix); **B19/B21 remain open, B20 is a documented
-> limitation** (B18 no longer reproduces); they are the subject of ROADMAP R26. Where a
+> fixed in ROADMAP R9 B.3.) **B17–B22** (§1.3c) are a newer batch: B17–B21 were
+> triaged from a local (proprietary) embedded field report, B22 was found during
+> the B17 review — **B17 is now fixed** (the §1.3c description predates the fix);
+> **B19/B21/B22 remain open, B20 is a documented limitation** (B18 no longer
+> reproduces); they are the subject of ROADMAP R26. Where a
 > description below names a file/line (e.g. B1's old
 > `adigatorGenDerFile_embedded.m` location), §1.5 records where the code
 > actually lives now (`embedding/prune_adigator_mat.m`).
@@ -345,6 +346,18 @@ the body either way). *Disposition:* capture the loaded constants as embedded
 data, or document that parameters must be pre-loaded and passed as inputs.
 Reproduces on HEAD.
 
+**B22 — constant-*cell* element analog of B17 (high severity, same class;
+open).** The B17 fix guards struct fields; a numeric element of a constant
+*cell* assigned in the body reaches `structParse` with `structflag=1` and is
+**not** marked derivative-free. Reproduced on HEAD (found during the B17
+review, #102): `C = {M, g}; y = C{1}*x + C{2}*x;` emits `C{1}.f` and crashes at
+runtime (`Dot indexing is not supported … C{1}.f`) — identical silent-broken-
+codegen class to B17, cell instead of struct. *Fix:* mirror B17 — mark constant
+cell elements derivative-free so they print bare — as a fast-follow to #102 with
+its own cell pinning test. Note `structParse`'s per-field constant marking must
+apply on the `structflag=1` (cell/nested) path too, not only the top-level
+struct arm.
+
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
 - `cadaunarymath.m` derivative-rule corrections (`asec`, `acsc`, `asecd`,
@@ -393,6 +406,7 @@ Reproduces on HEAD.
 | B19 (while+if index over-approximation) | **Open** — reproduces (`Cannot do strictly symbolic referencing/assignment`); needs tracing (loop-range analysis vs. B20-class limitation). ROADMAP R26. |
 | B20 (data-dependent indexing) | **Won't-fix as a limitation → actionable error + docs** (decided; ADR to accompany the R26 fix) — keep the error, make it point to the logical-weight-sum idiom; document the limitation. ROADMAP R26. |
 | B21 (user `load` verbatim in inline file) | **Open** — C-4 violation, orthogonal to B17 (found via B17's load-provenance test). Capture load'd constants as data, or require pre-loaded params. ROADMAP R26. |
+| B22 (constant-cell element `.f`) | **Open** — same class as B17 for constant *cells* (the `structParse` `structflag=1` path is unguarded). Found during the #102 review; reproduces on HEAD. Fix mirrors B17 (mark constant cell elements derivative-free) as a fast-follow to #102 with a cell pinning test. ROADMAP R26. |
 
 ---
 
