@@ -21,12 +21,15 @@ constants used in arithmetic** (`cadamatprint.m`).
 > **Status (read first).** The bug descriptions in §1.1–1.3 are the original
 > analysis and are written in the present tense of when they were found. Their
 > **current disposition is tracked in [§1.5 Fix disposition log](#15-fix-disposition-log)**:
-> every bug B1–B16 is now **Fixed**, **Mitigated**, or **Won't-fix (benign)** —
-> none remain open. (B16, §1.3b, was surfaced by the issue-#38 Monte-Carlo
-> hygiene fuzzer and fixed in ROADMAP R9 B.3.) Where a description below names a
-> file/line (e.g. B1's old `adigatorGenDerFile_embedded.m` location), §1.5
-> records where the code actually lives now
-> (`embedding/prune_adigator_mat.m`).
+> every bug **B1–B16** is **Fixed**, **Mitigated**, or **Won't-fix (benign)**.
+> (B16, §1.3b, was surfaced by the issue-#38 Monte-Carlo hygiene fuzzer and
+> fixed in ROADMAP R9 B.3.) **B17–B21** (§1.3c) are a newer batch triaged from a
+> local (proprietary) embedded field report — **B17/B19/B21 are open, B20 is a
+> documented limitation** (B18 no longer reproduces); they are the subject of
+> ROADMAP R26. Where a
+> description below names a file/line (e.g. B1's old
+> `adigatorGenDerFile_embedded.m` location), §1.5 records where the code
+> actually lives now (`embedding/prune_adigator_mat.m`).
 
 ### 1.1 Embedded pipeline (new code)
 
@@ -270,6 +273,74 @@ cleared — the generated file needs it. Pinned by **`UCoreErrorHygieneTest`**
 malformed fixtures must error, and neither path may leave `who('global')`, the
 path, or the open-fid set changed.
 
+### 1.3c Core-transform bugs found via an embedded struct-parameter field report (B17–B21)
+
+A local (proprietary, un-committed under `docs/known-bugs/`) report of failures
+differentiating a struct-parameter-heavy dynamics function through
+`adigatorGenDerFile_embedded('jacobian',…,'i')`. Each was triaged against HEAD
+with a **non-proprietary** repro; the four groups turned out to be four distinct
+root causes, not one.
+
+**B17 — spurious `.f` on constant-struct field references (high severity;
+silent broken codegen).** When a struct *constant* is assigned in the function
+body — inline (`P = struct(...)`) or from a load (`S = load('x.mat'); P =
+S.field`) — the non-overloaded `adigatorVarAnalyzer` `structParse`
+(`lib/adigatorVarAnalyzer.m`) turns each numeric field into a `cada` named
+`P.field` **classified derivative-bearing** (`VARINFO.NAMELOCS(:,3) ≠ Inf`),
+while the struct assignment itself is printed **verbatim**
+(`adigatorVarAnalyzer.m:243-248`). So `cadafuncname.m:39` prints `P.field.f` on
+every use (as an `mtimes` operand, a subfunction-call input, etc.), but the
+verbatim struct has **no `.f` field** → the generated derivative errors at
+runtime ("Reference to non-existent field 'f'"). Generation succeeds silently;
+only *running* the file reveals it. Contrast that survives: a numeric-array
+constant (`K = magic(3)`) is lifted to `K.f = magic(3)` (backed, runs), and
+aux-input struct fields are marked derivative-free (`Inf`) so they print bare —
+local constant-struct fields are the only ones with the verbatim-vs-lifted
+mismatch. Whole-struct passthrough (`q = P.sub`, a sub-struct field) also prints
+bare and works.
+*Fix (Option 1, approved):* mark constant local-struct field cadas
+derivative-free so `cadafuncname` takes its bare branch (`:29-31`) and prints
+`P.field`, consistent with the verbatim struct; apply across the empty/overmap/
+print runs and guard with `IStructInputTest` (R8), `IShapeMatrixTest`,
+`IEmbedModesTest`, MC-smoke, plus a new pinning test (inline **and** load
+provenance, asserting no `.f` on constant-struct fields + FD/round-trip).
+
+**B18 — `if` on constant/aux struct-parameter fields (no longer reproduces).**
+An `if` whose condition is arithmetic on constant/aux struct fields
+(`if (P.a+P.b+P.c)==0 … else <subfunction> … end`) formerly aborted the
+transformation. On HEAD it generates and matches finite differences to ~1e-10 on
+both branches (most likely resolved by R8 struct-input support). *Disposition:*
+add a regression guard only.
+
+**B19 — index over-approximation inside `while`+`if` (open).** Indexing a
+constant table by a loop counter inside `while n <= N` with nested `if (n>1)` /
+`if (m>1)` guards fails generation with `Cannot do strictly symbolic
+referencing/assignment`; the report's workaround re-asserts the loop bound
+inside each guard (`if and(cond, n<=N)`). Suspected: the index-range / overmap
+analysis over-approximates the counter past `N`. Reproduces on HEAD. Needs
+tracing — may resolve to the same symbolic-index limitation as B20, or a genuine
+loop-range fix.
+
+**B20 — data-dependent (runtime) indexing (limitation; make the error
+actionable).** Indexing a variable by a value computed at runtime
+(`ref_data(ref_idx,3)` with data-dependent `ref_idx`) is not expressible in
+static forward AD with compile-time sparsity (the pattern would be
+runtime-dependent). It already errors (`Cannot do strictly symbolic
+referencing/assignment` — principle 1, not silently wrong) but cryptically.
+*Disposition (decided):* keep the error, make it **actionable** (name the
+construct, point to the logical-weight-sum idiom) and document the limitation +
+idiom in the user guide. Reproduces on HEAD.
+
+**B21 — user `load(...)` emitted verbatim into the inline/coderload file
+(C-4, open).** When the differentiated function itself contains
+`S = load('x.mat')`, the embedded `'i'`/`'l'` pipeline passes the `load` through
+into the generated file, breaking the dependency-free guarantee (contract C-4).
+Orthogonal to B17 — surfaced while testing B17's load provenance (B17's runtime
+`.f` fix is independent and still applies, since the struct is materialized in
+the body either way). *Disposition:* capture the loaded constants as embedded
+data, or document that parameters must be pre-loaded and passed as inputs.
+Reproduces on HEAD.
+
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
 - `cadaunarymath.m` derivative-rule corrections (`asec`, `acsc`, `asecd`,
@@ -313,6 +384,11 @@ path, or the open-fid set changed.
 | §2.1 item 2 (`uint16` narrowing) | **Rejected** — `uint16` saturates at 65535, which index *arithmetic* in generated code can plausibly reach for moderate problem sizes (a 300-variable Jacobian already has unrolled indices near 10⁵), turning overflow into silent saturation. `uint32` (range ~4·10⁹) is kept as the narrowing floor. |
 | CI plan Phase 4 (ratchets) | **Implemented** — `ci_lint` gains a findings-count ratchet against `tests/lint_baseline.txt`, and a new `ci_coverage` step reports the aggregate line rate of `lib`/`util`/`embedding` (Cobertura artifact) and gates against `tests/coverage_baseline.txt`. Both baselines self-bootstrap: absent file → report-only; the first CI run supplies the numbers to commit. |
 | PR #1 architectural commits (direct emission + literal linidx) | Discarded — right direction (§2.1) but defective: `compute_wrapper_linidx` called with swapped size arguments at both call sites, second differentiation cannot parse `persistent`/`coder.*` statements, inline mode references a nonexistent struct level, and classic mode was left inconsistent with embed modes. To be reimplemented once TS-I-01 exists. |
+| B17 (constant-struct field `.f`) | **Open** — reproduced + root-caused (§1.3c): `structParse` marks constant local-struct fields derivative-bearing while the struct is emitted verbatim; fix specified (Option 1 — mark those fields derivative-free so `cadafuncname` prints them bare). Sufficient for both inline and load provenance. ROADMAP R26. |
+| B18 (constant/aux-param conditional) | **Fixed (no longer reproduces)** — generates + matches FD ~1e-10 both branches (likely R8). Needs a regression guard only. |
+| B19 (while+if index over-approximation) | **Open** — reproduces (`Cannot do strictly symbolic referencing/assignment`); needs tracing (loop-range analysis vs. B20-class limitation). ROADMAP R26. |
+| B20 (data-dependent indexing) | **Won't-fix as a limitation → actionable error + docs** (decided; ADR to accompany the R26 fix) — keep the error, make it point to the logical-weight-sum idiom; document the limitation. ROADMAP R26. |
+| B21 (user `load` verbatim in inline file) | **Open** — C-4 violation, orthogonal to B17 (found via B17's load-provenance test). Capture load'd constants as data, or require pre-loaded params. ROADMAP R26. |
 
 ---
 

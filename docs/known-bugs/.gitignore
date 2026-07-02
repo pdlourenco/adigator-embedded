@@ -1,0 +1,3 @@
+# Proprietary bug reports (GMV source snippets) — never commit.
+*
+!.gitignore
