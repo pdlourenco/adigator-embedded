@@ -13,6 +13,7 @@ classdef IOutputModesTest < matlab.unittest.TestCase
             tc.applyFixture(PathFixture(fullfile(root,'lib')));
             tc.applyFixture(PathFixture(fullfile(root,'lib','cadaUtils')));
             tc.applyFixture(PathFixture(fullfile(root,'util')));
+            tc.applyFixture(PathFixture(fullfile(root,'embedding')));  % adigatorGenHesFile -> updatestruct (#84 hessianNonzerosMode)
         end
     end
 
@@ -65,6 +66,103 @@ classdef IOutputModesTest < matlab.unittest.TestCase
             wtxt = fileread('om_fun2_Jac.m');
             tc.verifyFalse(contains(wtxt,'Jac = zeros'), ...
                 'nonzeros wrapper must not allocate a dense Jacobian');
+        end
+
+        function hessianNonzerosMode(tc)
+            % #84/R25 (ADR-0022): der_output='nonzeros' Hessian returns the
+            % nonzero vector in output.HessianLocs order; scattering it via the
+            % exported pattern reproduces the dense Hessian, cross-checked vs FD
+            % (the Verified-by test).
+            writeFcn('om_hfun',  {'function y = om_hfun(x)', ...
+                    'y = x(1)^2 + x(2)*x(3) + sin(x(3));', 'end'});
+            writeFcn('om_hfun2', {'function y = om_hfun2(x)', ...
+                    'y = x(1)^2 + x(2)*x(3) + sin(x(3));', 'end'});
+            gx = @() adigatorCreateDerivInput([3 1],'x');
+            outM = adigatorGenHesFile('om_hfun', {gx()}, ...
+                struct('overwrite',1,'echo',0));                       % dense
+            outN = adigatorGenHesFile('om_hfun2',{gx()}, ...
+                struct('overwrite',1,'echo',0,'der_output','nonzeros'));% nonzeros
+            rehash;
+
+            xv = randn(3,1);
+            [HM,~,FM]   = om_hfun_Hes(xv);
+            [vals,~,FN] = om_hfun2_Hes(xv);
+            tc.verifyEqual(FN, FM, 'AbsTol', 0);
+
+            locs = outN.HessianLocs;
+            tc.verifySize(vals, [size(locs,1) 1]);
+            HM = full(HM);
+            tc.verifyEqual(vals, HM(sub2ind(size(HM),locs(:,1),locs(:,2))), ...
+                'AbsTol', 1e-13, 'RelTol', 1e-13);
+            % patterns agree between the two modes
+            tc.verifyEqual(full(outN.HessianStructure), full(outM.HessianStructure));
+            % scattering the nonzeros via HessianLocs reproduces the dense Hessian
+            HS = zeros(size(HM));
+            HS(sub2ind(size(HM),locs(:,1),locs(:,2))) = vals;
+            tc.verifyEqual(HS, HM, 'AbsTol', 0);
+            % Verified-by (R25): the reconstructed Hessian matches finite differences
+            g   = @(v) [2*v(1); v(3); v(2)+cos(v(3))];   % analytic gradient of the body
+            Hfd = zeros(3); e = 1e-6;
+            for j = 1:3
+                ej = zeros(3,1); ej(j) = e;
+                Hfd(:,j) = (g(xv+ej) - g(xv-ej))/(2*e);
+            end
+            tc.verifyEqual(HS, Hfd, 'AbsTol', 1e-5);
+            % the nonzeros wrapper performs no dense projection
+            tc.verifyFalse(contains(fileread('om_hfun2_Hes.m'),'Hes = zeros'), ...
+                'nonzeros Hessian wrapper must not allocate a dense Hessian');
+        end
+
+        function hessianNonzerosVectorFunction(tc)
+            % #84/R25: the m>1 VECTOR-function Hessian [m*n x n] nonzeros path
+            % (the (x1-1)*m+y row layout, B7 territory) - HessianLocs must
+            % reconstruct the dense Hessian exactly.
+            writeFcn('om_vh',  {'function y = om_vh(x)', ...
+                    'y = [x(1)^2 + x(2)*x(3); x(2)^2*x(3)];', 'end'});
+            writeFcn('om_vh2', {'function y = om_vh2(x)', ...
+                    'y = [x(1)^2 + x(2)*x(3); x(2)^2*x(3)];', 'end'});
+            gx = @() adigatorCreateDerivInput([3 1],'x');
+            outM = adigatorGenHesFile('om_vh', {gx()}, ...
+                struct('overwrite',1,'echo',0));
+            outN = adigatorGenHesFile('om_vh2',{gx()}, ...
+                struct('overwrite',1,'echo',0,'der_output','nonzeros'));
+            rehash;
+
+            xv = randn(3,1);
+            HM   = full(om_vh_Hes(xv));   % dense [m*n x n] = [6 x 3]
+            vals = om_vh2_Hes(xv);        % nonzero vector
+            tc.verifySize(HM, [6 3]);
+            locs = outN.HessianLocs;
+            tc.verifyEqual(vals, HM(sub2ind(size(HM),locs(:,1),locs(:,2))), ...
+                'AbsTol', 1e-13, 'RelTol', 1e-13);
+            HS = zeros(size(HM));
+            HS(sub2ind(size(HM),locs(:,1),locs(:,2))) = vals;
+            tc.verifyEqual(HS, HM, 'AbsTol', 0);            % reconstruct dense
+            tc.verifyEqual(full(outN.HessianStructure), full(outM.HessianStructure));
+        end
+
+        function jacOutputDoesNotFlipHessian(tc)
+            % #84/R25 (ADR-0022, decision b): jac_output is a level-1 alias and
+            % must NOT flip the Hessian's form - even through adigatorOptions (the
+            % primary API, whose cross-sync was removed). jac_output='nonzeros'
+            % gives a nonzeros first derivative but a DENSE Hessian; only
+            % der_output='nonzeros' flips the Hessian.
+            writeFcn('om_ls', {'function y = om_ls(x)', ...
+                    'y = x(1)^2 + x(2)*x(3);', 'end'});
+            gx = @() adigatorCreateDerivInput([3 1],'x');
+            optJ = adigatorOptions('overwrite',1,'echo',0,'jac_output','nonzeros');
+            adigatorGenJacFile('om_ls',{gx()}, optJ);
+            adigatorGenHesFile('om_ls',{gx()}, optJ);
+            rehash;
+            tc.verifyFalse(contains(fileread('om_ls_Jac.m'),'Jac = zeros'), ...
+                'jac_output=nonzeros must give a nonzeros first derivative');
+            tc.verifyTrue(contains(fileread('om_ls_Hes.m'),'Hes = zeros'), ...
+                'jac_output (level-1 alias) must NOT flip the Hessian to nonzeros');
+            % der_output DOES reach the Hessian
+            optD = adigatorOptions('overwrite',1,'echo',0,'der_output','nonzeros');
+            adigatorGenHesFile('om_ls',{gx()}, optD); rehash;
+            tc.verifyFalse(contains(fileread('om_ls_Hes.m'),'Hes = zeros'), ...
+                'der_output=nonzeros must flip the Hessian to the nonzeros form');
         end
 
         function nonzerosGradientConvention(tc)

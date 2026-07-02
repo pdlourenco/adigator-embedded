@@ -344,7 +344,12 @@ else
   scatteridx = [dy,'_location']; % single-column cases only (see below)
 end
 %v1.5:	process this to output Jacobians and Gradients correctly, as shown above
-if strcmp(opts.jac_output,'nonzeros')
+% #84/R25: der_output is the canonical GLOBAL form; jac_output is a level-1
+% (Jacobian/gradient) alias. adigatorOptions does NOT cross-sync them, so honor
+% either here - an explicit 'nonzeros' in der_output OR jac_output selects the
+% nonzeros form for this (first-derivative) output. The Hessian reads der_output
+% only, so a level-1 jac_output never flips the Hessian (ADR-0022, decision b).
+if strcmp(opts.der_output,'nonzeros') || strcmp(opts.jac_output,'nonzeros')
   % roadmap R5 (ANALYSIS.md 2.3): return the nonzero vector in nzlocs
   % order; the constant sparsity pattern is exported once through
   % output.JacobianLocs/JacobianStructure. No per-call dense allocation
