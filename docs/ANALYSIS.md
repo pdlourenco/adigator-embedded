@@ -26,7 +26,7 @@ constants used in arithmetic** (`cadamatprint.m`).
 > fixed in ROADMAP R9 B.3.) **B17–B22** (§1.3c) are a newer batch: B17–B21 were
 > triaged from a local (proprietary) embedded field report, B22 was found during
 > the B17 review — **B17 is now fixed** (the §1.3c description predates the fix);
-> **B19/B21/B22 remain open, B20 is a documented limitation** (B18 no longer
+> **B19/B21 remain open, B20 is a documented limitation, B22 is fixed** (B18 no longer
 > reproduces); they are the subject of ROADMAP R26. Where a
 > description below names a file/line (e.g. B1's old
 > `adigatorGenDerFile_embedded.m` location), §1.5 records where the code
@@ -347,21 +347,23 @@ data, or document that parameters must be pre-loaded and passed as inputs.
 Reproduces on HEAD.
 
 **B22 — constant-*cell* element analog of B17 (high severity, same class;
-open).** The B17 fix guards struct fields; a numeric element of a constant
-*cell* assigned in the body reaches `structParse` with `structflag=1` and is
-**not** marked derivative-free. Reproduced on HEAD (found during the B17
-review, #102): `C = {M, g}; y = C{1}*x + C{2}*x;` emits `C{1}.f` and crashes at
-runtime (`Dot indexing is not supported … C{1}.f`) — identical silent-broken-
-codegen class to B17, cell instead of struct. **Scope is the whole
-`structflag=1` constant path, not just flat cells:** `structParse` recurses cell
-elements (`iscell`, line ~407), **struct-array fields** (`numel(x)>1`, line
-~382), and structs-nested-in-cells all with `structflag=1`, none of which the
-B17 `~structflag` marking reaches. So a constant *struct array* (`P(i).M`)
-exhibits the same crash. *Fix:* mirror B17 — mark the constant `structflag=1`
-numeric arm derivative-free so those references print bare — as a fast-follow to
-#102. Its pinning test must exercise **flat cell + struct-array + nested-in-cell**
-provenance (a flat-`{M,g}` test alone would leave the struct-array corner
-unpinned).
+fixed).** The B17 fix guards struct fields (`structParse`'s `~structflag` arm); a
+numeric element of a constant *cell* assigned in the body reaches `structParse`
+with `structflag=1` and was **not** marked derivative-free. Reproduced on HEAD
+(found during the B17 review, #102): `C = {M, g}; y = C{1}*x + C{2}*x;` emitted
+`C{1}.f` and crashed at runtime (`Dot indexing is not supported … C{1}.f`) —
+identical silent-broken-codegen class to B17, cell instead of struct. **Scope,
+established empirically:** the affected path is the *verbatim-emitted* constant
+container — flat cells (`iscell`, line ~407) and structs nested in cells (both
+recurse with `structflag=1`). Constant *struct arrays* (`numel(x)>1`, line ~382)
+were initially suspected but do **not** exhibit the bug: they take the *lifting*
+path (each field emitted as `P(i).A.f = <value>`, so the `.f` is backed) and are
+already correct. *Fixed:* the `structflag=1` numeric arm now marks the element
+derivative-free (`NAMELOCS(:,3)=Inf`), so `@cadastruct/subsref` propagates a bare
+reference. Pinned by `tests/integration/IConstCellFieldTest.m` (flat cell +
+struct-nested-in-cell, classic + inline, vs analytic Jacobian; plus a positive
+guard that struct arrays stay correct). Verified against the baseline: the two
+cell cases crash without the fix, the struct-array guard passes with or without.
 
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
@@ -411,7 +413,7 @@ unpinned).
 | B19 (while+if index over-approximation) | **Open** — reproduces (`Cannot do strictly symbolic referencing/assignment`); needs tracing (loop-range analysis vs. B20-class limitation). ROADMAP R26. |
 | B20 (data-dependent indexing) | **Won't-fix as a limitation → actionable error + docs** (decided; ADR to accompany the R26 fix) — keep the error, make it point to the logical-weight-sum idiom; document the limitation. ROADMAP R26. |
 | B21 (user `load` verbatim in inline file) | **Open** — C-4 violation, orthogonal to B17 (found via B17's load-provenance test). Capture load'd constants as data, or require pre-loaded params. ROADMAP R26. |
-| B22 (constant-cell element `.f`) | **Open** — same class as B17 for constant *cells* (the `structParse` `structflag=1` path is unguarded). Found during the #102 review; reproduces on HEAD. Fix mirrors B17 (mark constant cell elements derivative-free) as a fast-follow to #102 with a cell pinning test. ROADMAP R26. |
+| B22 (constant-cell element `.f`) | **Fixed** — same class as B17 for constant *cells* / structs-nested-in-cells (the `structParse` `structflag=1` arm now marks the element derivative-free). Struct *arrays* were suspected but take the lifting path and are already correct. Pinned by `tests/integration/IConstCellFieldTest.m` (flat cell + nested-in-cell, classic + inline, vs analytic; + a struct-array positive guard). ROADMAP R26. |
 
 ---
 

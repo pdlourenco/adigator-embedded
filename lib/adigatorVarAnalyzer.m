@@ -370,6 +370,16 @@ elseif isnumeric(x)
     ADIGATOR.VARINFO.NAMELOCS(x.id,3) = Inf;
   elseif ~isempty(x)
     x = adigatorMakeNumeric(x);
+    % B22 (ANALYSIS.md Sec 1.3c): the structflag==1 arm is a numeric element of
+    % a verbatim-emitted constant container — a cell (`C{i}`) or a struct nested
+    % in one. Same reasoning as B17: a numeric element is a compile-time
+    % constant, so mark it derivative-free and `@cadastruct/subsref` propagates a
+    % bare reference instead of an unbacked `elem.f`. (Constant struct *arrays*
+    % take the lifting path instead — `P(i).f=…` — and are already correct.)
+    % A *derivative*-bearing element in the same cell (`C={const,x}`) is emitted
+    % verbatim and errors at runtime — a pre-existing limitation this does not
+    % address; embed modes reject user cells up front (the source-scan gate).
+    ADIGATOR.VARINFO.NAMELOCS(x.id,3) = Inf;
   end
 elseif isa(x,'cadastruct')
   if structflag
