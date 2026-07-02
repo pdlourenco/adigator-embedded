@@ -366,6 +366,9 @@ if strcmp(opts.der_output,'nonzeros')
 % #84/R25 (ADR-0022): return the Hessian nonzero VECTOR in dydxdx order; the
 % constant pattern is exported once via output.HessianLocs (the JacobianLocs
 % analog, set below). No per-call dense allocation or scatter, mode-independent.
+% NB: reads opts.der_output ONLY, not jac_output - jac_output is a first-
+% derivative-level back-compat alias (ADR-0022) and must not flip the Hessian's
+% form (do NOT "fix" this into `der_output || jac_output`).
 fprintf(Hfid,['Hes = ',dydxdx,'(:);\n']);
 else
 % v1.5 (ANALYSIS.md §2.1): in embed modes, compute the Hessian scatter

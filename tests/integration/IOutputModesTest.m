@@ -113,6 +113,34 @@ classdef IOutputModesTest < matlab.unittest.TestCase
                 'nonzeros Hessian wrapper must not allocate a dense Hessian');
         end
 
+        function hessianNonzerosVectorFunction(tc)
+            % #84/R25: the m>1 VECTOR-function Hessian [m*n x n] nonzeros path
+            % (the (x1-1)*m+y row layout, B7 territory) - HessianLocs must
+            % reconstruct the dense Hessian exactly.
+            writeFcn('om_vh',  {'function y = om_vh(x)', ...
+                    'y = [x(1)^2 + x(2)*x(3); x(2)^2*x(3)];', 'end'});
+            writeFcn('om_vh2', {'function y = om_vh2(x)', ...
+                    'y = [x(1)^2 + x(2)*x(3); x(2)^2*x(3)];', 'end'});
+            gx = @() adigatorCreateDerivInput([3 1],'x');
+            outM = adigatorGenHesFile('om_vh', {gx()}, ...
+                struct('overwrite',1,'echo',0));
+            outN = adigatorGenHesFile('om_vh2',{gx()}, ...
+                struct('overwrite',1,'echo',0,'der_output','nonzeros'));
+            rehash;
+
+            xv = randn(3,1);
+            HM   = full(om_vh_Hes(xv));   % dense [m*n x n] = [6 x 3]
+            vals = om_vh2_Hes(xv);        % nonzero vector
+            tc.verifySize(HM, [6 3]);
+            locs = outN.HessianLocs;
+            tc.verifyEqual(vals, HM(sub2ind(size(HM),locs(:,1),locs(:,2))), ...
+                'AbsTol', 1e-13, 'RelTol', 1e-13);
+            HS = zeros(size(HM));
+            HS(sub2ind(size(HM),locs(:,1),locs(:,2))) = vals;
+            tc.verifyEqual(HS, HM, 'AbsTol', 0);            % reconstruct dense
+            tc.verifyEqual(full(outN.HessianStructure), full(outM.HessianStructure));
+        end
+
         function nonzerosGradientConvention(tc)
             % scalar function (Grd convention): values match the gradient
             % nonzeros in pattern order
