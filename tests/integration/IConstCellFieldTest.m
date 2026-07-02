@@ -77,31 +77,21 @@ classdef IConstCellFieldTest < matlab.unittest.TestCase
             tc.verifyEqual(J, Jexp, 'AbsTol', 1e-12, 'Jacobian must equal M + g*I');
         end
 
-        function flatCellEmbedInline(tc)
-            % Inline ('i') pipeline: generation succeeds, no spurious `.f`.
-            [~,~,n,Jexp] = refParams();
+        function flatCellEmbedRejected(tc)
+            % Embed modes ('l'/'i') reject cells up front (ADR-0023 gate), so a
+            % constant cell that works in classic (above) is a clear generation
+            % error here -- not the runtime `.f` crash it used to be, and not a
+            % silently non-embeddable file. (The classic B22 fix and the embed
+            % gate are complementary: correct in 'c', rejected in 'l'/'i'.)
+            [~,~,n] = refParams();
             writeFixture('cc_i', { ...
                 'C = {[1 0 0; 0 2 0; 0 0 3], 2.5};', ...
                 'y = C{1}*x + C{2}*x;'});
             ax = adigatorCreateDerivInput([n 1],'x');
-            adigatorGenDerFile_embedded('jacobian','cc_i',{ax}, ...
-                struct('embed_mode','i','echo',0,'overwrite',1));
-            rehash;
-            body = fileread('cc_i_Jac.m');
-            tc.verifyEmpty(regexp(body,'C\{\d+\}\.f','once'), ...
-                'inline-mode constant-cell element referenced as `.f`');
-            try
-                xv = (1:n).'/n - 0.3;
-                [J,~] = cc_i_Jac(xv);
-            catch e
-                if strcmp(e.identifier,'MATLAB:UndefinedFunction') && ...
-                        contains(e.message,'coder.')
-                    tc.assumeFail(['inline mode needs the coder.* namespace ', ...
-                        'to run in MATLAB; text assertion already ran: ', e.message]);
-                end
-                rethrow(e);
-            end
-            tc.verifyEqual(J, Jexp, 'AbsTol', 1e-12, 'inline Jacobian must equal M + g*I');
+            tc.verifyError(@() adigatorGenDerFile_embedded('jacobian','cc_i',{ax}, ...
+                struct('embed_mode','i','echo',0,'overwrite',1)), ...
+                'adigator:embed:unsupportedConstruct', ...
+                'embed mode must reject a user cell array');
         end
 
         function structArrayStaysCorrect(tc)

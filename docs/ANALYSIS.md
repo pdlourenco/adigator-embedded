@@ -26,7 +26,7 @@ constants used in arithmetic** (`cadamatprint.m`).
 > fixed in ROADMAP R9 B.3.) **B17–B22** (§1.3c) are a newer batch: B17–B21 were
 > triaged from a local (proprietary) embedded field report, B22 was found during
 > the B17 review — **B17 is now fixed** (the §1.3c description predates the fix);
-> **B19/B21 remain open, B20 is a documented limitation, B22 is fixed** (B18 no longer
+> **B19 remains open, B20 is a documented limitation, B21/B22 are fixed** (B18 no longer
 > reproduces); they are the subject of ROADMAP R26. Where a
 > description below names a file/line (e.g. B1's old
 > `adigatorGenDerFile_embedded.m` location), §1.5 records where the code
@@ -337,14 +337,16 @@ construct, point to the logical-weight-sum idiom) and document the limitation +
 idiom in the user guide. Reproduces on HEAD.
 
 **B21 — user `load(...)` emitted verbatim into the inline/coderload file
-(C-4, open).** When the differentiated function itself contains
-`S = load('x.mat')`, the embedded `'i'`/`'l'` pipeline passes the `load` through
-into the generated file, breaking the dependency-free guarantee (contract C-4).
-Orthogonal to B17 — surfaced while testing B17's load provenance (B17's runtime
-`.f` fix is independent and still applies, since the struct is materialized in
-the body either way). *Disposition:* capture the loaded constants as embedded
-data, or document that parameters must be pre-loaded and passed as inputs.
-Reproduces on HEAD.
+(C-4, fixed via the embed gate).** When the differentiated function itself
+contains `S = load('x.mat')`, the embedded `'i'`/`'l'` pipeline passed the
+`load` through into the generated file, breaking the dependency-free guarantee
+(contract C-4). Orthogonal to B17 — surfaced while testing B17's load provenance.
+*Fixed:* the embed-mode source-scan gate ([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md))
+now rejects a user `load` (and `global`) in the differentiated source up front,
+in `'l'`/`'i'`, with a clear error (`adigator:embed:unsupportedConstruct`)
+naming the file/line — the user pre-loads the data and passes it as an auxiliary
+input. Capturing `load`'d constants as embedded `Data*` is a possible future
+relaxation of the gate. Pinned by `tests/integration/IEmbedUnsupportedTest.m`.
 
 **B22 — constant-*cell* element analog of B17 (high severity, same class;
 fixed).** The B17 fix guards struct fields (`structParse`'s `~structflag` arm); a
@@ -364,6 +366,11 @@ reference. Pinned by `tests/integration/IConstCellFieldTest.m` (flat cell +
 struct-nested-in-cell, classic + inline, vs analytic Jacobian; plus a positive
 guard that struct arrays stay correct). Verified against the baseline: the two
 cell cases crash without the fix, the struct-array guard passes with or without.
+This is the **classic**-mode correctness fix; in **embed** modes (`'l'`/`'i'`)
+cells are rejected up front by the source-scan gate
+([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md), the same gate that
+resolves B21) — the two are complementary: cells are correct in `'c'`, a clear
+error in `'l'`/`'i'`.
 
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
@@ -412,8 +419,8 @@ cell cases crash without the fix, the struct-array guard passes with or without.
 | B18 (constant/aux-param conditional) | **Fixed (no longer reproduces)** — generates + matches FD ~1e-10 both branches (likely R8). Needs a regression guard only. |
 | B19 (while+if index over-approximation) | **Open** — reproduces (`Cannot do strictly symbolic referencing/assignment`); needs tracing (loop-range analysis vs. B20-class limitation). ROADMAP R26. |
 | B20 (data-dependent indexing) | **Won't-fix as a limitation → actionable error + docs** (decided; ADR to accompany the R26 fix) — keep the error, make it point to the logical-weight-sum idiom; document the limitation. ROADMAP R26. |
-| B21 (user `load` verbatim in inline file) | **Open** — C-4 violation, orthogonal to B17 (found via B17's load-provenance test). Capture load'd constants as data, or require pre-loaded params. ROADMAP R26. |
-| B22 (constant-cell element `.f`) | **Fixed** — same class as B17 for constant *cells* / structs-nested-in-cells (the `structParse` `structflag=1` arm now marks the element derivative-free). Struct *arrays* were suspected but take the lifting path and are already correct. Pinned by `tests/integration/IConstCellFieldTest.m` (flat cell + nested-in-cell, classic + inline, vs analytic; + a struct-array positive guard). ROADMAP R26. |
+| B21 (user `load` verbatim in inline file) | **Fixed** (embed gate, [ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md)) — `'l'`/`'i'` reject a user `load`/`global` in the differentiated source up front with a clear error (`adigator:embed:unsupportedConstruct`); pre-load and pass as an aux input. Capture-as-`Data*` is a future relaxation. Pinned by `tests/integration/IEmbedUnsupportedTest.m`. |
+| B22 (constant-cell element `.f`) | **Fixed** — **classic:** the `structParse` `structflag=1` arm marks constant cell / nested-in-cell elements derivative-free (struct *arrays* take the lifting path, already correct); pinned by `IConstCellFieldTest`. **Embed (`l`/`i`):** cells are rejected up front by the source-scan gate ([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md)), pinned by `IEmbedUnsupportedTest`. ROADMAP R26. |
 
 ---
 
