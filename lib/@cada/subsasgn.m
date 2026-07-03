@@ -893,7 +893,7 @@ if isa(index,'cada')
       numeric = true(prod(overloaded.func.size),1);
     end
   else
-    error('Cannot do strictly symbolic referencing/assignment.')
+    cadaErrorSymbolicIndex();
   end
 elseif isnumeric(index) || islogical(index)
   logicflag = 0;

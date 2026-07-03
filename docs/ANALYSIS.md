@@ -26,7 +26,7 @@ constants used in arithmetic** (`cadamatprint.m`).
 > fixed in ROADMAP R9 B.3.) **B17–B22** (§1.3c) are a newer batch: B17–B21 were
 > triaged from a local (proprietary) embedded field report, B22 was found during
 > the B17 review — **B17 is now fixed** (the §1.3c description predates the fix);
-> **B19 remains open, B20 is a documented limitation, B21/B22 are fixed** (B18 no longer
+> **B19 remains open; B20 is a documented limitation (now with an actionable error); B21/B22 are fixed** (B18 no longer
 > reproduces); they are the subject of ROADMAP R26. Where a
 > description below names a file/line (e.g. B1's old
 > `adigatorGenDerFile_embedded.m` location), §1.5 records where the code
@@ -335,9 +335,15 @@ actionable).** Indexing a variable by a value computed at runtime
 static forward AD with compile-time sparsity (the pattern would be
 runtime-dependent). It already errors (`Cannot do strictly symbolic
 referencing/assignment` — principle 1, not silently wrong) but cryptically.
-*Disposition (decided):* keep the error, make it **actionable** (name the
-construct, point to the logical-weight-sum idiom) and document the limitation +
-idiom in the user guide. Reproduces on HEAD.
+*Resolved as a documented limitation* ([ADR-0024](decisions/ADR-0024-data-dependent-index-actionable-error.md)):
+data-dependent indexing stays unsupported, but the error is now **actionable** —
+a shared helper `cadaErrorSymbolicIndex` (called from both `@cada/subsref` and
+`@cada/subsasgn`) names the construct, explains why static forward AD cannot do
+it, shows the logical-weight-sum rewrite, and carries the id
+`adigator:symbolicIndex`. Pinned by `tests/integration/ISymbolicIndexTest.m`
+(the dynamic index raises the actionable error; the logical-weight rewrite
+generates and differentiates correctly). User-guide Limitations note is an
+R13-continuation (LaTeX rebuild).
 
 **B21 — user `load(...)` emitted verbatim into the inline/coderload file
 (C-4, fixed via the embed gate).** When the differentiated function itself
@@ -421,7 +427,7 @@ error in `'l'`/`'i'`.
 | B17 (constant-struct field `.f`) | **Fixed** (Option 1) — `structParse` (`lib/adigatorVarAnalyzer.m`) marks numeric (constant) struct fields derivative-free (`NAMELOCS(:,3)=Inf`), so `cadafuncname` prints a bare `struct.field`; derivative-carrying (`cada`) fields are untouched (R8 unaffected). Pinned by `tests/integration/IConstStructFieldTest.m` (classic + inline + load provenance, vs analytic). ROADMAP R26. |
 | B18 (constant/aux-param conditional) | **Fixed (no longer reproduces)** — generates + matches FD both branches (likely R8). Pinned by `tests/integration/ICondAuxParamTest.m` (an `if` on aux struct-param fields with a subfunction branch, both parameter selections vs analytic + FD). |
 | B19 (while+if index over-approximation) | **Open** — reproduces (`Cannot do strictly symbolic referencing/assignment`); needs tracing (loop-range analysis vs. B20-class limitation). ROADMAP R26. |
-| B20 (data-dependent indexing) | **Won't-fix as a limitation → actionable error + docs** (decided; ADR to accompany the R26 fix) — keep the error, make it point to the logical-weight-sum idiom; document the limitation. ROADMAP R26. |
+| B20 (data-dependent indexing) | **Resolved as a documented limitation** ([ADR-0024](decisions/ADR-0024-data-dependent-index-actionable-error.md)) — data-dependent indexing stays unsupported, but the error is now actionable (`cadaErrorSymbolicIndex`, id `adigator:symbolicIndex`, points to the logical-weight-sum idiom). Pinned by `tests/integration/ISymbolicIndexTest.m`. ROADMAP R26. |
 | B21 (user `load` verbatim in inline file) | **Fixed** (embed gate, [ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md)) — `'l'`/`'i'` reject a user `load`/`global` in the differentiated source up front with a clear error (`adigator:embed:unsupportedConstruct`); pre-load and pass as an aux input. Capture-as-`Data*` is a future relaxation. Pinned by `tests/integration/IEmbedUnsupportedTest.m`. |
 | B22 (constant-cell element `.f`) | **Fixed** — **classic:** the `structParse` `structflag=1` arm marks constant cell / nested-in-cell elements derivative-free (struct *arrays* take the lifting path, already correct); pinned by `IConstCellFieldTest`. **Embed (`l`/`i`):** cells are rejected up front by the source-scan gate ([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md)), pinned by `IEmbedUnsupportedTest`. ROADMAP R26. |
 
