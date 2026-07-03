@@ -156,6 +156,16 @@ stays `double` is a hard assertion (`dataFieldsStayDouble`).
 `load`; `'i'` additionally contains no `.mat` and no `coder.load`. All three
 modes return numerically identical results.
 
+**Source-construct gate ([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md)).**
+To uphold the above, `'l'`/`'i'` generation **rejects at the source** — before
+transformation, with a clear `adigator:embed:unsupportedConstruct` error naming
+the file/line — any **cell array**, user **`load`**, or user **`global`** in the
+differentiated function (`util/adigatorScanEmbedUnsupported.m`, wired into
+`adigator.m`; AST-based via `mtree`, user-source only). Cells are not an
+embeddable-C construct; a user `load`/`global` is a runtime dependency. Classic
+`'c'` is unaffected (cells work per the B17/B22 fix; `load`/`global` are
+legitimate there). *Verified by:* `tests/integration/IEmbedUnsupportedTest.m`.
+
 **Deprecation ([ADR-0021](decisions/ADR-0021-deprecate-coderload-split-inline-data.md),
 ratified).** `'l'` (coderload) is **deprecated**: it does not codegen under
 Embedded Coder and its compiled footprint converges with `'i'` (the #79
