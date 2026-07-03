@@ -68,7 +68,9 @@ Classic mode `'c'` is unaffected (there cells work via the B17/B22 fix and
   capturing `load`'d constants as embedded `Data*`), in which case the gate for
   that construct is relaxed to that path rather than an error; or if the
   per-file scope proves too coarse and needs narrowing to the transformed
-  function's line span.
+  function's line span — e.g. an embed-bound kernel that uses a cell purely for
+  *non-differentiated bookkeeping* (`error('%s', msgs{k})`) is rejected today,
+  the kind of report that would justify the line-span narrowing.
 
 ## Alternatives considered
 
