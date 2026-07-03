@@ -315,7 +315,10 @@ An `if` whose condition is arithmetic on constant/aux struct fields
 (`if (P.a+P.b+P.c)==0 … else <subfunction> … end`) formerly aborted the
 transformation. On HEAD it generates and matches finite differences to ~1e-10 on
 both branches (most likely resolved by R8 struct-input support). *Disposition:*
-add a regression guard only.
+regression guard only — pinned by `tests/integration/ICondAuxParamTest.m`
+(ADiGator traces both branches and emits a runtime conditional; the Jacobian is
+checked against the analytic `M` / `M + a*I` and finite differences for both
+parameter selections).
 
 **B19 — index over-approximation inside `while`+`if` (open).** Indexing a
 constant table by a loop counter inside `while n <= N` with nested `if (n>1)` /
@@ -416,7 +419,7 @@ error in `'l'`/`'i'`.
 | CI plan Phase 4 (ratchets) | **Implemented** — `ci_lint` gains a findings-count ratchet against `tests/lint_baseline.txt`, and a new `ci_coverage` step reports the aggregate line rate of `lib`/`util`/`embedding` (Cobertura artifact) and gates against `tests/coverage_baseline.txt`. Both baselines self-bootstrap: absent file → report-only; the first CI run supplies the numbers to commit. |
 | PR #1 architectural commits (direct emission + literal linidx) | Discarded — right direction (§2.1) but defective: `compute_wrapper_linidx` called with swapped size arguments at both call sites, second differentiation cannot parse `persistent`/`coder.*` statements, inline mode references a nonexistent struct level, and classic mode was left inconsistent with embed modes. To be reimplemented once TS-I-01 exists. |
 | B17 (constant-struct field `.f`) | **Fixed** (Option 1) — `structParse` (`lib/adigatorVarAnalyzer.m`) marks numeric (constant) struct fields derivative-free (`NAMELOCS(:,3)=Inf`), so `cadafuncname` prints a bare `struct.field`; derivative-carrying (`cada`) fields are untouched (R8 unaffected). Pinned by `tests/integration/IConstStructFieldTest.m` (classic + inline + load provenance, vs analytic). ROADMAP R26. |
-| B18 (constant/aux-param conditional) | **Fixed (no longer reproduces)** — generates + matches FD ~1e-10 both branches (likely R8). Needs a regression guard only. |
+| B18 (constant/aux-param conditional) | **Fixed (no longer reproduces)** — generates + matches FD both branches (likely R8). Pinned by `tests/integration/ICondAuxParamTest.m` (an `if` on aux struct-param fields with a subfunction branch, both parameter selections vs analytic + FD). |
 | B19 (while+if index over-approximation) | **Open** — reproduces (`Cannot do strictly symbolic referencing/assignment`); needs tracing (loop-range analysis vs. B20-class limitation). ROADMAP R26. |
 | B20 (data-dependent indexing) | **Won't-fix as a limitation → actionable error + docs** (decided; ADR to accompany the R26 fix) — keep the error, make it point to the logical-weight-sum idiom; document the limitation. ROADMAP R26. |
 | B21 (user `load` verbatim in inline file) | **Fixed** (embed gate, [ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md)) — `'l'`/`'i'` reject a user `load`/`global` in the differentiated source up front with a clear error (`adigator:embed:unsupportedConstruct`); pre-load and pass as an aux input. Capture-as-`Data*` is a future relaxation. Pinned by `tests/integration/IEmbedUnsupportedTest.m`. |
