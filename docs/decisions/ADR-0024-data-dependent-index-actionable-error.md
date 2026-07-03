@@ -39,12 +39,22 @@ end
 Replace the cryptic message with one — via a single shared helper
 `cadaErrorSymbolicIndex` called from both the `subsref` (read) and `subsasgn`
 (assign) sites — that (a) names the construct, (b) explains *why* static forward
-AD cannot do it, (c) shows the logical-weight-sum rewrite, and (d) points to the
-docs. It carries the identifier **`adigator:symbolicIndex`** so callers/tests
-can catch it precisely.
+AD cannot do it, (c) shows the logical-weight-sum rewrite, (d) notes that a
+loop-counter index is fixed by a `for` loop (which ADiGator unrolls) rather than
+a `while` loop (which it does not), and (e) points to the docs. It carries the
+identifier **`adigator:symbolicIndex`** so callers/tests can catch it precisely.
 
-Document the limitation and the idiom in the user guide (Limitations) and
-`docs/ANALYSIS.md` B20.
+This **partially subsumes B19** (docs/ANALYSIS.md §1.3c): a plain `while`-loop
+counter used as a matrix subscript is a symbolic index for exactly this reason
+(ADiGator does not unroll `while` loops), so it gets the same actionable error —
+the `for`-loop pointer (d) is its natural fix. The *`if`-guarded* `while`-counter
+(the original report's shape) instead hits an internal index over-approximation
+that surfaces a raw `MATLAB:badsubscript` before this detection; that is a
+**residual rough edge** (principle-1-safe — it errors, never miscomputes),
+tracked on #108, not addressed here.
+
+Document the limitation and the idioms in the user guide (Limitations) and
+`docs/ANALYSIS.md` B19/B20.
 
 ## Consequences
 
