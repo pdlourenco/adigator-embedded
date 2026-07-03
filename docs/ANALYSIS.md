@@ -26,7 +26,7 @@ constants used in arithmetic** (`cadamatprint.m`).
 > fixed in ROADMAP R9 B.3.) **B17–B22** (§1.3c) are a newer batch: B17–B21 were
 > triaged from a local (proprietary) embedded field report, B22 was found during
 > the B17 review — **B17 is now fixed** (the §1.3c description predates the fix);
-> **B19 remains open; B20 is a documented limitation (now with an actionable error); B21/B22 are fixed** (B18 no longer
+> **B19 folds into B20 (a `while`-loop counter is a symbolic index); B20 is a documented limitation (with an actionable error); B21/B22 are fixed** (B18 no longer
 > reproduces); they are the subject of ROADMAP R26. Where a
 > description below names a file/line (e.g. B1's old
 > `adigatorGenDerFile_embedded.m` location), §1.5 records where the code
@@ -320,14 +320,20 @@ regression guard only — pinned by `tests/integration/ICondAuxParamTest.m`
 checked against the analytic `M` / `M + a*I` and finite differences for both
 parameter selections).
 
-**B19 — index over-approximation inside `while`+`if` (open).** Indexing a
-constant table by a loop counter inside `while n <= N` with nested `if (n>1)` /
-`if (m>1)` guards fails generation with `Cannot do strictly symbolic
-referencing/assignment`; the report's workaround re-asserts the loop bound
-inside each guard (`if and(cond, n<=N)`). Suspected: the index-range / overmap
-analysis over-approximates the counter past `N`. Reproduces on HEAD. Needs
-tracing — may resolve to the same symbolic-index limitation as B20, or a genuine
-loop-range fix.
+**B19 — `while`-loop counter used as a matrix index (resolved: the B20
+limitation).** Indexing a constant table by a loop counter inside `while n <= N`
+failed generation with the same symbolic-index error as B20. *Traced:* the root
+cause is that ADiGator **deliberately does not unroll `while` loops** (`unroll=1`
+errors "Cannot unroll 'while' loops"), so a `while` counter used as a subscript
+is a runtime (symbolic) index → the B20 symbolic-index limitation, not a
+loop-range-analysis bug. The natural fix is a **`for` loop**, which ADiGator
+*does* unroll (the counter becomes a compile-time constant) and which generates
+correctly; genuinely data-dependent indices use the B20 logical-weight-sum
+rewrite. (The report's "re-assert the bound in the `if`" note did not hold in a
+minimal repro — the `while` counter is the fundamental issue.) *Resolved:* folds
+into B20 — `cadaErrorSymbolicIndex` now also points to the `for`-loop fix; pinned
+by `tests/integration/ISymbolicIndexTest.m` (`while`-counter errors, the `for`
+equivalent generates and differentiates correctly). ADR-0024.
 
 **B20 — data-dependent (runtime) indexing (limitation; make the error
 actionable).** Indexing a variable by a value computed at runtime
@@ -426,7 +432,7 @@ error in `'l'`/`'i'`.
 | PR #1 architectural commits (direct emission + literal linidx) | Discarded — right direction (§2.1) but defective: `compute_wrapper_linidx` called with swapped size arguments at both call sites, second differentiation cannot parse `persistent`/`coder.*` statements, inline mode references a nonexistent struct level, and classic mode was left inconsistent with embed modes. To be reimplemented once TS-I-01 exists. |
 | B17 (constant-struct field `.f`) | **Fixed** (Option 1) — `structParse` (`lib/adigatorVarAnalyzer.m`) marks numeric (constant) struct fields derivative-free (`NAMELOCS(:,3)=Inf`), so `cadafuncname` prints a bare `struct.field`; derivative-carrying (`cada`) fields are untouched (R8 unaffected). Pinned by `tests/integration/IConstStructFieldTest.m` (classic + inline + load provenance, vs analytic). ROADMAP R26. |
 | B18 (constant/aux-param conditional) | **Fixed (no longer reproduces)** — generates + matches FD both branches (likely R8). Pinned by `tests/integration/ICondAuxParamTest.m` (an `if` on aux struct-param fields with a subfunction branch, both parameter selections vs analytic + FD). |
-| B19 (while+if index over-approximation) | **Open** — reproduces (`Cannot do strictly symbolic referencing/assignment`); needs tracing (loop-range analysis vs. B20-class limitation). ROADMAP R26. |
+| B19 (while-counter index) | **Resolved (folds into B20)** — traced to ADiGator not unrolling `while` loops, so a `while` counter used as a subscript is a symbolic index (B20 limitation, not a loop-range bug); the `for`-loop equivalent generates. `cadaErrorSymbolicIndex` now also points to the `for`-loop fix; pinned by `tests/integration/ISymbolicIndexTest.m`. ROADMAP R26. |
 | B20 (data-dependent indexing) | **Resolved as a documented limitation** ([ADR-0024](decisions/ADR-0024-data-dependent-index-actionable-error.md)) — data-dependent indexing stays unsupported, but the error is now actionable (`cadaErrorSymbolicIndex`, id `adigator:symbolicIndex`, points to the logical-weight-sum idiom). Pinned by `tests/integration/ISymbolicIndexTest.m`. ROADMAP R26. |
 | B21 (user `load` verbatim in inline file) | **Fixed** (embed gate, [ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md)) — `'l'`/`'i'` reject a user `load`/`global` in the differentiated source up front with a clear error (`adigator:embed:unsupportedConstruct`); pre-load and pass as an aux input. Capture-as-`Data*` is a future relaxation. Pinned by `tests/integration/IEmbedUnsupportedTest.m`. |
 | B22 (constant-cell element `.f`) | **Fixed** — **classic:** the `structParse` `structflag=1` arm marks constant cell / nested-in-cell elements derivative-free (struct *arrays* take the lifting path, already correct); pinned by `IConstCellFieldTest`. **Embed (`l`/`i`):** cells are rejected up front by the source-scan gate ([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md)), pinned by `IEmbedUnsupportedTest`. ROADMAP R26. |
