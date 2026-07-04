@@ -27,7 +27,12 @@ constants used in arithmetic** (`cadamatprint.m`).
 > triaged from a local (proprietary) embedded field report, B22 was found during
 > the B17 review — **B17 is now fixed** (the §1.3c description predates the fix);
 > **B19 is partially resolved (plain `while`-counter → the actionable B20 symbolic-index error; the `if`-guarded shape has a residual over-approximation rough edge, #108 — both principle-1-safe); B20 is a documented limitation (with an actionable error); B21/B22 are fixed** (B18 no longer
-> reproduces); they are the subject of ROADMAP R26. Where a
+> reproduces); they are the subject of ROADMAP R26. **B23–B26** (§1.3d) are the
+> newest batch, from the 2026-07-04 repo-wide code-quality review
+> ([`known-bugs/2026-07-04-code-quality-review.md`](known-bugs/2026-07-04-code-quality-review.md))
+> — **all four are Open**, tracked in issue
+> [#117](https://github.com/pdlourenco/adigator-embedded/issues/117) / ROADMAP
+> R28. Where a
 > description below names a file/line (e.g. B1's old
 > `adigatorGenDerFile_embedded.m` location), §1.5 records where the code
 > actually lives now (`embedding/prune_adigator_mat.m`).
@@ -400,6 +405,53 @@ cells are rejected up front by the source-scan gate
 resolves B21) — the two are complementary: cells are correct in `'c'`, a clear
 error in `'l'`/`'i'`.
 
+### 1.3d Silent-wrong-output bugs found via the 2026-07-04 code-quality review (B23–B26)
+
+A repo-wide code-quality review (five parallel deep-read passes plus
+independent hand-verification; full report with all medium/low findings in
+[`known-bugs/2026-07-04-code-quality-review.md`](known-bugs/2026-07-04-code-quality-review.md))
+found four principle-1-class bugs, all verified against the code at `188d8d1`.
+Tracked in issue
+[#117](https://github.com/pdlourenco/adigator-embedded/issues/117), ROADMAP
+R28; each fix lands with its pinning test per `CI_PLAN.md` policy.
+
+**B23 — `HessianStructure`/`HessianLocs` silently corrupted for a matrix
+function of a scalar variable (high).** `util/adigatorGenHesFile.m:484-488`
+mutates `ysize` for the remap (`remapcase = 2`) but — unlike
+`adigatorGenJacFile`, which consults `remapcase` when building
+`JacobianStructure` (the B10 fix) — never consults it in the Hessian-metadata
+block: at `:610` `HesPat = zeros(ysize)` allocates `r×1` while `HesLocs1(:,1)`
+holds linear indices into the unrolled `r×c` output, so MATLAB grows the array
+and `output.HessianStructure` becomes a column with `HessianLocs` column
+indices all 1. The emitted wrapper is correct (built pre-mutation), so a
+consumer scattering `der_output='nonzeros'` values through `HessianLocs`
+reconstructs a silently wrong Hessian (REQ-T-03). Half-ported copy of the B10
+fix. Unpinned because `IShapeMatrixTest` never asserts the exported structures
+(see issue [#119](https://github.com/pdlourenco/adigator-embedded/issues/119)).
+
+**B24 — reverse mode applies the elementwise `./` adjoint to true matrix
+division `/` (high).** `util/adigatorGenRevGradFile.m:323` classifies `/` as
+binary and `:715-720` emits the elementwise adjoint for `{'./', '/'}` alike,
+while `lib/@cada/mrdivide.m` prints genuine `A/B` (square `B`) into the
+forward tape — for same-size operands the elementwise adjoint runs and yields
+a silently wrong gradient. The `*` case has exactly the missing shape guard;
+`\` correctly errors. Contradicts the file's own "unsupported ⇒ error at
+generation time" header contract.
+
+**B25 — N-D parameter reference: position-2 base subscript never validated
+(high).** `lib/@cada/subsref.m:331-341` (`NDRefTranslate`): positions ≥3 get
+integer+range checks; `base = s.subs{2}` gets none (logical bases are also
+accepted and added numerically). `B` declared `[3 4 5]`: `B(1,5,2)` — a hard
+error in plain MATLAB — folds to a *valid* column of the `3×20` fold and
+silently returns `B(1,1,3)`.
+
+**B26 — `length()` of an N-D declared parameter silently returns the fold
+length (med-high).** `lib/@cada/length.m:11,42` has no `ndsize` guard, while
+`size.m:125-130` rejects the ambiguous case for exactly the
+declared-shape-vs-fold reason; declared `[3 4 5]` gives `length(B)` = 20
+instead of 5, so `for k = 1:length(B)` silently iterates the wrong count. The
+PR #14 guard landed in `size` but not its sibling.
+
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
 - `cadaunarymath.m` derivative-rule corrections (`asec`, `acsc`, `asecd`,
@@ -449,6 +501,10 @@ error in `'l'`/`'i'`.
 | B20 (data-dependent indexing) | **Resolved as a documented limitation** ([ADR-0024](decisions/ADR-0024-data-dependent-index-actionable-error.md)) — data-dependent indexing stays unsupported, but the error is now actionable (`cadaErrorSymbolicIndex`, id `adigator:symbolicIndex`, points to the logical-weight-sum idiom). Pinned by `tests/integration/ISymbolicIndexTest.m`. ROADMAP R26. |
 | B21 (user `load` verbatim in inline file) | **Fixed** (embed gate, [ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md)) — `'l'`/`'i'` reject a user `load`/`global` in the differentiated source up front with a clear error (`adigator:embed:unsupportedConstruct`); pre-load and pass as an aux input. Capture-as-`Data*` is a future relaxation. Pinned by `tests/integration/IEmbedUnsupportedTest.m`. |
 | B22 (constant-cell element `.f`) | **Fixed** — **classic:** the `structParse` `structflag=1` arm marks constant cell / nested-in-cell elements derivative-free (struct *arrays* take the lifting path, already correct); pinned by `IConstCellFieldTest`. **Embed (`l`/`i`):** cells are rejected up front by the source-scan gate ([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md)), pinned by `IEmbedUnsupportedTest`. ROADMAP R26. |
+| B23 (Hessian `*Structure`/`*Locs` corruption, matrix-of-scalar) | **Open** — `util/adigatorGenHesFile.m` remap leaks into the metadata block (§1.3d); fix must land with `IShapeMatrixTest` structure assertions ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117), [#119](https://github.com/pdlourenco/adigator-embedded/issues/119)). ROADMAP R28. |
+| B24 (reverse-mode `/` elementwise adjoint) | **Open** — `util/adigatorGenRevGradFile.m` `case {'./','/'}` lacks the `*`-branch matrix guard (§1.3d); fix = matrix adjoint or the `\`-style unsupported error, pinned in `IRevGradTest` ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
+| B25 (N-D base subscript unvalidated) | **Open** — `lib/@cada/subsref.m` `NDRefTranslate` position-2 base needs the same integer/range/logical validation positions ≥3 have (§1.3d); pinned in `INDParamTest` ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
+| B26 (`length()` returns the ndsize fold length) | **Open** — `lib/@cada/length.m` needs the `size.m`-style `ndsize` guard (§1.3d); pinned in `INDParamTest` ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
 
 ---
 
