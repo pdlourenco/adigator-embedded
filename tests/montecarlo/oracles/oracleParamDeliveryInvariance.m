@@ -51,6 +51,11 @@ for k = 1:numel(deliveries)
         return;
     end
     if isempty(Jfirst); Jfirst = Jk; end
+    % Bit-exact isequaln is valid because the Phase-1 bilinear body M*x + g*x
+    % reorders no arithmetic across deliveries and 17-digit serialization
+    % round-trips the inlined literal to the exact double. A future phase that
+    % widens mcGenParamDelivery to bodies with summations that can reorder must
+    % drop this to a tight tolerance for those cases (issue #103, Phase 2/3).
     if ~isequal(size(Jk), size(Jfirst)) || ~isequaln(Jk, Jfirst)
         r.pass = false;
         r.message = sprintf('delivery ''%s'' Jacobian differs from ''%s''', d, deliveries{1});
