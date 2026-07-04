@@ -9,6 +9,15 @@ change** — it governs the `Index*`/`Data*` downcast layout, orthogonal to outp
 form). Implementation is roadmap **R25**, Hessian-nonzeros first (the R22/#85
 prerequisite); each phase lands its `Verified by:` test.
 
+**Update — R25 phase 1 shipped (#99, "decision b").** As implemented,
+`der_output` selects the form of each generator's **top-order output only** (a
+Hessian file's `Grd` companion stays dense regardless); `jac_output` is kept as
+a **level-1-only alias with no cross-sync** — it never flips a Hessian. Genuine
+per-derivative-level selection (Decision 1's "per level") and the
+`(der_output × DerType × mode)` matrix (Decision 3) are **deferred to R25 phase
+2**. Phase 1 shipped Hessian-nonzeros + `HessianLocs` + the `Jac→Grd`
+forward-gradient name fix, verified by `IOutputModesTest` (`CI_PLAN.md` TS-I-12).
+
 ## Context
 
 The output-form option grew incrementally and applies **unevenly** across
@@ -55,7 +64,9 @@ by a **`*Locs` family** — `HessianLocs` as the `JacobianLocs` analog, and one
 per DerType that gains a nonzeros form — exporting the constant sparsity pattern
 once (consistent with the C-2/C-3 data/pattern split). `jac_output` stays as a
 **back-compat alias** for the first-derivative level. Rejected the alternative
-of per-type options (`hes_output`, …) as option sprawl.
+of per-type options (`hes_output`, …) as option sprawl. *(Narrowed at
+implementation — see the Status "decision b" update: `der_output` flips the
+top output only and per-level selection is deferred.)*
 
 **2 — Treat it as a contract change (C-6 + C-2; C-3 unchanged).** On
 ratification:

@@ -247,16 +247,18 @@ generator, including the matrix-free products as they land:
 **Output form ([ADR-0022](decisions/ADR-0022-generalized-der-output-nonzeros.md),
 ratified).** A fourth facet: each wrapper's derivative outputs may be emitted in
 **`matrix`** or **`nonzeros`** form per the **`der_output ∈ {matrix, nonzeros}`**
-option, applied per derivative level (`jac_output` is a back-compat alias for
-the first-derivative level). In `nonzeros` form the constant sparsity pattern is
-exported once via a **`*Locs` family** — `HessianLocs` the `output.JacobianLocs`
-analog, one per DerType that supports nonzeros. Which `(der_output × DerType ×
-mode)` cells are supported vs **N/A** is a documented matrix (DESIGN + README),
-N/A cells named by design (e.g. `classic + slim`; `nonzeros` of a dense
-gradient; `nonzeros` of reverse-grad/`JtV`). Implementation is roadmap **R25**,
-**Hessian-nonzeros first** (the R22/#85 prerequisite); each phase lands its
-`Verified by:` test (`HessianLocs` reconstructs the dense Hessian vs dense FD —
-the TS-U-03 analog).
+option, which selects the form of the generator's **top-order output** —
+`der_output='nonzeros'` on a Hessian file flips only `Hes`; its `Grd` companion
+stays dense. `jac_output` is a **level-1-only alias** (no cross-sync — it never
+flips a Hessian). True per-derivative-level selection is deferred (R25 phase 2,
+"decision b"). In `nonzeros` form the constant sparsity pattern is exported once
+via a **`*Locs` family** — `HessianLocs` the `output.JacobianLocs` analog, one
+per DerType that supports nonzeros. The full `(der_output × DerType × mode)`
+support/N-A matrix is **deferred to R25 phase 2** (N/A by design, e.g.
+`classic + slim`; `nonzeros` of a dense gradient; `nonzeros` of
+reverse-grad/`JtV`). **Phase 1 shipped** (R25/#99): Hessian-nonzeros +
+`HessianLocs` + the `Jac→Grd` forward-gradient name fix, verified by
+`IOutputModesTest` (`CI_PLAN.md` TS-I-12).
 
 *Verified by:* `tests/integration/ILevelSelectTest.m` (`CI_PLAN.md` TS-I-05,
 `DER_LEVELS` selection across generators); the order is exercised by every test
