@@ -126,6 +126,27 @@ classdef MCSmokeTest < matlab.unittest.TestCase
                 {'ADIGATOR','ADIGATORFORDATA','ADIGATORDATA','ADIGATORVARIABLESTORAGE'}), ...
                 'transformation-state globals leaked after successful generation');
         end
+
+        function paramDeliveryInvarianceIsClean(tc)
+            % R27 Phase 1 (issue #103): the same bilinear function with its
+            % parameters delivered several ways -- inline constant struct (the
+            % B17 shape), aux struct (R8), separate aux inputs, inline constant
+            % cell (the B22 shape) -- must generate, run, and yield the identical
+            % Jacobian. This is the tolerance-free backstop for the B17/B22
+            % silent-broken-codegen class the body-only generators never reach.
+            report = mcCampaign('nIters', 12, 'seed', 271828, ...
+                'generators', {'mcGenParamDelivery'}, ...
+                'oracles', {'oracleParamDeliveryInvariance'}, ...
+                'promote', false, 'verbose', false);
+
+            tc.verifyEqual(report.nFail, 0, ...
+                sprintf('paramDelivery invariance found %d failing case(s); see report.failures', ...
+                report.nFail));
+            pd = report.oracleStats.oracleParamDeliveryInvariance;
+            tc.verifyGreaterThan(pd.pass, 0, ...
+                'paramDelivery oracle never passed — harness not exercising the deliveries');
+            tc.verifyEqual(pd.fail, 0, 'paramDelivery oracle reported a hard failure');
+        end
     end
 end
 
