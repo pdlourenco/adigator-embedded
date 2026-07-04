@@ -118,7 +118,19 @@ Contracts section (binding conventions), or for purely mechanical choices
   source size is no reason to keep it; binds C-4 (deprecation + split-form
   invariants), removal R17-gated; implementation roadmap R24 (issue #83).
 - [ADR-0022](ADR-0022-generalized-der-output-nonzeros.md) — **Accepted**:
-  generalize `jac_output` → a single `der_output ∈ {matrix, nonzeros}` option +
-  a `*Locs` family across DerTypes (Hessian-nonzeros/`HessianLocs` first); binds
-  C-6 (a fourth facet) + extends C-2, with a documented option×DerType×mode N/A
-  matrix; implementation roadmap R25 (issue #84; prerequisite for R22/#85).
+  a canonical `der_output ∈ {matrix, nonzeros}` option + a `*Locs` family across
+  DerTypes (`jac_output` kept as a level-1 alias); binds C-6 (a fourth facet) +
+  extends C-2. Phase 1 shipped (Hessian-nonzeros/`HessianLocs`, `Jac→Grd` fix,
+  R25/#99; `der_output` flips each generator's top output only — no cross-sync,
+  "decision b"); the option×DerType×mode matrix + per-level selection are
+  deferred to R25 phase 2 (issue #84; prerequisite for R22/#85).
+- [ADR-0023](ADR-0023-embed-source-scan-gate.md) — **Accepted**: embed-mode
+  source-scan gate — reject cells / `load` / `global` in embed-mode source with
+  an actionable `adigator:embed:unsupportedConstruct` error (adds an embed facet
+  to C-4); resolves B21 (`load`) and B22-in-embed (cells) at generation time
+  (issues #101, R26; pinned by `IEmbedUnsupportedTest`).
+- [ADR-0024](ADR-0024-data-dependent-index-actionable-error.md) — **Accepted**:
+  data-dependent (symbolic) indexing stays unsupported — a **limitation policy**
+  (not a contract change); the fix is *error quality* (an actionable error
+  pointing to the logical-weight-sum rewrite), never a wrong derivative
+  (B19/B20; issues #101/#108; pinned by `ISymbolicIndexTest`).

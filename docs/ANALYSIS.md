@@ -274,7 +274,7 @@ cleared — the generated file needs it. Pinned by **`UCoreErrorHygieneTest`**
 malformed fixtures must error, and neither path may leave `who('global')`, the
 path, or the open-fid set changed.
 
-### 1.3c Core-transform bugs found via an embedded struct-parameter field report (B17–B21)
+### 1.3c Core-transform bugs found via an embedded struct-parameter field report (B17–B22)
 
 A local (proprietary, un-committed under `docs/known-bugs/`) report of failures
 differentiating a struct-parameter-heavy dynamics function through

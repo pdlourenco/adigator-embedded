@@ -16,7 +16,7 @@ Source-of-truth documents:
   traceability (the V-model left/right legs).
 - [`docs/DESIGN.md`](docs/DESIGN.md) — architecture rationale **and** the
   binding output Contracts (C-1..C-5).
-- [`docs/ANALYSIS.md`](docs/ANALYSIS.md) — known bugs B1–B14 and optimization /
+- [`docs/ANALYSIS.md`](docs/ANALYSIS.md) — known bugs B1–B22 and optimization /
   reverse-mode analysis.
 - [`docs/REVIEW_CONTEXT.md`](docs/REVIEW_CONTEXT.md) — principles and red flags
   to review against.
