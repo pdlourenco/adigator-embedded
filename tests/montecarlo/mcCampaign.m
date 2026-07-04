@@ -12,8 +12,10 @@ function report = mcCampaign(varargin)
 % Options (defaults in brackets):
 %   nIters     [100]  number of cases.
 %   seed       [0]    base RNG seed (>= 0); iteration i uses seed+i.
-%   generators [affine, quadratic, shapefuzz]  generator function names, cycled.
-%   oracles    [knownDeriv, sparsitySuperset, crossMode]  oracle function names.
+%   generators [affine, quadratic, shapefuzz, elementwise, scalarSum,
+%              paramDelivery]  generator function names, cycled.
+%   oracles    [knownDeriv, sparsitySuperset, crossMode, hessSymmetry, fwdRev,
+%              paramDeliveryInvariance]  oracle function names.
 %   stopOnFail [false] stop at the first failing case.
 %   promote    [true]  write a regression reproducer per failure.
 %   reportPath ['']    also write the summary to this file.
@@ -24,9 +26,11 @@ p = inputParser; p.FunctionName = 'mcCampaign';
 p.addParameter('nIters', 100, @(x) isnumeric(x) && isscalar(x) && x >= 1);
 p.addParameter('seed', 0, @(x) isnumeric(x) && isscalar(x) && x >= 0);
 p.addParameter('generators', ...
-    {'mcGenAffine','mcGenQuadratic','mcGenShapeFuzz','mcGenElementwise','mcGenScalarSum'}, @iscellstr);
+    {'mcGenAffine','mcGenQuadratic','mcGenShapeFuzz','mcGenElementwise','mcGenScalarSum', ...
+     'mcGenParamDelivery'}, @iscellstr);
 p.addParameter('oracles', ...
-    {'oracleKnownDeriv','oracleSparsitySuperset','oracleCrossMode','oracleHessSymmetry','oracleFwdRev'}, @iscellstr);
+    {'oracleKnownDeriv','oracleSparsitySuperset','oracleCrossMode','oracleHessSymmetry', ...
+     'oracleFwdRev','oracleParamDeliveryInvariance'}, @iscellstr);
 p.addParameter('stopOnFail', false, @(x) islogical(x) && isscalar(x));
 p.addParameter('promote', true, @(x) islogical(x) && isscalar(x));
 p.addParameter('reportPath', '', @(x) ischar(x) || isstring(x));
