@@ -1,3 +1,6 @@
 # Proprietary bug reports (GMV source snippets) — never commit.
+# Repo-derived review reports (no proprietary content) are whitelisted
+# explicitly, one line per file, so the default stays never-commit.
 *
 !.gitignore
+!2026-07-04-code-quality-review.md
