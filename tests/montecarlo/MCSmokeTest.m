@@ -147,6 +147,24 @@ classdef MCSmokeTest < matlab.unittest.TestCase
                 'paramDelivery oracle never passed — harness not exercising the deliveries');
             tc.verifyEqual(pd.fail, 0, 'paramDelivery oracle reported a hard failure');
         end
+
+        function derOutputInvarianceIsClean(tc)
+            % R27 Phase 2 (issue #103): the der_output option axis. For a
+            % jacobian case, the jac_output='nonzeros' form must reconstruct
+            % (scatter into JacobianLocs) to the exact dense matrix form -- an
+            % option the body-only battery never swept.
+            report = mcCampaign('nIters', 16, 'seed', 141421, ...
+                'generators', {'mcGenAffine','mcGenQuadratic'}, ...
+                'oracles', {'oracleDerOutputInvariance'}, ...
+                'promote', false, 'verbose', false);
+
+            tc.verifyEqual(report.nFail, 0, ...
+                sprintf('derOutput invariance found %d failing case(s)', report.nFail));
+            do = report.oracleStats.oracleDerOutputInvariance;
+            tc.verifyGreaterThan(do.pass, 0, ...
+                'derOutput oracle never passed — harness not exercising the matrix/nonzeros forms');
+            tc.verifyEqual(do.fail, 0, 'derOutput oracle reported a hard failure');
+        end
     end
 end
 

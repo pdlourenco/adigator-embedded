@@ -15,7 +15,7 @@ function report = mcCampaign(varargin)
 %   generators [affine, quadratic, shapefuzz, elementwise, scalarSum,
 %              paramDelivery]  generator function names, cycled.
 %   oracles    [knownDeriv, sparsitySuperset, crossMode, hessSymmetry, fwdRev,
-%              paramDeliveryInvariance]  oracle function names.
+%              paramDeliveryInvariance, derOutputInvariance]  oracle names.
 %   stopOnFail [false] stop at the first failing case.
 %   promote    [true]  write a regression reproducer per failure.
 %   reportPath ['']    also write the summary to this file.
@@ -30,7 +30,7 @@ p.addParameter('generators', ...
      'mcGenParamDelivery'}, @iscellstr);
 p.addParameter('oracles', ...
     {'oracleKnownDeriv','oracleSparsitySuperset','oracleCrossMode','oracleHessSymmetry', ...
-     'oracleFwdRev','oracleParamDeliveryInvariance'}, @iscellstr);
+     'oracleFwdRev','oracleParamDeliveryInvariance','oracleDerOutputInvariance'}, @iscellstr);
 p.addParameter('stopOnFail', false, @(x) islogical(x) && isscalar(x));
 p.addParameter('promote', true, @(x) islogical(x) && isscalar(x));
 p.addParameter('reportPath', '', @(x) ischar(x) || isstring(x));
