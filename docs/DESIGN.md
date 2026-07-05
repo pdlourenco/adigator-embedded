@@ -152,19 +152,30 @@ stays `double` is a hard assertion (`dataFieldsStayDouble`).
 
 ### C-4 — Embed-mode invariants
 
-`'l'` and `'i'` generated code contains no `global` declaration and no runtime
-`load`; `'i'` additionally contains no `.mat` and no `coder.load`. All three
-modes return numerically identical results.
+The **tool** introduces no `global` declaration and no runtime `load` into
+`'l'`/`'i'` generated code; `'i'` additionally gets no `.mat` and no
+`coder.load`. All three modes return numerically identical results. A **user's
+own** `global`/`load`/cells in the differentiated source pass through **verbatim
+(exactly as classic)** with a **warning** — so the generated file is only as
+embeddable as the user's source (see the gate below).
 
-**Source-construct gate ([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md)).**
-To uphold the above, `'l'`/`'i'` generation **rejects at the source** — before
-transformation, with a clear `adigator:embed:unsupportedConstruct` error naming
-the file/line — any **cell array**, user **`load`**, or user **`global`** in the
-differentiated function (`util/adigatorScanEmbedUnsupported.m`, wired into
-`adigator.m`; AST-based via `mtree`, user-source only). Cells are not an
-embeddable-C construct; a user `load`/`global` is a runtime dependency. Classic
-`'c'` is unaffected (cells work per the B17/B22 fix; `load`/`global` are
-legitimate there). *Verified by:* `tests/integration/IEmbedUnsupportedTest.m`.
+**Source-construct gate ([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md),
+rev 2026-07-04).** Embed is *no more restrictive than classic*. `'l'`/`'i'`
+generation **warns** — before transformation, with an
+`adigator:embed:unsupportedConstruct` warning naming the file/line — when the
+differentiated function uses a **cell array**, user **`load`**, or user
+**`global`**, then **emits the construct verbatim exactly as classic does** and
+lets generation proceed (`util/adigatorScanEmbedUnsupported.m`, wired into
+`adigator.m`; AST-based via `mtree`, user-source only). The warning flags that
+the file is not self-contained and may not code-generate until the construct is
+removed — a *reduced-embeddability* observation, not a block (the user may use
+these provisionally and make both the original and derivative embeddable later).
+Constructs classic itself rejects (bare `load(...)`, unsupported cell patterns)
+still error from the core downstream, unchanged — the scan adds no gate beyond
+classic's and suppresses none of classic's errors. Classic `'c'` never calls the
+scan. Because the construct is emitted verbatim, the embed derivative is
+numerically identical to the classic one. *Verified by:*
+`tests/integration/IEmbedUnsupportedTest.m`.
 
 **Deprecation ([ADR-0021](decisions/ADR-0021-deprecate-coderload-split-inline-data.md),
 ratified).** `'l'` (coderload) is **deprecated**: it does not codegen under

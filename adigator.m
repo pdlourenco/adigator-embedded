@@ -136,7 +136,7 @@ ADIGATOR.OPTIONS.KEYBOARD     = 0;
 ADIGATOR.OPTIONS.PREALLOCATE  = 0;
 ADIGATOR.OPTIONS.MAXWHILEITER = opts.maxwhileiter;
 ADIGATOR.OPTIONS.COMPLEX      = opts.complex;
-ADIGATOR.OPTIONS.EMBED_MODE   = opts.embed_mode; % v1.5
+ADIGATOR.OPTIONS.EMBED_MODE   = adigatorNormalizeEmbedMode(opts.embed_mode); % v1.5 (#121-M14: canonicalize the alias so the embed gate's strcmp can't be bypassed by an un-normalized value, e.g. a raw struct('embed_mode','inline'))
 ADIGATOR.OPTIONS.PATH         = opts.path; % v1.5
 
 
@@ -334,13 +334,17 @@ for CFcount = 1:NUMcf
     FunctionInfo(FunCount).DERNUMBER         = 1;
   end
 
-  % Embed modes ('l'/'i') require dependency-free, embeddable output (C-4), so
-  % reject cell arrays / user `load` / user `global` in the differentiated
-  % source up front with a clear error instead of emitting non-embeddable code
-  % (B21/B22, ADR-0023). Only USER source is scanned: a previously-generated
-  % ADiGator derivative file (PrevDerFlag) carries ADiGator's own global/load
-  % boilerplate that the embed pipeline strips, so it is skipped. Classic mode
-  % ('c') is unaffected.
+  % Embed modes ('l'/'i') aim for dependency-free, embeddable output (C-4). A
+  % user cell array / `load` / `global` in the differentiated source is emitted
+  % verbatim (exactly as classic mode) and only WARNED about -- the generated
+  % file is not self-contained and may not codegen until the construct is
+  % removed, but embed is no more restrictive than classic and must not stop
+  % differentiation (ADR-0023 rev 2026-07-04, B21 reclassified warn-and-allow).
+  % Constructs classic itself rejects (bare `load(...)`, unsupported cell
+  % patterns) still error from the core downstream, unchanged. Only USER source
+  % is scanned: a previously-generated ADiGator derivative file (PrevDerFlag)
+  % carries ADiGator's own global/load boilerplate that the embed pipeline
+  % strips, so it is skipped. Classic mode ('c') is unaffected.
   if ~PrevDerFlag && ...
       (strcmp(ADIGATOR.OPTIONS.EMBED_MODE,'l') || strcmp(ADIGATOR.OPTIONS.EMBED_MODE,'i'))
     adigatorScanEmbedUnsupported(CalledFunctions{CFcount});

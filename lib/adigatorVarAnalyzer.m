@@ -378,7 +378,8 @@ elseif isnumeric(x)
     % take the lifting path instead — `P(i).f=…` — and are already correct.)
     % A *derivative*-bearing element in the same cell (`C={const,x}`) is emitted
     % verbatim and errors at runtime — a pre-existing limitation this does not
-    % address; embed modes reject user cells up front (the source-scan gate).
+    % address; embed modes emit user cells verbatim too and only warn about
+    % reduced embeddability (the source-scan gate, ADR-0023 rev 2026-07-04).
     ADIGATOR.VARINFO.NAMELOCS(x.id,3) = Inf;
   end
 elseif isa(x,'cadastruct')
