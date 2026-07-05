@@ -10,8 +10,8 @@ embed-mode facet to `DESIGN §Contracts C-4`. Implementation lands with this ADR
 **Revised 2026-07-04 (maintainer): error → warning.** The disposition below —
 a hard error that *stops* differentiation — diverged from the intended design.
 The corrected behavior is a **warning + verbatim emission** (as classic mode);
-see the Revision section. The realignment (code + `C-4` + user guide + `CI_PLAN`
-+ `IEmbedUnsupportedTest`) is **pending in
+see the Revision section. The realignment (code, `C-4`, the user guide,
+`CI_PLAN`, and `IEmbedUnsupportedTest`) is **pending in
 [#123](https://github.com/pdlourenco/adigator-embedded/issues/123) / ROADMAP
 R29** and flips together, contract-first. **Until it lands the tool still
 errors, and `C-4` / the guide / `CI_PLAN` correctly describe that current
