@@ -7,6 +7,50 @@ embed-mode facet to `DESIGN §Contracts C-4`. Implementation lands with this ADR
 (`util/adigatorScanEmbedUnsupported.m` + a gate in `adigator.m`); pinned by
 `tests/integration/IEmbedUnsupportedTest.m`.
 
+**Revised 2026-07-04 (maintainer): error → warning.** The disposition below —
+a hard error that *stops* differentiation — diverged from the intended design.
+The corrected behavior is a **warning + verbatim emission** (as classic mode);
+see the Revision section. The realignment (code, `C-4`, the user guide,
+`CI_PLAN`, and `IEmbedUnsupportedTest`) is **pending in
+[#123](https://github.com/pdlourenco/adigator-embedded/issues/123) / ROADMAP
+R29** and flips together, contract-first. **Until it lands the tool still
+errors, and `C-4` / the guide / `CI_PLAN` correctly describe that current
+behavior.**
+
+## Revision — 2026-07-04: warn, don't stop (issue #123)
+
+**Decision (revised).** In embed modes `'l'`/`'i'`, a user **cell**, **`load`**,
+or **`global`** in the differentiated source is **not** an error. It is emitted
+**verbatim into the derivative file exactly as classic mode does**, accompanied
+by a **warning** that the generated file is not self-contained and may not
+code-generate until the construct is removed.
+
+**Why.** A user may `load` (or use a `global`/cell) *provisionally* and replace
+it on both the original and derivative function later; classic mode already
+accepts these. "The derivative should be embeddable, so the source should be
+too" is a *warning*-worthy observation, not a blocking one — stopping
+differentiation is too strong, especially when classic accepts the same code.
+
+**Governing principle — embed is no more restrictive than classic.** Embed adds
+only a warning (reduced embeddability); it introduces **no** gate beyond
+classic's, and it must **not suppress** classic's own errors. Constructs that
+classic itself rejects (bare `load(...)`, `persistent`, cell patterns the core
+cannot differentiate) continue to error **from the core, unchanged**.
+
+**Proviso (maintainer).** The warn-and-pass treatment applies to a construct
+**only where it actually works in classic**. The realignment (#123) must
+**verify** each of cells/`load`/`global` produces a correct classic-mode
+derivative before downgrading its gate to a warning.
+
+**Reclassifies B21** from "C-4 violation → hard block" to "warn-and-allow"
+(embeddability is the user's responsibility). **B22-in-embed:** the constant
+cell is emitted verbatim (correct since the B22 classic fix); the warning notes
+a cell may still be rejected by MATLAB Coder downstream.
+
+*This Revision supersedes the disposition in the Decision / Consequences /
+Alternatives below, which are kept unchanged as the record of what shipped
+first.*
+
 ## Context
 
 Embed modes `'l'`/`'i'` exist to produce **dependency-free, embeddable**

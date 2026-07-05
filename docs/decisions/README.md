@@ -124,11 +124,12 @@ Contracts section (binding conventions), or for purely mechanical choices
   R25/#99; `der_output` flips each generator's top output only — no cross-sync,
   "decision b"); the option×DerType×mode matrix + per-level selection are
   deferred to R25 phase 2 (issue #84; prerequisite for R22/#85).
-- [ADR-0023](ADR-0023-embed-source-scan-gate.md) — **Accepted**: embed-mode
-  source-scan gate — reject cells / `load` / `global` in embed-mode source with
-  an actionable `adigator:embed:unsupportedConstruct` error (adds an embed facet
-  to C-4); resolves B21 (`load`) and B22-in-embed (cells) at generation time
-  (issues #101, R26; pinned by `IEmbedUnsupportedTest`).
+- [ADR-0023](ADR-0023-embed-source-scan-gate.md) — **Accepted** (embed-mode
+  source-scan gate for cells / `load` / `global`; adds an embed facet to C-4;
+  B21/B22-in-embed, issues #101, R26), **revised 2026-07-04**: the disposition
+  changes from a hard **error** to a **warning + verbatim emission** (embed is
+  no more restrictive than classic) — realignment pending in #123 / R29 (until
+  then the tool still errors).
 - [ADR-0024](ADR-0024-data-dependent-index-actionable-error.md) — **Accepted**:
   data-dependent (symbolic) indexing stays unsupported — a **limitation policy**
   (not a contract change); the fix is *error quality* (an actionable error
