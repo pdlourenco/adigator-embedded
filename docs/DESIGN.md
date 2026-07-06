@@ -284,7 +284,7 @@ issue #21).
 - **Minimum release R2022a** — the embedding layer uses `arguments` blocks
   (R2019b+), `readlines`/`writelines` (R2022a+), and string arrays. See
   [ADR-0003](decisions/ADR-0003-r2022a-minimum-release.md).
-- **GPLv3** — inherited from the Weinstein/Rao upstream (`docs/COPYING.txt`).
+- **GPLv3** — inherited from the Weinstein/Rao upstream (root [`LICENSE`](../LICENSE)).
   New dependencies must be licence-compatible.
 - **Octave is not viable today** without a deliberate compatibility layer
   (the three features above plus heavy `classdef` `subsref`/`subsasgn`

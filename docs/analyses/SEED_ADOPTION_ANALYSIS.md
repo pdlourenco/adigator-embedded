@@ -115,7 +115,7 @@ incorporated into a GPLv3 project without conflict (MIT is GPL-compatible), but:
 
 - Any seed file copied in should have its MIT copyright/attribution line either
   preserved or rewritten to point at this project, per the seed README step 6.
-- Don't copy the seed's `LICENSE` — this repo keeps `docs/COPYING.txt` (GPLv3).
+- The GPLv3 license is the repo-root `LICENSE` (moved from `docs/COPYING.txt` so GitHub detects it); don't overwrite it with a seed template's own license text.
 
 This is a minor mechanical point, not a blocker.
 
