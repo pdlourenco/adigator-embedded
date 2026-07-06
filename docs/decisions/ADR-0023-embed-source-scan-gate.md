@@ -11,11 +11,16 @@ embed-mode facet to `DESIGN §Contracts C-4`. Implementation lands with this ADR
 a hard error that *stops* differentiation — diverged from the intended design.
 The corrected behavior is a **warning + verbatim emission** (as classic mode);
 see the Revision section. The realignment (code, `C-4`, the user guide,
-`CI_PLAN`, and `IEmbedUnsupportedTest`) is **pending in
+`CI_PLAN`, `REVIEW_CONTEXT` principle 2, `ANALYSIS`, and `IEmbedUnsupportedTest`)
+**landed together, contract-first, via
 [#123](https://github.com/pdlourenco/adigator-embedded/issues/123) / ROADMAP
-R29** and flips together, contract-first. **Until it lands the tool still
-errors, and `C-4` / the guide / `CI_PLAN` correctly describe that current
-behavior.**
+R29.** The gate in `util/adigatorScanEmbedUnsupported.m` now warns and emits the
+construct verbatim; the `adigator.m` gate normalizes `embed_mode` first
+(#121-M14). The classic-mode proviso was verified in MATLAB (a cell, `var =
+load`, and `global` each produce a bit-exact-correct classic derivative), and
+the embed derivative is now numerically identical to classic (AbsTol 0), pinned
+by `IEmbedUnsupportedTest`. The Decision / Consequences / Alternatives sections
+below record the original (error) disposition as the audit trail.
 
 ## Revision — 2026-07-04: warn, don't stop (issue #123)
 

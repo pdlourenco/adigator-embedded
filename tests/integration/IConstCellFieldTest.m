@@ -77,21 +77,28 @@ classdef IConstCellFieldTest < matlab.unittest.TestCase
             tc.verifyEqual(J, Jexp, 'AbsTol', 1e-12, 'Jacobian must equal M + g*I');
         end
 
-        function flatCellEmbedRejected(tc)
-            % Embed modes ('l'/'i') reject cells up front (ADR-0023 gate), so a
-            % constant cell that works in classic (above) is a clear generation
-            % error here -- not the runtime `.f` crash it used to be, and not a
-            % silently non-embeddable file. (The classic B22 fix and the embed
-            % gate are complementary: correct in 'c', rejected in 'l'/'i'.)
-            [~,~,n] = refParams();
+        function flatCellEmbedWarnsButGenerates(tc)
+            % Embed modes ('l'/'i') are no more restrictive than classic
+            % (ADR-0023 rev 2026-07-04): a constant cell that works in classic
+            % (above) is emitted verbatim here too, so generation succeeds with
+            % only a WARNING that the file is not self-contained -- not the
+            % runtime `.f` crash it used to be, and no longer a hard error. The
+            % classic B22 fix and the embed warn-path are complementary: correct
+            % and now numerically identical in 'c' and 'l'/'i'.
+            [~,~,n,Jexp] = refParams();
             writeFixture('cc_i', { ...
                 'C = {[1 0 0; 0 2 0; 0 0 3], 2.5};', ...
                 'y = C{1}*x + C{2}*x;'});
             ax = adigatorCreateDerivInput([n 1],'x');
-            tc.verifyError(@() adigatorGenDerFile_embedded('jacobian','cc_i',{ax}, ...
+            tc.verifyWarning(@() adigatorGenDerFile_embedded('jacobian','cc_i',{ax}, ...
                 struct('embed_mode','i','echo',0,'overwrite',1)), ...
                 'adigator:embed:unsupportedConstruct', ...
-                'embed mode must reject a user cell array');
+                'embed mode must warn on a user cell array, not error');
+            rehash;
+            xv = (1:n).'/n - 0.3;
+            [J,~] = cc_i_Jac(xv);
+            tc.verifyEqual(J, Jexp, 'AbsTol', 1e-12, ...
+                'embed cell Jacobian must equal M + g*I (verbatim, as classic)');
         end
 
         function structArrayStaysCorrect(tc)

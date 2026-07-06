@@ -12,7 +12,8 @@ function r = oracleParamDeliveryInvariance(c)
 % A delivery that crashes at generation or run time (as B17/B22 did before
 % their fixes) breaks the invariant -- so this oracle is the tolerance-free
 % backstop for that whole class (issue #103, ROADMAP R27). Classic mode is used
-% so the cell/struct deliveries are exercised (embed rejects cells per ADR-0023).
+% here; embed modes emit cells/`load`/`global` verbatim and only warn about
+% reduced embeddability (ADR-0023 rev 2026-07-04), so they would also generate.
 %
 % Copyright GMV. Distributed under the GNU General Public License v3.0.
 

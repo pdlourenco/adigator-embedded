@@ -370,16 +370,23 @@ generates and differentiates correctly). User-guide Limitations note is an
 R13-continuation (LaTeX rebuild).
 
 **B21 — user `load(...)` emitted verbatim into the inline/coderload file
-(C-4, fixed via the embed gate).** When the differentiated function itself
-contains `S = load('x.mat')`, the embedded `'i'`/`'l'` pipeline passed the
-`load` through into the generated file, breaking the dependency-free guarantee
-(contract C-4). Orthogonal to B17 — surfaced while testing B17's load provenance.
-*Fixed:* the embed-mode source-scan gate ([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md))
-now rejects a user `load` (and `global`) in the differentiated source up front,
-in `'l'`/`'i'`, with a clear error (`adigator:embed:unsupportedConstruct`)
-naming the file/line — the user pre-loads the data and passes it as an auxiliary
-input. Capturing `load`'d constants as embedded `Data*` is a possible future
-relaxation of the gate. Pinned by `tests/integration/IEmbedUnsupportedTest.m`.
+(reclassified: warn-and-allow, ADR-0023 rev).** When the differentiated function
+itself contains `S = load('x.mat')`, the embedded `'i'`/`'l'` pipeline emits the
+`load` verbatim into the generated file — the file is then not self-contained
+(the original C-4 concern). Orthogonal to B17 — surfaced while testing B17's load
+provenance. *Disposition (revised 2026-07-04):* **reclassified from "C-4
+violation → hard block" to "warn-and-allow"** ([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md)
+rev). Embed is *no more restrictive than classic*: `'l'`/`'i'` emit the user
+`load`/`global` verbatim (exactly as classic) and only **warn**
+(`adigator:embed:unsupportedConstruct`) that the file is not self-contained and
+may not code-generate until the construct is removed — the user may use it
+provisionally and make both the original and derivative embeddable later
+(pre-loading the data and passing it as an auxiliary input). Embeddability is the
+user's responsibility; the tool flags it but does not stop. Constructs classic
+itself rejects (bare `load(...)`) still error from the core, unchanged. Capturing
+`load`'d constants as embedded `Data*` remains a possible future enhancement.
+Pinned by `tests/integration/IEmbedUnsupportedTest.m` (warn + generate +
+embed-vs-classic numeric equality).
 
 **B22 — constant-*cell* element analog of B17 (high severity, same class;
 fixed).** The B17 fix guards struct fields (`structParse`'s `~structflag` arm); a
@@ -400,10 +407,12 @@ struct-nested-in-cell, classic + inline, vs analytic Jacobian; plus a positive
 guard that struct arrays stay correct). Verified against the baseline: the two
 cell cases crash without the fix, the struct-array guard passes with or without.
 This is the **classic**-mode correctness fix; in **embed** modes (`'l'`/`'i'`)
-cells are rejected up front by the source-scan gate
-([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md), the same gate that
-resolves B21) — the two are complementary: cells are correct in `'c'`, a clear
-error in `'l'`/`'i'`.
+the same constant cell is emitted verbatim and generates, accompanied by the
+source-scan **warning** ([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md)
+rev 2026-07-04, the same gate that reclassifies B21) that a cell may still be
+rejected by MATLAB Coder downstream — the two are complementary: cells are
+correct in `'c'` and now numerically identical in `'l'`/`'i'` (verbatim), with a
+warning that flags the reduced embeddability.
 
 ### 1.3d Silent-wrong-output bugs found via the 2026-07-04 code-quality review (B23–B26)
 
@@ -499,8 +508,8 @@ PR #14 guard landed in `size` but not its sibling.
 | B18 (constant/aux-param conditional) | **Fixed (no longer reproduces)** — generates + matches FD both branches (likely R8). Pinned by `tests/integration/ICondAuxParamTest.m` (an `if` on aux struct-param fields with a subfunction branch, both parameter selections vs analytic + FD). |
 | B19 (while-counter index) | **Partially resolved** (both shapes principle-1-safe — they error, never miscompute). Plain `while`-counter → the B20 symbolic-index limitation, now raising the actionable error pointing to the `for`-loop fix. `if`-guarded `while`-counter (the reported shape) → an internal index over-approximation that still surfaces a raw `MATLAB:badsubscript` — a **residual rough edge** tracked on [#108](https://github.com/pdlourenco/adigator-embedded/issues/108) (not a simple guard; zero-derivative functions share the empty-`nzlocs` site). Pinned by `tests/integration/ISymbolicIndexTest.m` (incl. the `if`-guarded shape *errors*). ROADMAP R26. |
 | B20 (data-dependent indexing) | **Resolved as a documented limitation** ([ADR-0024](decisions/ADR-0024-data-dependent-index-actionable-error.md)) — data-dependent indexing stays unsupported, but the error is now actionable (`cadaErrorSymbolicIndex`, id `adigator:symbolicIndex`, points to the logical-weight-sum idiom). Pinned by `tests/integration/ISymbolicIndexTest.m`. ROADMAP R26. |
-| B21 (user `load` verbatim in inline file) | **Fixed** (embed gate, [ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md)) — `'l'`/`'i'` reject a user `load`/`global` in the differentiated source up front with a clear error (`adigator:embed:unsupportedConstruct`); pre-load and pass as an aux input. Capture-as-`Data*` is a future relaxation. Pinned by `tests/integration/IEmbedUnsupportedTest.m`. |
-| B22 (constant-cell element `.f`) | **Fixed** — **classic:** the `structParse` `structflag=1` arm marks constant cell / nested-in-cell elements derivative-free (struct *arrays* take the lifting path, already correct); pinned by `IConstCellFieldTest`. **Embed (`l`/`i`):** cells are rejected up front by the source-scan gate ([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md)), pinned by `IEmbedUnsupportedTest`. ROADMAP R26. |
+| B21 (user `load` verbatim in inline file) | **Reclassified: warn-and-allow** ([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md) rev 2026-07-04) — embed is no more restrictive than classic, so `'l'`/`'i'` emit a user `load`/`global` verbatim (as classic) and only **warn** (`adigator:embed:unsupportedConstruct`) that the file is not self-contained; the user may use it provisionally, or pre-load and pass as an aux input to make it embeddable. Constructs classic itself rejects (bare `load(...)`) still error from the core. Capture-as-`Data*` is a future enhancement. Pinned by `tests/integration/IEmbedUnsupportedTest.m` (warn + generate + embed-vs-classic equality). ROADMAP R29. |
+| B22 (constant-cell element `.f`) | **Fixed** — **classic:** the `structParse` `structflag=1` arm marks constant cell / nested-in-cell elements derivative-free (struct *arrays* take the lifting path, already correct); pinned by `IConstCellFieldTest`. **Embed (`l`/`i`):** the constant cell is emitted verbatim and generates, with a source-scan **warning** that a cell may still be rejected by MATLAB Coder ([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md) rev 2026-07-04); pinned by `IEmbedUnsupportedTest`. ROADMAP R26/R29. |
 | B23 (Hessian `*Structure`/`*Locs` corruption, matrix-of-scalar) | **Open** — `util/adigatorGenHesFile.m` remap leaks into the metadata block (§1.3d); fix must land with `IShapeMatrixTest` structure assertions ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117), [#119](https://github.com/pdlourenco/adigator-embedded/issues/119)). ROADMAP R28. |
 | B24 (reverse-mode `/` elementwise adjoint) | **Open** — `util/adigatorGenRevGradFile.m` `case {'./','/'}` lacks the `*`-branch matrix guard (§1.3d); fix = matrix adjoint or the `\`-style unsupported error, pinned in `IRevGradTest` ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
 | B25 (N-D base subscript unvalidated) | **Open** — `lib/@cada/subsref.m` `NDRefTranslate` position-2 base needs the same integer/range/logical validation positions ≥3 have (§1.3d); pinned in `INDParamTest` ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |

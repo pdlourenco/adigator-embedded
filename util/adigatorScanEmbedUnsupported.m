@@ -1,17 +1,23 @@
 function adigatorScanEmbedUnsupported(filepath)
-%ADIGATORSCANEMBEDUNSUPPORTED  Reject embed-incompatible source constructs.
+%ADIGATORSCANEMBEDUNSUPPORTED  Warn on embed-incompatible source constructs.
 %   adigatorScanEmbedUnsupported(FILEPATH) statically scans a user function
-%   file and raises a clear, actionable error if it uses a construct that
-%   cannot be made embeddable in the 'l'/'i' modes: **cell arrays**, **load**,
-%   or **global** in the differentiated function.
+%   file and raises a WARNING if it uses a construct that reduces the
+%   embeddability of the 'l'/'i' output: **cell arrays**, **load**, or
+%   **global** in the differentiated function. It does not stop
+%   differentiation -- the construct is emitted verbatim into the derivative
+%   file exactly as classic mode does.
 %
-%   In embed modes the generated derivative must be dependency-free and
-%   embeddable (DESIGN.md Contract C-4). A user `load`/`global` is a runtime
-%   dependency emitted verbatim (B21); a cell array is emitted verbatim and is
-%   not an accepted embedded-C construct (B22). Rather than emit code that
-%   breaks later at codegen/runtime, this pre-transformation gate fails fast at
-%   generation time, naming the file and line. Classic mode ('c') never calls
-%   this gate. (ADR-0023; docs/ANALYSIS.md B21/B22.)
+%   Embed modes aim for dependency-free, embeddable output (DESIGN.md Contract
+%   C-4), but embed is *no more restrictive than classic*: a user may use a
+%   `load`/`global`/cell provisionally and make both the original and the
+%   derivative embeddable later. So this gate only flags the reduced
+%   embeddability (the generated file is not self-contained and may not
+%   code-generate until the construct is removed), naming the file and line,
+%   and lets generation proceed. Constructs that classic itself rejects (bare
+%   `load(...)`, unsupported cell patterns) still error from the core
+%   downstream, unchanged -- this scan neither adds a gate beyond classic's nor
+%   suppresses classic's own errors. Classic mode ('c') never calls this scan.
+%   (ADR-0023 rev 2026-07-04; docs/ANALYSIS.md B21/B22.)
 %
 %   Detection is AST-based (mtree), so occurrences inside comments or strings
 %   do not false-trigger. A file that mtree cannot parse is skipped here and
@@ -69,11 +75,12 @@ for k = 1:numel(lines)
     items{k} = sprintf('    %s (line %d)', kinds{k}, lines(k));
 end
 
-error('adigator:embed:unsupportedConstruct', ...
-    ['Embedded modes (''l''/''i'') do not support cell arrays, ''load'', or ' ...
-     '''global'' in the differentiated function, but ''%s%s'' uses:\n%s\n' ...
-     'Pass parameters as struct or numeric inputs (pre-load any data and ' ...
-     'pass it in as an auxiliary input), or generate in classic mode ' ...
-     '(embed_mode=''c'').'], ...
+warning('adigator:embed:unsupportedConstruct', ...
+    ['Embedded modes (''l''/''i'') emit cell arrays, ''load'', and ''global'' ' ...
+     'verbatim (as classic mode), so the derivative generated from ''%s%s'' is ' ...
+     'not self-contained and may not code-generate until these are removed:\n%s\n' ...
+     'To make it embeddable, pass parameters as struct or numeric inputs ' ...
+     '(pre-load any data and pass it in as an auxiliary input). Generation ' ...
+     'continues.'], ...
     fname, fext, strjoin(items, newline));
 end

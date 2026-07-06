@@ -41,10 +41,17 @@ A bundled review covers both. Narrow with "review in verification mode" /
    computed correctly (e.g. the SVD-based matrix-induced norm, ADR-0002), the
    tool must raise a clear error, never emit a plausible-but-wrong derivative.
    Flag any change that lets an unsupported case fall through to a generic path.
-2. **`'l'` and `'i'` modes are dependency-free.** Generated `'l'`/`'i'` code
-   carries no `global` and no runtime `load`; `'i'` additionally no `.mat` and
-   no `coder.load` (contract C-4). A PR that reintroduces any of these into the
-   restricted modes breaks the fork's reason to exist.
+2. **The tool introduces no runtime dependencies into `'l'`/`'i'`.** The
+   *generator* adds no `global` and no runtime `load` to `'l'`/`'i'` code; `'i'`
+   additionally no `.mat` and no `coder.load` (contract C-4). A PR that makes the
+   *tool* reintroduce any of these into the restricted modes breaks the fork's
+   reason to exist. A **user's own** `global`/`load`/cells in the differentiated
+   source are a different matter: embed is *no more restrictive than classic*, so
+   they pass through **verbatim (as classic) with a warning** (ADR-0023 rev
+   2026-07-04) — flag reduced embeddability, don't flag the pass-through itself as
+   fork-breaking. Still flag any change that would let the *tool* emit its own
+   `global`/`load`/`.mat`/`coder.load`, or that suppresses the user-source
+   warning.
 3. **Cross-mode numeric identity.** `'c'`, `'l'`, `'i'` must return
    bit-identical results — they are the same arithmetic, only the data-delivery
    mechanism differs. Flag anything that could make a mode diverge numerically.
