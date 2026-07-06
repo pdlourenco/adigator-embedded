@@ -368,8 +368,9 @@ a shared helper `cadaErrorSymbolicIndex` (called from both `@cada/subsref` and
 it, shows the logical-weight-sum rewrite, and carries the id
 `adigator:symbolicIndex`. Pinned by `tests/integration/ISymbolicIndexTest.m`
 (the dynamic index raises the actionable error; the logical-weight rewrite
-generates and differentiates correctly). User-guide Limitations note is an
-R13-continuation (LaTeX rebuild).
+generates and differentiates correctly). The user-guide note landed with #113
+under §Debugging ("Errors Regarding 'Strictly Symbolic' Inputs"), not a separate
+Limitations section.
 
 **B21 — user `load(...)` emitted verbatim into the inline/coderload file
 (reclassified: warn-and-allow, ADR-0023 rev).** When the differentiated function

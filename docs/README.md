@@ -44,7 +44,8 @@ mirrors the user function's argument order. For classic (non-embedded) use,
 
 `'l'` (coderload) is **deprecated** ([ADR-0021](decisions/ADR-0021-deprecate-coderload-split-inline-data.md)):
 it does not codegen under Embedded Coder and its compiled footprint converges
-with `'i'`; while present it emits a one-time deprecation warning. For large
+with `'i'`; while present it will emit a one-time deprecation warning (planned,
+R24). For large
 constant data, inline's forthcoming `split_data` two-file form (roadmap R24)
 keeps the source small without a `.mat`. All three modes return numerically
 identical results (DESIGN §Contracts C-4). For a
@@ -79,8 +80,8 @@ Full reference: [`adigatorOptions.m`](../adigatorOptions.m).
 |----------|---------|
 | [`userguide/`](userguide/) | the user's guide ([PDF](userguide/ADiGatorUserGuide.pdf)) and its LaTeX source |
 | [`DESIGN.md`](DESIGN.md) | architecture rationale + the binding output contracts |
-| [`ANALYSIS.md`](analyses/ANALYSIS.md) | bug catalogue (B1–B16) + optimisation / reverse-mode analysis |
-| [`ROADMAP.md`](ROADMAP.md) | development roadmap (R1–R21) |
+| [`ANALYSIS.md`](analyses/ANALYSIS.md) | bug catalogue (B1–B26) + optimisation / reverse-mode analysis |
+| [`ROADMAP.md`](ROADMAP.md) | development roadmap (R1–R30) |
 | [`CI_PLAN.md`](CI_PLAN.md) | CI strategy + requirement/test traceability |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | contributor mechanics, pre-push review, ADR policy |
 | [`decisions/`](decisions/) | architecture decision records (ADR-0001 …) |
@@ -166,8 +167,8 @@ Operators and inputs
   evaluated on the value at run time, usable in conditionals and masks.
 - Numerous correctness fixes to the derivative-output conventions, the
   Jacobian/Hessian dimension handling, the unary derivative rules, option
-  parsing and file-handle hygiene (catalogued as B1-B16 in
-  docs/ANALYSIS.md).
+  parsing and file-handle hygiene (catalogued as B1–B26 in
+  docs/analyses/ANALYSIS.md).
 
 Testing / CI
 - GitHub Actions pipeline (unit + integration PR gate; extended example and

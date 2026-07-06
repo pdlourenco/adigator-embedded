@@ -180,8 +180,9 @@ numerically identical to the classic one. *Verified by:*
 **Deprecation ([ADR-0021](decisions/ADR-0021-deprecate-coderload-split-inline-data.md),
 ratified).** `'l'` (coderload) is **deprecated**: it does not codegen under
 Embedded Coder and its compiled footprint converges with `'i'` (the #79
-source-bytes-≠-ROM lesson). While present it emits a one-time deprecation
-warning and stays numerically identical (the invariant above holds). Inline
+source-bytes-≠-ROM lesson). While present it will emit a one-time deprecation
+warning (planned, R24) and stays numerically identical (the invariant above
+holds). Inline
 gains a **split-data** two-file form (`split_data`, default off) — derivative
 and data as separate source files — so large-data source size is no reason to
 keep `'l'`; the split form holds these same C-4 invariants (both files source;
