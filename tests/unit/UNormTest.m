@@ -83,6 +83,38 @@ classdef UNormTest < matlab.unittest.TestCase
             end
         end
 
+        function vectorizedMatrixNormErrors(tc)
+            % M13: a VECTORIZED matrix ([Inf n], variable rows + n>1 fixed
+            % columns) is a matrix, not a vector - the p-norm rewrite would be
+            % wrong, so it must raise adigator:norm:matrixNorm. Pre-fix the
+            % `any(isinf(xsize))` classifier let any Inf dim pass as a "vector",
+            % bypassing the C-5 error; it then died later with a cryptic
+            % "Cannot sum over vectorized dimension".
+            % (p=-Inf omitted: MATLAB rejects -Inf matrix norms itself with
+            % MATLAB:norm:unknownNorm before adigator's C-5 check is reached.)
+            specs = {'', '2', '1', 'Inf'};
+            for s = 1:numel(specs)
+                fname = 'adigator_norm_vecmat';
+                if isempty(specs{s})
+                    writeFun(fname,'y = norm(X);','X');
+                else
+                    writeFun(fname,sprintf('y = norm(X,%s);',specs{s}),'X');
+                end
+                aX = adigatorCreateDerivInput([Inf 3],'X');   % vectorized MATRIX
+                gen = @() adigator(fname,{aX},[fname,'_dx'], ...
+                    adigatorOptions('overwrite',1,'echo',0));
+                tc.verifyError(gen, 'adigator:norm:matrixNorm', ...
+                    sprintf('vectorized matrix norm (p=%s) must raise adigator:norm:matrixNorm', ...
+                    ternary(isempty(specs{s}),'default',specs{s})));
+            end
+            % (Real vectors [n 1]/[1 n]/scalar/empty still classify as vectors
+            % and keep the p-norm rewrite - covered by vectorNormGradients,
+            % rowVectorNorm and emptyNormIsNotAMatrix, which stay green with the
+            % fix. A *vectorized* vector [Inf 1] is a separate unsupported case:
+            % its p-norm would sum over the vectorized dimension, unrelated to
+            % this matrix-vs-vector classification.)
+        end
+
         function predicatesAreDerivativeFree(tc)
             n = 4;
             writeFun('adigator_pred','y = x.^2;\ny(isnan(x) | isinf(x) | ~isfinite(x)) = 0;');
