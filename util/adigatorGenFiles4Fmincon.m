@@ -408,7 +408,7 @@ if order == 2
         % Single Inequality Constraint
         if n*n >= 250 && cD2nnz/(n*n) <= 3/4
           fprintf(Hfid,['conHes = sparse(con.dxdx_location(:,1),con.dxdx_location(:,2),',...
-            'lambda.ineqnonlin*con.dxdx,%1.0d,%1.0d);\n']);
+            'lambda.ineqnonlin*con.dxdx,%1.0d,%1.0d);\n'],n,n);   % M1: dims were missing
         else
           fprintf(Hfid,'conHes = zeros(%1.0f,%1.0f);\n',n,n);
           fprintf(Hfid,['conHes((con.dxdx_location(:,2)-1)*%1.0f+con.dxdx_location(:,1))',...
@@ -443,7 +443,7 @@ if order == 2
         % Single Equality Constraint
         if n*n >= 250 && ceqD2nnz/(n*n) <= 3/4
           fprintf(Hfid,['coneqHes = sparse(coneq.dxdx_location(:,1),coneq.dxdx_location(:,2),',...
-            'lambda.eqnonlin*coneq.dxdx,%1.0d,%1.0d);\n']);
+            'lambda.eqnonlin*coneq.dxdx,%1.0d,%1.0d);\n'],n,n);   % M1: dims were missing
         else
           fprintf(Hfid,'coneqHes = zeros(%1.0f,%1.0f);\n',n,n);
           fprintf(Hfid,['coneqHes((coneq.dxdx_location(:,2)-1)*%1.0f+coneq.dxdx_location(:,1))',...

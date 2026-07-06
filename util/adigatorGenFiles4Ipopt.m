@@ -346,7 +346,7 @@ if order == 2
         fprintf(Hfid,'conHes = reshape(sparse(lambda).''*conHesReshaped,%1.0f,%1.0f);\n',n,n);
       else
         fprintf(Hfid,['conHes = sparse(con.dxdx_location(:,1),con.dxdx_location(:,2),',...
-          'lambda*con.dxdx,%1.0d,%1.0d);\n']);
+          'lambda*con.dxdx,%1.0d,%1.0d);\n'],n,n);   % M1: dims were missing
       end
     end
     % IPOPT likes lower triangular - take average of it as well
