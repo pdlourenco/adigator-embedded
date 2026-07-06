@@ -27,6 +27,17 @@ slprj/
 # Per-example scratch dirs for adigator-generated example output (issue #67/#69).
 examples/**/generated/
 
+# Proprietary bug reports (GMV source snippets) — NEVER commit, at ANY path.
+# docs/analyses/.gitignore (a whitelist) is the primary guard for the current
+# location; these path-INDEPENDENT rules are the belt-and-suspenders that survive
+# folder renames — the 2026-07-05 docs/known-bugs → docs/analyses reorg removed
+# the per-folder ignore and briefly un-ignored the report on a rebased branch.
+# Do NOT whitelist these; the one PUBLIC review lives (and is whitelisted) at
+# docs/analyses/2026-07-04-code-quality-review.md.
+**/known-bugs/
+**/adigator-bugs.md
+**/*embedded-field-report*.md
+
 # Intentional, committed generated-shaped fixtures (synthetic + offline-test
 # fixtures): keep them — and any future ones — trackable without `git add -f`.
 # Must stay last so it overrides the suffix rules above.
