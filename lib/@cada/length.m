@@ -3,6 +3,17 @@ function y = length(x)
 % Copyright 2011-2014 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
 %
+% B25/B26: length() of an N-D declared parameter (a 2D fold carrying its shape
+% in func.ndsize, see adigatorCreateAuxInput) would return max() of the *fold*
+% dimensions, not the declared shape (e.g. 20 for a declared [3 4 5] folded to
+% 3x20), a silent wrong count. Mirror the size.m ndsize guard: reject it and
+% point the user at the fixed declared dimensions as constants.
+if isfield(x.func,'ndsize')
+  error('adigator:ndparam:length',...
+    ['length() of an N-D declared parameter is ambiguous between the ',...
+    'declared shape and its internal 2D fold; use the (fixed) declared ',...
+    'dimensions as constants instead']);
+end
 % R11 (issue #54): outside a transformation (no ADIGATOR global), return the
 % plain length of the stored shape without declaring - hence creating - the
 % transformation global. This matches the value the transformation path
