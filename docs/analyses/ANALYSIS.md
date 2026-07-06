@@ -29,7 +29,7 @@ constants used in arithmetic** (`cadamatprint.m`).
 > **B19 is partially resolved (plain `while`-counter → the actionable B20 symbolic-index error; the `if`-guarded shape has a residual over-approximation rough edge, #108 — both principle-1-safe); B20 is a documented limitation (with an actionable error); B21/B22 are fixed** (B18 no longer
 > reproduces); they are the subject of ROADMAP R26. **B23–B26** (§1.3d) are the
 > newest batch, from the 2026-07-04 repo-wide code-quality review
-> ([`known-bugs/2026-07-04-code-quality-review.md`](2026-07-04-code-quality-review.md))
+> ([`2026-07-04-code-quality-review.md`](2026-07-04-code-quality-review.md))
 > — **all four are Open**, tracked in issue
 > [#117](https://github.com/pdlourenco/adigator-embedded/issues/117) / ROADMAP
 > R28. Where a
@@ -281,7 +281,7 @@ path, or the open-fid set changed.
 
 ### 1.3c Core-transform bugs found via an embedded struct-parameter field report (B17–B22)
 
-A local (proprietary, un-committed under `docs/known-bugs/`) report of failures
+A local (proprietary, un-committed under `docs/analyses/`) report of failures
 differentiating a struct-parameter-heavy dynamics function through
 `adigatorGenDerFile_embedded('jacobian',…,'i')`. Each was triaged against HEAD
 with a **non-proprietary** repro; the four groups turned out to be four distinct
@@ -418,7 +418,7 @@ warning that flags the reduced embeddability.
 
 A repo-wide code-quality review (five parallel deep-read passes plus
 independent hand-verification; full report with all medium/low findings in
-[`known-bugs/2026-07-04-code-quality-review.md`](2026-07-04-code-quality-review.md))
+[`2026-07-04-code-quality-review.md`](2026-07-04-code-quality-review.md))
 found four principle-1-class bugs, all verified against the code at `188d8d1`.
 Tracked in issue
 [#117](https://github.com/pdlourenco/adigator-embedded/issues/117), ROADMAP
