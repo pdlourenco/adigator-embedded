@@ -50,7 +50,7 @@ function [Outputs,varargout] = adigator(UserFunName,UserFunInputs,DerFileName,va
 %     GNU General Public License for more details.
 % 
 %     You should have received a copy of the GNU General Public License
-%     along with ADiGator in adigator/COPYING.txt.  
+%     along with ADiGator in the repository-root LICENSE file.
 %     If not, see <http://www.gnu.org/licenses/>.
 %
 %   Modifications as described below are Copyright GMV.
