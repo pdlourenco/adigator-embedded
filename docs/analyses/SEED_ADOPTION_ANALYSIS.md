@@ -13,7 +13,7 @@ separate documents, the `meta/` history, the template-placeholder tooling — is
 built for a problem this repository does not have, and adopting it would add
 maintenance surface without buying anything. Notably, the single most valuable
 idea in the seed — the V-model left-leg/right-leg discipline — **has already
-been adopted independently** in [`CI_PLAN.md`](CI_PLAN.md); that convergence is
+been adopted independently** in [`CI_PLAN.md`](../CI_PLAN.md); that convergence is
 the strongest evidence for which parts carry their weight.
 
 ---
@@ -49,7 +49,7 @@ regardless of scale.
 
 ## 2. Convergent evolution: the seed's best idea is already in the repo
 
-Before forking the seed at all, note that [`CI_PLAN.md`](CI_PLAN.md) was written
+Before forking the seed at all, note that [`CI_PLAN.md`](../CI_PLAN.md) was written
 as a *"simplified V-model: requirements stated first (left leg), each
 requirement assigned tests that verify or validate it (right leg)"*, with stable
 `REQ-T`/`REQ-C`/`TS-U`/`TS-I`/`TS-S` IDs and an explicit traceability matrix

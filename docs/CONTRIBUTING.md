@@ -11,7 +11,7 @@ around it.
 
 Before **every** `git push` on a PR branch, launch a reviewer subagent on the
 local diff, seeded with [`REVIEW_CONTEXT.md`](REVIEW_CONTEXT.md) (principles +
-red flags) alongside [`DESIGN.md`](DESIGN.md) and [`ANALYSIS.md`](ANALYSIS.md),
+red flags) alongside [`DESIGN.md`](DESIGN.md) and [`ANALYSIS.md`](analyses/ANALYSIS.md),
 and act on what it flags before pushing. This catches the "I'd have caught that
 if I'd thought harder" class of bug before it burns a (MATLAB-licensed) CI
 round-trip or reviewer attention.

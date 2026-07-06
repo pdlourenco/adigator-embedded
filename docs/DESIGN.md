@@ -3,7 +3,7 @@
 The *rationale* half of the documentation set: why the tool is shaped the way
 it is. The binding output **contracts** are in [§Contracts](#contracts) below;
 the requirement/test discipline is in [`CI_PLAN.md`](CI_PLAN.md); the bug and
-optimization analysis is in [`ANALYSIS.md`](ANALYSIS.md). For the user-facing
+optimization analysis is in [`ANALYSIS.md`](analyses/ANALYSIS.md). For the user-facing
 manual see [`userguide/ADiGatorUserGuide.pdf`](userguide/ADiGatorUserGuide.pdf)
 and the TOMS/CALGO papers in [`papers/`](papers/).
 
@@ -12,7 +12,7 @@ and the TOMS/CALGO papers in [`papers/`](papers/).
 > rather than restating it. Below ~300 lines, the contracts live here as a
 > section rather than in a separate `SPEC.md`; the project has a single
 > implementation and no cross-language/process boundaries, so a standalone spec
-> would be overhead (see [`SEED_ADOPTION_ANALYSIS.md`](SEED_ADOPTION_ANALYSIS.md) §3.2).
+> would be overhead (see [`SEED_ADOPTION_ANALYSIS.md`](analyses/SEED_ADOPTION_ANALYSIS.md) §3.2).
 
 ---
 
@@ -49,7 +49,7 @@ control flow is either unrolled or reduced to rolled `for` loops with
 per-iteration index tables. This "static tape" is the central design asset: it
 is what lets the embedded pipeline emit fully static source, and it is the
 structure a future reverse-mode emitter would walk backward (see
-[`ANALYSIS.md`](ANALYSIS.md) §3).
+[`ANALYSIS.md`](analyses/ANALYSIS.md) §3).
 
 ## Embedded generation modes
 
@@ -82,9 +82,9 @@ as a deliverable to be optimized and compiled.
 The binding cross-surface conventions. Implementations must match these and
 these must match the implementations; an automated check is named per rule
 under `Verified by:`. The authoritative source for the derivative shapes is
-[`adigatorDerivativeConventions.m`](adigatorDerivativeConventions.m); the layout
+[`adigatorDerivativeConventions.m`](../adigatorDerivativeConventions.m); the layout
 of the generated data is documented at length in the preamble of
-[`ANALYSIS.md`](ANALYSIS.md).
+[`ANALYSIS.md`](analyses/ANALYSIS.md).
 
 ### C-1 — Derivative output shapes
 
@@ -294,5 +294,5 @@ issue #21).
 
 Reverse-mode differentiation (O(1) gradient sweeps for `f: Rⁿ → R`), generated-
 code size/allocation optimizations for embedded targets, and a triplet/CSC
-output mode are analysed in [`ANALYSIS.md`](ANALYSIS.md) §§2–3 with staged,
+output mode are analysed in [`ANALYSIS.md`](analyses/ANALYSIS.md) §§2–3 with staged,
 trigger-gated plans.
