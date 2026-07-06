@@ -10,9 +10,9 @@ addpath([currpath,filesep,'embedding']);
 
 fprintf('     ADiGator Successfully Installed\n\n')
 
-copyingfile = [currpath,filesep,'COPYING.txt'];
+copyingfile = [currpath,filesep,'LICENSE'];
 if strcmp(filesep,'\');copyingfile = regexprep(copyingfile,'\\','\\\\'); end
-COPYINGlink = ['<a href="matlab: opentoline(''',copyingfile,''',1)">COPYING.txt</a>'];
+COPYINGlink = ['<a href="matlab: opentoline(''',copyingfile,''',1)">LICENSE</a>'];
 COPYINGurl  = '<a href="http://www.gnu.org/licenses/">http://www.gnu.org/licenses/</a>';
 
 fprintf([...

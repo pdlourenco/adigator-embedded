@@ -93,7 +93,7 @@ Full reference: [`adigatorOptions.m`](../adigatorOptions.m).
   `readlines`/`writelines` and string arrays; Octave is not supported today.
 - Base MATLAB suffices for generation; the optimisation examples need the
   Optimization Toolbox and the codegen path needs MATLAB Coder.
-- GPLv3 (see [`COPYING.txt`](COPYING.txt)).
+- GPLv3 (see [`LICENSE`](../LICENSE)).
 
 ## Citing ADiGator
 
@@ -178,7 +178,7 @@ Testing / CI
 
 ADiGator is Copyright 2011–2017 Matthew J. Weinstein and Anil V. Rao,
 distributed under the GNU General Public License v3.0
-([`COPYING.txt`](COPYING.txt)). The embeddable-generation extensions
+([`LICENSE`](../LICENSE)). The embeddable-generation extensions
 (2025–2026) are by Pedro Lourenço (GMV) reachable at palourenco@gmv.com, under the same licence. Upstream
 contact: weinstein87@gmail.com.
 

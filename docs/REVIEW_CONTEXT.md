@@ -67,7 +67,7 @@ A bundled review covers both. Narrow with "review in verification mode" /
    `KnownIssue` test (`CI_PLAN.md`) to a hard assertion in the *same* PR; a new
    rule/branch comes with an FD or analytic check. Flag fixes that land without
    their pinning test.
-7. **GPLv3 hygiene.** The project is GPLv3 (`docs/COPYING.txt`). A new
+7. **GPLv3 hygiene.** The project is GPLv3 (root `LICENSE`). A new
    dependency's licence must be compatible and declared.
 
 ## Terminology (enforce consistency)
