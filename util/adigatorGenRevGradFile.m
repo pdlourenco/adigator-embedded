@@ -713,6 +713,22 @@ for k = n:-1:1
             if ~cbn; addbar(sb,sumto([cb,'.*',a],info.lsz,info.bsz)); end
           end
         case {'./','/'}
+          % B24: '/' with a NON-scalar denominator is a genuine matrix division
+          % (mrdivide, A*inv(B)); the elementwise adjoint below would silently
+          % produce a wrong-value/wrong-size gradient. Reject it at generation
+          % time with the same adigator:revgrad:unsupported error that an
+          % active-exponent '^' raises here and that '\' (mldivide) hits via the
+          % generic active-op guard. The correct matrix adjoint is future work
+          % (issue #128, ROADMAP R30); when it lands this guard routes to that
+          % branch instead. './' and scalar '/' (bsz == [1 1]) are elementwise
+          % and keep the adjoint below.
+          if strcmp(info.op,'/') && ~isequal(info.bsz,[1 1])
+            error('adigator:revgrad:unsupported',...
+              ['reverse-mode matrix division (A/B with a non-scalar ' ...
+               'denominator) is not yet supported: %s\nRewrite to ' ...
+               'elementwise/scalar operations, or use a forward-mode ' ...
+               'derivative (issue #128).'], S(k).text);
+          end
           y = selftext(k);
           if ~ca;  addbar(sa,sumto([cb,'./',b],info.lsz,info.asz2)); end
           if ~cbn
