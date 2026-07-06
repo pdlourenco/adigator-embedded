@@ -439,13 +439,21 @@ fix. Unpinned because `IShapeMatrixTest` never asserts the exported structures
 (see issue [#119](https://github.com/pdlourenco/adigator-embedded/issues/119)).
 
 **B24 — reverse mode applies the elementwise `./` adjoint to true matrix
-division `/` (high).** `util/adigatorGenRevGradFile.m:323` classifies `/` as
-binary and `:715-720` emits the elementwise adjoint for `{'./', '/'}` alike,
-while `lib/@cada/mrdivide.m` prints genuine `A/B` (square `B`) into the
-forward tape — for same-size operands the elementwise adjoint runs and yields
-a silently wrong gradient. The `*` case has exactly the missing shape guard;
-`\` correctly errors. Contradicts the file's own "unsupported ⇒ error at
-generation time" header contract.
+division `/` (high; fixed via an unsupported-error guard).**
+`util/adigatorGenRevGradFile.m:323` classifies `/` as binary and `:715-720`
+emitted the elementwise adjoint for `{'./', '/'}` alike, while
+`lib/@cada/mrdivide.m` prints genuine `A/B` (square `B`) into the forward tape —
+for same-size operands the elementwise adjoint ran and yielded a silently wrong
+gradient (reproduced: wrong value *and* wrong size). The `*` case has exactly
+the missing shape guard; `\` correctly errors. *Fixed:* the `{'./','/'}` case
+now guards `op=='/' && bsz≠[1 1]` and raises `adigator:revgrad:unsupported`
+(matching `\` and the active-exponent `^`), so a genuine matrix division fails
+fast at generation time instead of miscomputing — the principle-1-safe interim
+behavior per the maintainer decision. `'./'` and scalar `'/'` are elementwise
+and keep the correct adjoint. The proper matrix adjoint (`A·inv(B)` family, via
+a solve) is deferred to **ROADMAP R30 / [#128](https://github.com/pdlourenco/adigator-embedded/issues/128)**;
+the guard names that issue and relaxes to it when it lands. Pinned by
+`IRevGradTest` (matrix `/` errors; scalar `/` still matches FD).
 
 **B25 — N-D parameter reference: position-2 base subscript never validated
 (high).** `lib/@cada/subsref.m:331-341` (`NDRefTranslate`): positions ≥3 get
@@ -511,7 +519,7 @@ PR #14 guard landed in `size` but not its sibling.
 | B21 (user `load` verbatim in inline file) | **Reclassified: warn-and-allow** ([ADR-0023](../decisions/ADR-0023-embed-source-scan-gate.md) rev 2026-07-04) — embed is no more restrictive than classic, so `'l'`/`'i'` emit a user `load`/`global` verbatim (as classic) and only **warn** (`adigator:embed:unsupportedConstruct`) that the file is not self-contained; the user may use it provisionally, or pre-load and pass as an aux input to make it embeddable. Constructs classic itself rejects (bare `load(...)`) still error from the core. Capture-as-`Data*` is a future enhancement. Pinned by `tests/integration/IEmbedUnsupportedTest.m` (warn + generate + embed-vs-classic equality). ROADMAP R29. |
 | B22 (constant-cell element `.f`) | **Fixed** — **classic:** the `structParse` `structflag=1` arm marks constant cell / nested-in-cell elements derivative-free (struct *arrays* take the lifting path, already correct); pinned by `IConstCellFieldTest`. **Embed (`l`/`i`):** the constant cell is emitted verbatim and generates, with a source-scan **warning** that a cell may still be rejected by MATLAB Coder ([ADR-0023](../decisions/ADR-0023-embed-source-scan-gate.md) rev 2026-07-04); pinned by `IEmbedUnsupportedTest`. ROADMAP R26/R29. |
 | B23 (Hessian `*Structure`/`*Locs` corruption, matrix-of-scalar) | **Open** — `util/adigatorGenHesFile.m` remap leaks into the metadata block (§1.3d); fix must land with `IShapeMatrixTest` structure assertions ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117), [#119](https://github.com/pdlourenco/adigator-embedded/issues/119)). ROADMAP R28. |
-| B24 (reverse-mode `/` elementwise adjoint) | **Open** — `util/adigatorGenRevGradFile.m` `case {'./','/'}` lacks the `*`-branch matrix guard (§1.3d); fix = matrix adjoint or the `\`-style unsupported error, pinned in `IRevGradTest` ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
+| B24 (reverse-mode `/` elementwise adjoint) | **Fixed (unsupported-error guard)** — `case {'./','/'}` now guards `op=='/' && bsz≠[1 1]` → `adigator:revgrad:unsupported` (matching `\`), so a genuine matrix division fails fast instead of silently miscomputing (§1.3d); `'./'`/scalar `'/'` keep the elementwise adjoint. Pinned in `IRevGradTest` (matrix `/` errors; scalar `/` matches FD) ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). The proper matrix adjoint is deferred to ROADMAP R30 / [#128](https://github.com/pdlourenco/adigator-embedded/issues/128). ROADMAP R28. |
 | B25 (N-D base subscript unvalidated) | **Open** — `lib/@cada/subsref.m` `NDRefTranslate` position-2 base needs the same integer/range/logical validation positions ≥3 have (§1.3d); pinned in `INDParamTest` ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
 | B26 (`length()` returns the ndsize fold length) | **Open** — `lib/@cada/length.m` needs the `size.m`-style `ndsize` guard (§1.3d); pinned in `INDParamTest` ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
 
