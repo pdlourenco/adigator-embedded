@@ -14,7 +14,7 @@ content** — everything is derived from the public repository (hence the
 `.gitignore` whitelist entry).
 
 Cross-references: bugs **B23–B26** are catalogued in
-[`../ANALYSIS.md`](../ANALYSIS.md) §1.3d with dispositions in §1.5; remediation
+[`ANALYSIS.md`](ANALYSIS.md) §1.3d with dispositions in §1.5; remediation
 is roadmap row **R28**; tracking issues
 [#117](https://github.com/pdlourenco/adigator-embedded/issues/117) (B23–B26),
 [#118](https://github.com/pdlourenco/adigator-embedded/issues/118) (D1),

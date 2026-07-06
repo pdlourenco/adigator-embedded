@@ -11,7 +11,7 @@ This fork (GMV / Pedro Lourenço, 2025–2026) extends the Weinstein & Rao v1.5
 release with **embeddable, MATLAB-Coder-ready derivative files** plus a range of
 correctness, performance and capability improvements. The original algorithm and
 theory are unchanged; see [`docs/DESIGN.md`](DESIGN.md) for the architecture and
-[`docs/ANALYSIS.md`](ANALYSIS.md) for the full bug / optimisation analysis.
+[`docs/ANALYSIS.md`](analyses/ANALYSIS.md) for the full bug / optimisation analysis.
 
 ## Quick start
 
@@ -79,7 +79,7 @@ Full reference: [`adigatorOptions.m`](../adigatorOptions.m).
 |----------|---------|
 | [`userguide/`](userguide/) | the user's guide ([PDF](userguide/ADiGatorUserGuide.pdf)) and its LaTeX source |
 | [`DESIGN.md`](DESIGN.md) | architecture rationale + the binding output contracts |
-| [`ANALYSIS.md`](ANALYSIS.md) | bug catalogue (B1–B16) + optimisation / reverse-mode analysis |
+| [`ANALYSIS.md`](analyses/ANALYSIS.md) | bug catalogue (B1–B16) + optimisation / reverse-mode analysis |
 | [`ROADMAP.md`](ROADMAP.md) | development roadmap (R1–R21) |
 | [`CI_PLAN.md`](CI_PLAN.md) | CI strategy + requirement/test traceability |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | contributor mechanics, pre-push review, ADR policy |
@@ -117,7 +117,7 @@ Please cite the most recent ACM-TOMS CALGO article. BibTex is here:
 v1.5 — embedded (GMV / Pedro Lourenço, 2025–2026; unreleased). Embeddable
 (C-code-generation-ready) derivative generation plus correctness, performance
 and capability improvements over Weinstein & Rao v1.5. Full development log in
-[`ROADMAP.md`](ROADMAP.md) and [`ANALYSIS.md`](ANALYSIS.md); highlights:
+[`ROADMAP.md`](ROADMAP.md) and [`ANALYSIS.md`](analyses/ANALYSIS.md); highlights:
 
 Embeddable generation
 - `adigatorGenDerFile_embedded` produces self-contained derivative files for

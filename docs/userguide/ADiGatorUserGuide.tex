@@ -434,7 +434,7 @@ If \texttt{auxdata} specified, it is fixed in all function handles.\\
 \end{tabular}
 \end{tabular}
 \section{Embedded and Extended Features (Version 1.5 Fork)}\label{Sec:Embedded}
-The features described in this section are specific to the embedded fork of \emph{ADiGator} (Version 1.5; GMV / Pedro Louren\c{c}o, 2025--2026). They extend the base package with derivative files suitable for embedded code generation (MATLAB Coder), together with several capability and output-form additions. The underlying differentiation algorithm is unchanged; for the architecture and the binding output conventions see \texttt{docs/DESIGN.md}, and for the development log see \texttt{docs/ROADMAP.md} and \texttt{docs/ANALYSIS.md}.
+The features described in this section are specific to the embedded fork of \emph{ADiGator} (Version 1.5; GMV / Pedro Louren\c{c}o, 2025--2026). They extend the base package with derivative files suitable for embedded code generation (MATLAB Coder), together with several capability and output-form additions. The underlying differentiation algorithm is unchanged; for the architecture and the binding output conventions see \texttt{docs/DESIGN.md}, and for the development log see \texttt{docs/ROADMAP.md} and \texttt{docs/analyses/ANALYSIS.md}.
 
 \subsection{adigatorGenDerFile\_embedded}\label{SubSec:GenDerEmbedded}
 \underline{When to use}: You wish to generate an embeddable (code-generation-ready) Jacobian, gradient, or Hessian file, free of the runtime \texttt{load}/global-variable mechanism of the classic generated files.\\\\

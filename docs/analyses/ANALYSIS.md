@@ -29,7 +29,7 @@ constants used in arithmetic** (`cadamatprint.m`).
 > **B19 is partially resolved (plain `while`-counter → the actionable B20 symbolic-index error; the `if`-guarded shape has a residual over-approximation rough edge, #108 — both principle-1-safe); B20 is a documented limitation (with an actionable error); B21/B22 are fixed** (B18 no longer
 > reproduces); they are the subject of ROADMAP R26. **B23–B26** (§1.3d) are the
 > newest batch, from the 2026-07-04 repo-wide code-quality review
-> ([`known-bugs/2026-07-04-code-quality-review.md`](known-bugs/2026-07-04-code-quality-review.md))
+> ([`known-bugs/2026-07-04-code-quality-review.md`](2026-07-04-code-quality-review.md))
 > — **all four are Open**, tracked in issue
 > [#117](https://github.com/pdlourenco/adigator-embedded/issues/117) / ROADMAP
 > R28. Where a
@@ -247,7 +247,7 @@ all file handles, and leave no stray globals"; the B13 family, previously noted
 "currently unpinned" in `CI_PLAN.md`). Surfaced by the issue-#38 `oracleHygiene`
 prototype on its first run.
 
-**Fix (ROADMAP R9 B.3, [ADR-0011](decisions/ADR-0011-adigator-error-path-cleanup.md)).**
+**Fix (ROADMAP R9 B.3, [ADR-0011](../decisions/ADR-0011-adigator-error-path-cleanup.md)).**
 Release now happens on **every** exit (normal return or error), in two parts.
 The four transformation globals are cleared by a **non-declaring helper
 subfunction** (`adigatorClearTransformGlobals`, which runs `clear global …`
@@ -359,7 +359,7 @@ actionable).** Indexing a variable by a value computed at runtime
 static forward AD with compile-time sparsity (the pattern would be
 runtime-dependent). It already errors (`Cannot do strictly symbolic
 referencing/assignment` — principle 1, not silently wrong) but cryptically.
-*Resolved as a documented limitation* ([ADR-0024](decisions/ADR-0024-data-dependent-index-actionable-error.md)):
+*Resolved as a documented limitation* ([ADR-0024](../decisions/ADR-0024-data-dependent-index-actionable-error.md)):
 data-dependent indexing stays unsupported, but the error is now **actionable** —
 a shared helper `cadaErrorSymbolicIndex` (called from both `@cada/subsref` and
 `@cada/subsasgn`) names the construct, explains why static forward AD cannot do
@@ -375,7 +375,7 @@ itself contains `S = load('x.mat')`, the embedded `'i'`/`'l'` pipeline emits the
 `load` verbatim into the generated file — the file is then not self-contained
 (the original C-4 concern). Orthogonal to B17 — surfaced while testing B17's load
 provenance. *Disposition (revised 2026-07-04):* **reclassified from "C-4
-violation → hard block" to "warn-and-allow"** ([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md)
+violation → hard block" to "warn-and-allow"** ([ADR-0023](../decisions/ADR-0023-embed-source-scan-gate.md)
 rev). Embed is *no more restrictive than classic*: `'l'`/`'i'` emit the user
 `load`/`global` verbatim (exactly as classic) and only **warn**
 (`adigator:embed:unsupportedConstruct`) that the file is not self-contained and
@@ -408,7 +408,7 @@ guard that struct arrays stay correct). Verified against the baseline: the two
 cell cases crash without the fix, the struct-array guard passes with or without.
 This is the **classic**-mode correctness fix; in **embed** modes (`'l'`/`'i'`)
 the same constant cell is emitted verbatim and generates, accompanied by the
-source-scan **warning** ([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md)
+source-scan **warning** ([ADR-0023](../decisions/ADR-0023-embed-source-scan-gate.md)
 rev 2026-07-04, the same gate that reclassifies B21) that a cell may still be
 rejected by MATLAB Coder downstream — the two are complementary: cells are
 correct in `'c'` and now numerically identical in `'l'`/`'i'` (verbatim), with a
@@ -418,7 +418,7 @@ warning that flags the reduced embeddability.
 
 A repo-wide code-quality review (five parallel deep-read passes plus
 independent hand-verification; full report with all medium/low findings in
-[`known-bugs/2026-07-04-code-quality-review.md`](known-bugs/2026-07-04-code-quality-review.md))
+[`known-bugs/2026-07-04-code-quality-review.md`](2026-07-04-code-quality-review.md))
 found four principle-1-class bugs, all verified against the code at `188d8d1`.
 Tracked in issue
 [#117](https://github.com/pdlourenco/adigator-embedded/issues/117), ROADMAP
@@ -507,9 +507,9 @@ PR #14 guard landed in `size` but not its sibling.
 | B17 (constant-struct field `.f`) | **Fixed** (Option 1) — `structParse` (`lib/adigatorVarAnalyzer.m`) marks numeric (constant) struct fields derivative-free (`NAMELOCS(:,3)=Inf`), so `cadafuncname` prints a bare `struct.field`; derivative-carrying (`cada`) fields are untouched (R8 unaffected). Pinned by `tests/integration/IConstStructFieldTest.m` (classic + inline + load provenance, vs analytic). ROADMAP R26. |
 | B18 (constant/aux-param conditional) | **Fixed (no longer reproduces)** — generates + matches FD both branches (likely R8). Pinned by `tests/integration/ICondAuxParamTest.m` (an `if` on aux struct-param fields with a subfunction branch, both parameter selections vs analytic + FD). |
 | B19 (while-counter index) | **Partially resolved** (both shapes principle-1-safe — they error, never miscompute). Plain `while`-counter → the B20 symbolic-index limitation, now raising the actionable error pointing to the `for`-loop fix. `if`-guarded `while`-counter (the reported shape) → an internal index over-approximation that still surfaces a raw `MATLAB:badsubscript` — a **residual rough edge** tracked on [#108](https://github.com/pdlourenco/adigator-embedded/issues/108) (not a simple guard; zero-derivative functions share the empty-`nzlocs` site). Pinned by `tests/integration/ISymbolicIndexTest.m` (incl. the `if`-guarded shape *errors*). ROADMAP R26. |
-| B20 (data-dependent indexing) | **Resolved as a documented limitation** ([ADR-0024](decisions/ADR-0024-data-dependent-index-actionable-error.md)) — data-dependent indexing stays unsupported, but the error is now actionable (`cadaErrorSymbolicIndex`, id `adigator:symbolicIndex`, points to the logical-weight-sum idiom). Pinned by `tests/integration/ISymbolicIndexTest.m`. ROADMAP R26. |
-| B21 (user `load` verbatim in inline file) | **Reclassified: warn-and-allow** ([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md) rev 2026-07-04) — embed is no more restrictive than classic, so `'l'`/`'i'` emit a user `load`/`global` verbatim (as classic) and only **warn** (`adigator:embed:unsupportedConstruct`) that the file is not self-contained; the user may use it provisionally, or pre-load and pass as an aux input to make it embeddable. Constructs classic itself rejects (bare `load(...)`) still error from the core. Capture-as-`Data*` is a future enhancement. Pinned by `tests/integration/IEmbedUnsupportedTest.m` (warn + generate + embed-vs-classic equality). ROADMAP R29. |
-| B22 (constant-cell element `.f`) | **Fixed** — **classic:** the `structParse` `structflag=1` arm marks constant cell / nested-in-cell elements derivative-free (struct *arrays* take the lifting path, already correct); pinned by `IConstCellFieldTest`. **Embed (`l`/`i`):** the constant cell is emitted verbatim and generates, with a source-scan **warning** that a cell may still be rejected by MATLAB Coder ([ADR-0023](decisions/ADR-0023-embed-source-scan-gate.md) rev 2026-07-04); pinned by `IEmbedUnsupportedTest`. ROADMAP R26/R29. |
+| B20 (data-dependent indexing) | **Resolved as a documented limitation** ([ADR-0024](../decisions/ADR-0024-data-dependent-index-actionable-error.md)) — data-dependent indexing stays unsupported, but the error is now actionable (`cadaErrorSymbolicIndex`, id `adigator:symbolicIndex`, points to the logical-weight-sum idiom). Pinned by `tests/integration/ISymbolicIndexTest.m`. ROADMAP R26. |
+| B21 (user `load` verbatim in inline file) | **Reclassified: warn-and-allow** ([ADR-0023](../decisions/ADR-0023-embed-source-scan-gate.md) rev 2026-07-04) — embed is no more restrictive than classic, so `'l'`/`'i'` emit a user `load`/`global` verbatim (as classic) and only **warn** (`adigator:embed:unsupportedConstruct`) that the file is not self-contained; the user may use it provisionally, or pre-load and pass as an aux input to make it embeddable. Constructs classic itself rejects (bare `load(...)`) still error from the core. Capture-as-`Data*` is a future enhancement. Pinned by `tests/integration/IEmbedUnsupportedTest.m` (warn + generate + embed-vs-classic equality). ROADMAP R29. |
+| B22 (constant-cell element `.f`) | **Fixed** — **classic:** the `structParse` `structflag=1` arm marks constant cell / nested-in-cell elements derivative-free (struct *arrays* take the lifting path, already correct); pinned by `IConstCellFieldTest`. **Embed (`l`/`i`):** the constant cell is emitted verbatim and generates, with a source-scan **warning** that a cell may still be rejected by MATLAB Coder ([ADR-0023](../decisions/ADR-0023-embed-source-scan-gate.md) rev 2026-07-04); pinned by `IEmbedUnsupportedTest`. ROADMAP R26/R29. |
 | B23 (Hessian `*Structure`/`*Locs` corruption, matrix-of-scalar) | **Open** — `util/adigatorGenHesFile.m` remap leaks into the metadata block (§1.3d); fix must land with `IShapeMatrixTest` structure assertions ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117), [#119](https://github.com/pdlourenco/adigator-embedded/issues/119)). ROADMAP R28. |
 | B24 (reverse-mode `/` elementwise adjoint) | **Open** — `util/adigatorGenRevGradFile.m` `case {'./','/'}` lacks the `*`-branch matrix guard (§1.3d); fix = matrix adjoint or the `\`-style unsupported error, pinned in `IRevGradTest` ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
 | B25 (N-D base subscript unvalidated) | **Open** — `lib/@cada/subsref.m` `NDRefTranslate` position-2 base needs the same integer/range/logical validation positions ≥3 have (§1.3d); pinned in `INDParamTest` ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
@@ -773,7 +773,7 @@ files of generated code mitigates that.
 
 The "vectorization / matrix algebra" question (#56) was settled by measuring
 this fork's actual generated code rather than by reasoning. Recorded here as the
-evidence behind [ADR-0016](decisions/ADR-0016-matrix-free-products-efficiency-path.md);
+evidence behind [ADR-0016](../decisions/ADR-0016-matrix-free-products-efficiency-path.md);
 it also reframes R12 and motivates R16–R19.
 
 **Method.** For representative functions across the three derivative objects,

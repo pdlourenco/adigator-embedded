@@ -3,7 +3,7 @@
 Seeds a reviewer (agent or human) with what this project actually cares about,
 so a review is judgment against principles and contracts — not surface lint.
 Point the reviewer at [`DESIGN.md`](DESIGN.md) (architecture + Contracts),
-[`CI_PLAN.md`](CI_PLAN.md) (requirements/tests), [`ANALYSIS.md`](ANALYSIS.md)
+[`CI_PLAN.md`](CI_PLAN.md) (requirements/tests), [`ANALYSIS.md`](analyses/ANALYSIS.md)
 (known bugs B1–B14 and optimization notes), and this file before a review.
 
 ## Project in one paragraph
