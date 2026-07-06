@@ -30,9 +30,11 @@ constants used in arithmetic** (`cadamatprint.m`).
 > reproduces); they are the subject of ROADMAP R26. **B23–B26** (§1.3d) are the
 > newest batch, from the 2026-07-04 repo-wide code-quality review
 > ([`2026-07-04-code-quality-review.md`](2026-07-04-code-quality-review.md))
-> — **all four are Open**, tracked in issue
+> — **all four are now Fixed** (B23 #126, B24 #130, B25/B26 #132; the
+> reverse-mode matrix-division *adjoint* is a separate follow-up, R30/#128), each
+> pinned; see §1.5. Tracked in issue
 > [#117](https://github.com/pdlourenco/adigator-embedded/issues/117) / ROADMAP
-> R28. Where a
+> R28 (workstream 1; workstreams 2–5 in #118–#121 remain). Where a
 > description below names a file/line (e.g. B1's old
 > `adigatorGenDerFile_embedded.m` location), §1.5 records where the code
 > actually lives now (`embedding/prune_adigator_mat.m`).
