@@ -285,9 +285,9 @@ fprintf(fid,[ystr,' = ',AdiJacFileName,'(',InputStr2,');\n']);
 %
 % Jacobian(f)_x = [df1/dx1  ... df1/dxn
 %                  ...
-%                  dfm/dx1   ... dfn/dxn]
+%                  dfm/dx1   ... dfm/dxn]
 %
-% size(Gradient(f)) = [length(x) length(f)]
+% size(Jacobian_x(f)) = [length(f) length(x)]   % m x n (contract C-1)
 %
 % usage in computations: Jacobian_x(f) * x
 
