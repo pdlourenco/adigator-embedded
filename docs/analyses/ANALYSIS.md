@@ -198,7 +198,14 @@ outputs (Jac-file gradient wrapper vs. Hes-file gradient wrapper).
 
 ### 1.3 Math documentation defects
 
-`adigatorDerivativeConventions.m` (the new conventions spec) contradicts both
+**Fixed (#118, 2026-07-06).** The four genuine defects below were corrected in
+`adigatorDerivativeConventions.m` and the copied `adigatorGenJacFile`/
+`adigatorGenHesFile` tables to match contract C-1 (text-only; no behavioural
+change). The fifth bullet — the "summary block is inconsistent" claim — was
+**re-examined and retracted**: it is a valid generalization of the table (see
+that bullet). Disposition row in §1.5.
+
+`adigatorDerivativeConventions.m` (the new conventions spec) contradicted both
 itself and the implementation:
 
 - **Jacobian section (lines 30-40):** displays the standard `m×n` Jacobian and
@@ -209,13 +216,19 @@ itself and the implementation:
   `size(Gradient(f)) = [length(x) length(f)]` should read
   `size(Hessian_x(f)) = [length(x) length(x)]`.
 - Line 36 typo: last Jacobian row reads `dfm/dx1 ... dfn/dxn` (`dfn` → `dfm`).
-- The summary block (lines 53-58) is internally inconsistent with the
-  generalization table (e.g. `any(c,r=1) & any(c,r>1) → r*c x n*m` covers the
-  `r=1` row that the table assigns `c×m`/`c×n` shapes).
-- The same comment blocks are pasted into `adigatorGenJacFile.m` and
-  `adigatorGenHesFile.m` with the same errors; the Jac-file header
-  (lines 50-58) still documents the upstream behavior and does not mention
-  that with the `'Grd'` appendix a *column* gradient is returned.
+- ~~The summary block (lines 53-58) is internally inconsistent with the
+  generalization table.~~ **Retracted (#118).** The example given —
+  `any(c,r=1) & any(c,r>1) → r*c x n*m` vs the table's `c×m`/`c×n` for the `r=1`
+  row — compares *equal* quantities: for `r=1`, `r*c = c` and `n*m` reduces to
+  `m` (n=1) or `n` (m=1), so `r*c×n*m` **is** `c×m`/`c×n`. The block is a correct
+  generalization of the table (both express `[numel(f) × numel(x)]`); left
+  unchanged.
+- The same comment blocks were pasted into `adigatorGenJacFile.m` and
+  `adigatorGenHesFile.m` with the same errors — **fixed in #118**. (The earlier
+  claim that the *file headers* still carried them was already stale: the
+  headers were fixed; only these body tables were not.) The Jacobian file help
+  header does not mention that with the `'Grd'` appendix a *column* gradient is
+  returned — separate user-facing doc item, out of #118 scope.
 - The User Guide (§ adigatorGenHesFile) never states the gradient orientation;
   upstream returned `1×n`, v1.5 returns `n×1` — a silent behavioral break for
   existing callers worth documenting prominently (fminunc/fmincon accept
@@ -537,6 +550,7 @@ PR #14 guard landed in `size` but not its sibling.
 | B24 (reverse-mode `/` elementwise adjoint) | **Fixed (unsupported-error guard)** — `case {'./','/'}` now guards `op=='/' && bsz≠[1 1]` → `adigator:revgrad:unsupported` (matching `\`), so a genuine matrix division fails fast instead of silently miscomputing (§1.3d); `'./'`/scalar `'/'` keep the elementwise adjoint. Pinned in `IRevGradTest` (matrix `/` errors; scalar `/` matches FD) ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). The proper matrix adjoint is deferred to ROADMAP R30 / [#128](https://github.com/pdlourenco/adigator-embedded/issues/128). ROADMAP R28. |
 | B25 (N-D base subscript unvalidated) | **Fixed** — `lib/@cada/subsref.m` `NDRefTranslate` now validates the position-2 base like positions ≥3: a logical/non-numeric base → `adigator:ndparam:slice` (the genuine silent-wrong case native evaluation misses), an out-of-range numeric/`cada` base → `adigator:ndparam:subsOutOfRange` (covers `emptyflag`); numeric literal OOB was already caught by native eval (§1.3d). Pinned in `INDParamTest` (`ndp_logbase`) ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
 | B26 (`length()` returns the ndsize fold length) | **Fixed** — `lib/@cada/length.m` now mirrors the `size.m` `ndsize` guard → `adigator:ndparam:length` (was silently returning the 2D-fold length, §1.3d). Pinned in `INDParamTest` (`ndp_length`) ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
+| §1.3 math-doc conventions (D1) | **Fixed** — `adigatorDerivativeConventions.m` (the binding conventions file, CLAUDE.md §3) contradicted contract C-1: Hessian section `f: Rn -> Rm` (→ `R`), the Jacobian/Hessian size captions mislabeled `size(Gradient(f)) = [length(x) length(f)]` (Jacobian read n×m, contradicting C-1's m×n), and the `dfn`/`dfm` row typo. Corrected to match C-1, plus the same defects copied into `adigatorGenJacFile`/`adigatorGenHesFile` — text-only, no behavioural change. The §1.3 "summary block inconsistent" claim was **retracted** (it is a valid generalization of the table). ([#118](https://github.com/pdlourenco/adigator-embedded/issues/118)) ROADMAP R28. |
 
 ---
 

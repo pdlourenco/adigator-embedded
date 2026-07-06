@@ -327,20 +327,20 @@ ysize = adiout.func.size;
 %
 % Jacobian(f)_x = [df1/dx1  ... df1/dxn
 %                  ...
-%                  dfm/dx1   ... dfn/dxn]
+%                  dfm/dx1   ... dfm/dxn]
 %
-% size(Gradient(f)) = [length(x) length(f)]
+% size(Jacobian_x(f)) = [length(f) length(x)]   % m x n (contract C-1)
 %
 % usage in computations: Jacobian_x(f) * x
 %%% SCALAR FUNCTION OF VECTOR VARIABLE (HESSIAN)
-% f: Rn -> Rm
+% f: Rn -> R
 % x in Rn
 %
 % Hessian(f)_x = [d2f/dx1dx1  ... d2f/dx1dxn
 %                 ...
 %                 d2f/dxndx1  ... d2f/dxndxn]
 %
-% size(Gradient(f)) = [length(x) length(f)]
+% size(Hessian_x(f)) = [length(x) length(x)]
 %
 % usage in computations: x' * Hessian_x(f) * x
 
