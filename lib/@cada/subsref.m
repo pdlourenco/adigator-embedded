@@ -338,6 +338,33 @@ else
   base = s.subs{2};
   r    = csz(2);
   js   = 3;
+  % B25: validate the base the way the scalar positions >=3 are validated in
+  % the loop below. The base was previously unchecked, so a LOGICAL base was
+  % silently coerced to numeric and folded to a wrong element (positions >=3
+  % reject logicals), and an out-of-range base relied on MATLAB's incidental
+  % bounds error (raw, and absent under emptyflag) instead of a clear one.
+  % The base may be a vector, unlike the scalar positions >=3.
+  if isa(base,'cada')
+    if ~emptyflag
+      bval = base.func.value;
+      if ~isempty(bval) && any(bval(:) ~= floor(bval(:)) | bval(:) < 1 | bval(:) > r)
+        error('adigator:ndparam:subsOutOfRange',...
+          ['subscript 2 of a reference into an N-D declared parameter is ',...
+          'out of range (declared extent %1.0f)'],r);
+      end
+    end
+  elseif isnumeric(base)
+    if ~emptyflag && any(base(:) ~= floor(base(:)) | base(:) < 1 | base(:) > r)
+      error('adigator:ndparam:subsOutOfRange',...
+        ['subscript 2 of a reference into an N-D declared parameter is ',...
+        'out of range (declared extent %1.0f)'],r);
+    end
+  else
+    error('adigator:ndparam:slice',...
+      ['subscript 2 of a reference into an N-D declared parameter must be a ',...
+      'numeric or overloaded index (logical indexing is not supported); ',...
+      'reference the 2D fold for general N-D references']);
+  end
 end
 % Subscripts past the leading block must be scalars; accumulate the affine
 % window offset, folding numeric terms into a constant and building

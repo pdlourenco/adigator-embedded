@@ -448,17 +448,29 @@ a silently wrong gradient. The `*` case has exactly the missing shape guard;
 generation time" header contract.
 
 **B25 — N-D parameter reference: position-2 base subscript never validated
-(high).** `lib/@cada/subsref.m:331-341` (`NDRefTranslate`): positions ≥3 get
-integer+range checks; `base = s.subs{2}` gets none (logical bases are also
-accepted and added numerically). `B` declared `[3 4 5]`: `B(1,5,2)` — a hard
-error in plain MATLAB — folds to a *valid* column of the `3×20` fold and
-silently returns `B(1,1,3)`.
+(fixed).** `lib/@cada/subsref.m` (`NDRefTranslate`): positions ≥3 get
+integer/range checks and reject non-numeric subscripts; `base = s.subs{2}` got
+none. Empirically, a numeric out-of-range base (e.g. `B(1,5,2)` on a declared
+`[3 4 5]`) is caught by adigator's initial native evaluation (`MATLAB:badsubscript`),
+so it is not silent — but a **logical** base (`B(1,true,2)`) *is* silently
+coerced to numeric and folded to the wrong element, which native evaluation does
+**not** catch. *Fixed:* the base is now validated like the positions ≥3 — a
+logical (or other non-numeric/non-cada) base raises `adigator:ndparam:slice`,
+and an out-of-range numeric/`cada` base raises `adigator:ndparam:subsOutOfRange`
+(the latter also covers the `emptyflag` dead-branch path native evaluation skips).
+The base may still be a vector (`B(i,1:2,k)`). Pinned by `INDParamTest`
+(`ndp_logbase`).
 
 **B26 — `length()` of an N-D declared parameter silently returns the fold
-length (med-high).** `lib/@cada/length.m:11,42` has no `ndsize` guard, while
-`size.m:125-130` rejects the ambiguous case for exactly the
-declared-shape-vs-fold reason; declared `[3 4 5]` gives `length(B)` = 20
-instead of 5, so `for k = 1:length(B)` silently iterates the wrong count. The
+length (fixed).** `lib/@cada/length.m` returned `max(func.size)` over the 2D
+*fold* dimensions with no `ndsize` guard, while `size.m:125-130` rejects the
+ambiguous case for exactly the declared-shape-vs-fold reason; declared `[3 4 5]`
+gave `length(B)` = 20 instead of 5, so `for k = 1:length(B)` silently iterated
+the wrong count. *Fixed:* `length` now mirrors the `size` guard and raises
+`adigator:ndparam:length`, pointing the user at the fixed declared dimensions as
+constants. A bare linear `end` (`B(end)`) resolves through the `end` overload →
+`length()`, so it is guarded too (it linear-indexed the fold pre-fix, also a
+silent wrong element). Pinned by `INDParamTest` (`ndp_length`, `ndp_end`). The
 PR #14 guard landed in `size` but not its sibling.
 
 ### 1.4 Genuine fixes in this fork (verified, for the record)
@@ -512,8 +524,8 @@ PR #14 guard landed in `size` but not its sibling.
 | B22 (constant-cell element `.f`) | **Fixed** — **classic:** the `structParse` `structflag=1` arm marks constant cell / nested-in-cell elements derivative-free (struct *arrays* take the lifting path, already correct); pinned by `IConstCellFieldTest`. **Embed (`l`/`i`):** the constant cell is emitted verbatim and generates, with a source-scan **warning** that a cell may still be rejected by MATLAB Coder ([ADR-0023](../decisions/ADR-0023-embed-source-scan-gate.md) rev 2026-07-04); pinned by `IEmbedUnsupportedTest`. ROADMAP R26/R29. |
 | B23 (Hessian `*Structure`/`*Locs` corruption, matrix-of-scalar) | **Open** — `util/adigatorGenHesFile.m` remap leaks into the metadata block (§1.3d); fix must land with `IShapeMatrixTest` structure assertions ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117), [#119](https://github.com/pdlourenco/adigator-embedded/issues/119)). ROADMAP R28. |
 | B24 (reverse-mode `/` elementwise adjoint) | **Open** — `util/adigatorGenRevGradFile.m` `case {'./','/'}` lacks the `*`-branch matrix guard (§1.3d); fix = matrix adjoint or the `\`-style unsupported error, pinned in `IRevGradTest` ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
-| B25 (N-D base subscript unvalidated) | **Open** — `lib/@cada/subsref.m` `NDRefTranslate` position-2 base needs the same integer/range/logical validation positions ≥3 have (§1.3d); pinned in `INDParamTest` ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
-| B26 (`length()` returns the ndsize fold length) | **Open** — `lib/@cada/length.m` needs the `size.m`-style `ndsize` guard (§1.3d); pinned in `INDParamTest` ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
+| B25 (N-D base subscript unvalidated) | **Fixed** — `lib/@cada/subsref.m` `NDRefTranslate` now validates the position-2 base like positions ≥3: a logical/non-numeric base → `adigator:ndparam:slice` (the genuine silent-wrong case native evaluation misses), an out-of-range numeric/`cada` base → `adigator:ndparam:subsOutOfRange` (covers `emptyflag`); numeric literal OOB was already caught by native eval (§1.3d). Pinned in `INDParamTest` (`ndp_logbase`) ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
+| B26 (`length()` returns the ndsize fold length) | **Fixed** — `lib/@cada/length.m` now mirrors the `size.m` `ndsize` guard → `adigator:ndparam:length` (was silently returning the 2D-fold length, §1.3d). Pinned in `INDParamTest` (`ndp_length`) ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
 
 ---
 
