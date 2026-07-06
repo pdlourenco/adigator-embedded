@@ -129,6 +129,34 @@ classdef IEmbedModesTest < matlab.unittest.TestCase
             tc.verifyEqual(G.i, G.c, 'AbsTol', 0, 'inline vs classic gradient');
         end
 
+        function inlineEmbedLeavesOnlyTheWrapper(tc)
+            % Inline mode must clean up every intermediate: after a successful
+            % embed the folder holds ONLY the wrapper .m - no derivative source
+            % .m, no static .mat, no data_*.m temporaries. (Stricter than
+            % gradientEquivalentAcrossModes, which checks the .mat alone.)
+            %
+            % NOTE on M8: this is a success-path completeness check, not a pin of
+            % M8's reordering - the pre-M8 code also deleted the sources on
+            % success (just earlier), so this passes either way. M8's guarantee
+            % (a mid-embed FAILURE leaves the .m/.mat for regeneration, because
+            % the deletes are deferred to after the last writelines) has no clean
+            % external fault-injection seam and is verified by inspection.
+            writeLocalFixture('m8_fix', 'y = x(1)^2 + x(2)*x(3);');
+            idir = fullfile(pwd, 'm8_i');
+            adigatorGenDerFile_embedded('gradient', 'm8_fix', ...
+                {adigatorCreateDerivInput([3 1],'x')}, ...
+                struct('embed_mode','i','path',idir,'echo',0));
+            tc.assertTrue(isfile(fullfile(idir,'m8_fix_Grd.m')), ...
+                'inline wrapper not generated');
+            % the intermediate derivative source, its .mat, and the inline
+            % data_*.m temporaries are all gone -> only the wrapper remains
+            ms = dir(fullfile(idir,'*.m'));
+            tc.verifyEqual({ms.name}, {'m8_fix_Grd.m'}, ...
+                'M8: inline embed must leave only the wrapper .m (source deferred-deleted)');
+            tc.verifyEmpty(dir(fullfile(idir,'*.mat')), ...
+                'M8: static .mat left behind after inline embed');
+        end
+
         function sparseGradientLiteralScatter(tc)
             % structurally sparse gradient: embed modes emit a literal
             % linear-index scatter in the wrapper (ANALYSIS.md §2.1)

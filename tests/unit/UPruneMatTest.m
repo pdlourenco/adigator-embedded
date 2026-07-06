@@ -29,6 +29,44 @@ classdef UPruneMatTest < matlab.unittest.TestCase
             tc.verifyEqual(double(out.myfun.Gator1Data.Index1), [-1 0 5]);
         end
 
+        function oversizedIndexErrorsInsteadOfSaturating(tc)
+            % M7: an Index entry above the uint32 range must error, not silently
+            % saturate to intmax('uint32') (which would corrupt the embedded
+            % index table). ANALYSIS 1.5 assumed 2^32 but never checked it.
+            s.myfun.Gator1Data.Index1 = [1 2 2^32];   % 2^32 > intmax('uint32')
+            tc.verifyError(@() prune_adigator_mat(s, {'myfun'}), ...
+                'adigator:embed:indexRange');
+        end
+
+        function largestInRangeIndexStillDowncasts(tc)
+            % M7 control: the largest in-range value (intmax('uint32')) is not
+            % rejected and still down-casts cleanly.
+            top = double(intmax('uint32'));           % 4294967295
+            s.myfun.Gator1Data.Index1 = [1 top];
+            out = prune_adigator_mat(s, {'myfun'});
+            tc.verifyClass(out.myfun.Gator1Data.Index1, 'uint32');
+            tc.verifyEqual(double(out.myfun.Gator1Data.Index1), [1 top]);
+        end
+
+        function emptyIndexStillDowncastsToUint32(tc)
+            % M7 boundary: an empty Index* field must still down-cast to uint32
+            % (the pre-M7 behaviour: empty takes the vacuously-true nonnegative
+            % branch). The range guard must not skip the cast for empty arrays.
+            s.myfun.Gator1Data.Index1 = zeros(0,1);   % empty double
+            out = prune_adigator_mat(s, {'myfun'});
+            tc.verifyTrue(isfield(out.myfun.Gator1Data, 'Index1'));
+            tc.verifyClass(out.myfun.Gator1Data.Index1, 'uint32');
+            tc.verifyEmpty(out.myfun.Gator1Data.Index1);
+        end
+
+        function belowRangeNegativeIndexErrors(tc)
+            % M7 symmetric guard: a negative entry below the int32 range must
+            % also error rather than saturate.
+            s.myfun.Gator1Data.Index1 = [-2^31 - 1, 0];  % < intmin('int32')
+            tc.verifyError(@() prune_adigator_mat(s, {'myfun'}), ...
+                'adigator:embed:indexRange');
+        end
+
         function dataFieldsStayDouble(tc)
             % B1: integer-valued value constants are used in arithmetic by
             % the generated code and must not be down-cast.

@@ -106,10 +106,33 @@ for jj = 1:numel(funnames) % go through each of the functions
                 % Exact integer check to avoid rounding near-integer floats.
                 if startsWith(idxName,"Index") && ~issparse(A) && isnumeric(A) ...
                         && isreal(A) && all(isfinite(A(:))) && isequal(A, round(A))
-                    % Nonnegative? prefer uint32; otherwise int32
+                    % M7: uint32()/int32() silently SATURATE out-of-range values,
+                    % which would corrupt the embedded index tables. ANALYSIS
+                    % §1.5 adopted 2^32 as an index-range assumption but the code
+                    % never checked it (cf. structure_to_embed_mfile guarding its
+                    % own compression with < 2^53). Fail loudly instead so a
+                    % genuinely oversized problem is reported, not miscompiled.
+                    % The empty case still down-casts (empty -> the uint32 branch,
+                    % as before M7); only the max/min range checks are guarded so
+                    % they are not evaluated on an empty array.
                     if all(A(:) >= 0)
+                        % Nonnegative (vacuously true for empty) -> uint32
+                        if ~isempty(A) && max(A(:)) > double(intmax('uint32'))
+                            error('adigator:embed:indexRange', ...
+                                ['prune_adigator_mat: Index field ''%s'' has an entry (%g) ', ...
+                                 'above the uint32 range (2^32-1); the embedded down-cast ', ...
+                                 'would silently saturate. This exceeds the ANALYSIS ', ...
+                                 '1.5 index-size assumption.'], idxName, max(A(:)));
+                        end
                         A = uint32(A);
                     else
+                        % has negatives (so non-empty) -> int32
+                        if min(A(:)) < double(intmin('int32')) || max(A(:)) > double(intmax('int32'))
+                            error('adigator:embed:indexRange', ...
+                                ['prune_adigator_mat: Index field ''%s'' has an entry outside ', ...
+                                 'the int32 range; the embedded down-cast would silently saturate.'], ...
+                                idxName);
+                        end
                         A = int32(A);
                     end
                 end
