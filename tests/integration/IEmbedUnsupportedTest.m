@@ -74,6 +74,7 @@ classdef IEmbedUnsupportedTest < matlab.unittest.TestCase
 
         function globalWarnsButGeneratesInEmbed(tc)
             % A user `global` warns, is emitted verbatim, and matches classic.
+            tc.addTeardown(@() clearGlobalGg());   % don't leave gg defined
             clear global gg
             global gg %#ok<GVMIS>
             gg = [1 0 0;0 2 0;0 0 3];
@@ -148,6 +149,10 @@ classdef IEmbedUnsupportedTest < matlab.unittest.TestCase
 end
 
 % ---- helpers ----
+
+function clearGlobalGg()
+clear global gg
+end
 
 function J = genClassic(name)
 ax = adigatorCreateDerivInput([3 1],'x');
