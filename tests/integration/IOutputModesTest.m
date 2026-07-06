@@ -141,6 +141,42 @@ classdef IOutputModesTest < matlab.unittest.TestCase
             tc.verifyEqual(full(outN.HessianStructure), full(outM.HessianStructure));
         end
 
+        function hessianNonzerosMatrixOfScalar(tc)
+            % B23 (silent-wrong-output): a MATRIX function of a SCALAR variable
+            % (remapcase 2 in adigatorGenHesFile). The dense wrapper is correct
+            % (built pre-mutation), but HessianStructure/HessianLocs were built
+            % from the *mutated* ysize -- the r*c linear indices overflowed the
+            % r-row column, so the exported pattern was a wrong-shape column
+            % ([3 1] here) and der_output='nonzeros' reconstructed a silently
+            % wrong Hessian (sub2ind even threw). HessianLocs must index the
+            % true [r c] output shape.
+            writeFcn('om_ms',  {'function y = om_ms(x)',  'y = [x^2, x^3; 2*x^2, 4*x];', 'end'});
+            writeFcn('om_ms2', {'function y = om_ms2(x)', 'y = [x^2, x^3; 2*x^2, 4*x];', 'end'});
+            gx = @() adigatorCreateDerivInput([1 1],'x');
+            outM = adigatorGenHesFile('om_ms', {gx()}, ...
+                struct('overwrite',1,'echo',0));                        % dense
+            outN = adigatorGenHesFile('om_ms2',{gx()}, ...
+                struct('overwrite',1,'echo',0,'der_output','nonzeros'));% nonzeros
+            rehash;
+
+            xv = 0.7;
+            HM   = full(om_ms_Hes(xv));   % dense Hessian, same [2 2] shape as y
+            vals = om_ms2_Hes(xv);        % nonzero vector
+            tc.verifySize(HM, [2 2]);
+            locs = outN.HessianLocs;
+            % pre-fix locs held (row 3, col 1) into a 2x2 -> out of range
+            tc.verifyTrue(all(locs(:,1) <= size(HM,1) & locs(:,2) <= size(HM,2)), ...
+                'HessianLocs must index the true output shape, not the mutated ysize (B23)');
+            tc.verifyEqual(vals, HM(sub2ind(size(HM),locs(:,1),locs(:,2))), ...
+                'AbsTol', 1e-13, 'RelTol', 1e-13);
+            HS = zeros(size(HM));
+            HS(sub2ind(size(HM),locs(:,1),locs(:,2))) = vals;
+            tc.verifyEqual(HS, HM, 'AbsTol', 0);            % reconstruct dense
+            tc.verifyEqual(full(outN.HessianStructure), full(outM.HessianStructure));
+            % analytic entrywise second derivative of [x^2 x^3; 2x^2 4x]
+            tc.verifyEqual(HM, [2 6*xv; 4 0], 'AbsTol', 1e-10);
+        end
+
         function jacOutputDoesNotFlipHessian(tc)
             % #84/R25 (ADR-0022, decision b): jac_output is a level-1 alias and
             % must NOT flip the Hessian's form - even through adigatorOptions (the

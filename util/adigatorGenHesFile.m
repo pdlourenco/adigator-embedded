@@ -475,6 +475,14 @@ end  % #84/R25: close the der_output nonzeros/matrix branch for the Hessian outp
 % matrix, otherwise project into full matrix.
 dydxsize = [prod(ysize), prod(xsize)];
 dydxnumel  = dydxsize(1)*dydxsize(2);
+% v1.5 (B23): preserve the TRUE output shape before the remapcase block below
+% mutates ysize for the gradient scatter. The Hessian-metadata block (the n==1
+% branch that builds output.HessianStructure/HessianLocs) must allocate the
+% pattern in the real y shape; using the mutated ysize corrupts it for a matrix
+% function of a scalar variable (remapcase 2) -- the r*c linear indices overflow
+% the r-row column, silently producing a wrong HessianLocs. remapcase 0 leaves
+% ysize untouched, so HesOutSize == ysize there (no behavior change).
+HesOutSize = ysize;
 remapcase = 0; % v1.5: remember the shape remap (see adigatorGenJacFile B10 fix)
 if dydxsize(1) == 1 && all(xsize>1) % scalar function of matrix variable
   remapcase = 1;
@@ -607,7 +615,7 @@ output.HessianFile  = HesFileName;
 % (dydxdxlocs/dydxlocs hoisted above the Hessian print section, v1.5)
 HesLocs1 = dydxlocs(dydxdxlocs(:,1),:);
 if n == 1
-  HesPat = zeros(ysize);
+  HesPat = zeros(HesOutSize);   % v1.5 (B23): true y shape, not the mutated ysize
   HesPat(HesLocs1(:,1)) = 1;
   output.HessianStructure = sparse(HesPat);
   % #84/R25 (ADR-0022): HessianLocs is the [row col] pattern in dydxdx nonzero
