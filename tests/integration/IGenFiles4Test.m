@@ -6,6 +6,13 @@ classdef IGenFiles4Test < matlab.unittest.TestCase
     % broken `_Hes` file (missing dimensions and closing paren) - the generator
     % reported success. n >= 16 (n^2 >= 250) with a sparse constraint Hessian
     % hits that branch. The pin: the generated Hessian file must parse.
+    %
+    % Also pins two emission-hygiene fixes from the same #121 batch:
+    %   M2 (Fminunc) - `if order` was always true (order is 1 or 2), so an
+    %      order-1 request wrongly named the gradient wrapper `_Hes` and listed a
+    %      never-regenerated `_ADiGatorHes` for overwrite-deletion.
+    %   M3 (Fmincon) - the auxdata branch assigned the constraint-gradient handle
+    %      to the misspelled field `funcs.congrd` (every caller uses `consgrd`).
 
     methods (TestClassSetup)
         function addPaths(tc)
@@ -61,6 +68,53 @@ classdef IGenFiles4Test < matlab.unittest.TestCase
             adigatorGenFiles4Ipopt(setup);
             rehash;
             tc.verifyGeneratedHessianParses('m1i_obj_Hes.m', 'con.dxdx');
+        end
+
+        function fminuncOrder1NamesGradientWrapper(tc)
+            % M2: an order-1 (gradient-only) Fminunc request must emit a `_Grd`
+            % wrapper, emit no `_Hes`, and leave a pre-existing `_ADiGatorHes`
+            % untouched. Pre-fix `if order` was always true, so order-1 named the
+            % gradient wrapper `_Hes` and scheduled `_ADiGatorHes` for deletion.
+            n = 4;
+            writeRaw('m2_obj', {'function y = m2_obj(x)', 'y = sum(x.^2);', 'end'});
+            % a stray second-deriv file from an earlier order-2 run must survive a
+            % subsequent order-1 regeneration (order-1 never regenerates it)
+            writeRaw('m2_obj_ADiGatorHes', ...
+                {'function y = m2_obj_ADiGatorHes(x)', 'y = x;', 'end'});
+            setup = struct('order',1,'numvar',n,'objective','m2_obj');
+            funcs = adigatorGenFiles4Fminunc(setup);
+            rehash;
+            tc.verifyEqual(exist('m2_obj_Grd.m','file'), 2, ...
+                'order-1 must generate the _Grd gradient wrapper (M2)');
+            tc.verifyNotEqual(exist('m2_obj_Hes.m','file'), 2, ...
+                'order-1 must NOT generate a _Hes wrapper (M2)');
+            tc.verifyEqual(exist('m2_obj_ADiGatorHes.m','file'), 2, ...
+                'order-1 must not delete a pre-existing _ADiGatorHes (M2)');
+            tc.verifyTrue(isfield(funcs,'gradient'), ...
+                'order-1 must return funcs.gradient (M2)');
+            % the wrapper carries the gradient signature [f, g], not [f, g, h]
+            hdr = fileread('m2_obj_Grd.m');
+            tc.verifyNotEmpty(regexp(hdr,'function \[f, g\] = m2_obj_Grd','once'), ...
+                'the _Grd wrapper must have the [f, g] gradient signature (M2)');
+        end
+
+        function fminconAuxdataConstraintExposesConsgrd(tc)
+            % M3: an auxdata problem with a constraint must expose the
+            % constraint-gradient handle under `funcs.consgrd` (the field every
+            % caller reads), not the misspelled `funcs.congrd` the auxdata branch
+            % used - which silently dropped the handle.
+            n = 3;
+            writeRaw('m3_obj', {'function y = m3_obj(x,a)', 'y = a*sum(x.^2);', 'end'});
+            writeRaw('m3_con', {'function [c,ceq] = m3_con(x,a)', ...
+                'c = a*x(1) - 1;', 'ceq = [];', 'end'});
+            setup = struct('order',1,'numvar',n,'objective','m3_obj', ...
+                'constraint','m3_con','auxdata',2);
+            funcs = adigatorGenFiles4Fmincon(setup);
+            rehash;
+            tc.verifyTrue(isfield(funcs,'consgrd'), ...
+                'auxdata+constraint must expose funcs.consgrd (M3)');
+            tc.verifyFalse(isfield(funcs,'congrd'), ...
+                'the misspelled funcs.congrd must be gone (M3)');
         end
     end
 

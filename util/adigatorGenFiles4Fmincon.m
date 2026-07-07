@@ -487,7 +487,7 @@ end
 if auxflag
   funcs.objgrd  = eval(['@(x)',GrdFileName,'(x,auxdata)']);
   if consflag
-    funcs.congrd  = eval(['@(x)',JacFileName,'(x,auxdata)']);
+    funcs.consgrd = eval(['@(x)',JacFileName,'(x,auxdata)']);   % M3: was congrd (no-auxdata branch + fmincon use `consgrd`)
   end
   if order == 2
     funcs.hessian = eval(['@(x,lambda)',HesFileName,'(x,auxdata,lambda)']);

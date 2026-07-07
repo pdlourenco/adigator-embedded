@@ -97,6 +97,41 @@ classdef UCoreErrorHygieneTest < matlab.unittest.TestCase
 
             clear guard;   % run the cleanup now so the assertions above are the test's last act
         end
+
+        function errorRestorePathEmitsLiteralMessageWithId(tc)
+            % M5 (#121): error_restore_path called `error(msg)`, which raised
+            % with an EMPTY identifier. The fix raises under the fork's adigator:*
+            % id via error('adigator:generationError','%s',msg). The id and the
+            % path-restore are the load-bearing assertions here; the '%s' keeps a
+            % composed message with '\' or '%' literal (defensive - single-arg
+            % error is already literal in current MATLAB, but it guards Octave /
+            % future multi-arg misuse), so the verbatim-message assertion below is
+            % a belt-and-suspenders check.
+            p0 = path;
+            guard = onCleanup(@() path(p0));   % safety net for the path
+            % perturb the path so a genuine restore is observable
+            probe = fullfile(pwd, 'm5_probe_dir');
+            mkdir(probe);
+            addpath(probe);
+            tc.assertTrue(contains(path, probe), 'probe dir must be on the path first');
+
+            badmsg = 'The file C:\proj\run_100%done.m already exists';  % '\' and '%'
+            caught = false;
+            try
+                error_restore_path(p0, badmsg);   % restore to p0, then error
+            catch ME
+                caught = true;
+            end
+            tc.verifyTrue(caught, 'error_restore_path must raise an error (M5)');
+            tc.verifyEqual(ME.identifier, 'adigator:generationError', ...
+                'the error must carry the adigator:* id (M5)');
+            tc.verifyEqual(ME.message, badmsg, ...
+                'the message must be raised verbatim, not printf-interpreted (M5)');
+            tc.verifyEqual(path, p0, ...
+                'the path must be restored before erroring (M5)');
+
+            clear guard;
+        end
     end
 end
 
