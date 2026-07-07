@@ -2,6 +2,7 @@
 % \documentclass{esub2acm}
 % \documentclass[acmtoms]{acmtrans2m}
 \usepackage{array,subfig,verbatim}
+\usepackage{longtable}
 \usepackage[T1]{fontenc}
 \usepackage{framed,fancybox}
 \usepackage{multicol}
@@ -241,12 +242,19 @@ The \emph{ADiGator} package currently has different options which may given to t
 \centerline{\texttt{options = adigatorOptions(field1,value1,field2,value2,...)}}
 A list of all options, values, and descriptions is given in Table \ref{Tab:Options}.
 
-\begin{table}[h]
-\caption{Options for ADiGator \label{Tab:Options}}
-\center
-\begin{tabular}{|c|c|p{12cm}|}
+\begin{longtable}{|c|c|p{12cm}|}
+\caption{Options for ADiGator \label{Tab:Options}}\\
 \hline
 \multicolumn{1}{|c|}{Option Field} & Value & \multicolumn{1}{c|}{Description}  \\ \hline
+\endfirsthead
+\multicolumn{3}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}}\\
+\hline
+\multicolumn{1}{|c|}{Option Field} & Value & \multicolumn{1}{c|}{Description}  \\ \hline
+\endhead
+\hline \multicolumn{3}{r}{\emph{continued on next page}}\\
+\endfoot
+\hline
+\endlastfoot
 {\bf AUXDATA} & 1 & {\bf Known Auxiliary Inputs} (as defined in Section \ref{SubSec:Inputs})  will always have the same sparsity patterns as given to \texttt{adigator}, but their non-zero values may change. 
 \\ \cline{2-3}
 ~ & 0 & {\bf Known Auxiliary Inputs} will always have the same numeric values (default) \\ \hline
@@ -276,8 +284,7 @@ A list of all options, values, and descriptions is given in Table \ref{Tab:Optio
 {\bf SLIM\_EMBED} & \texttt{[]} & {\bf (v1.5 fork)} Unset (default): \texttt{adigatorGenDerFile\_embedded} defaults this on (embeddable output is wanted); the other generators leave it off. Set 0/1 to override. \\ \cline{2-3}
 ~ & 0 & No slimming. \\ \cline{2-3}
 ~ & 1 & In embedded modes (\texttt{'l'}/\texttt{'i'}), slice from the generated code the statements that feed only output fields the wrapper never reads (the \texttt{\_location}/\texttt{\_size} metadata), so their constant index tables drop from the embedded data. Guarded by a generation-time correctness check; left unsliced on any uncertainty. \\ \hline
-\end{tabular}
-\end{table}
+\end{longtable}
 
 \section{Generating Derivative Files and Wrapper Files via Black Box ADiGator Commands}
 As seen in Section \ref{Sec:Using}, the call to the \texttt{adigator} routine can be somewhat complicated. Moreover, the derivative files which are generated have a very distinct input/output structure. The complexity of the \texttt{adigator} command together with the input/output structure of the generated files allows one to differentiate files which have complex input/output structures and to specifically define their problem.
@@ -433,6 +440,56 @@ If \texttt{auxdata} specified, it is fixed in all function handles.\\
 \texttt{examples/optimization/ipoptEx/}
 \end{tabular}
 \end{tabular}
+
+\subsection{Reverse Mode (Adjoint) Commands}\label{SubSec:ReverseBlackBox}
+The routines above accumulate derivatives in \emph{forward} mode, whose cost scales with the number of independent variables. For a scalar-valued cost, or when only the action of the transposed Jacobian on a vector is required, \emph{reverse} (adjoint) mode is far cheaper: it computes the full gradient (or $\bfJ^\top\bfv$) in a fixed number of sweeps --- one forward evaluation plus one adjoint pass --- \underline{independent of the number of variables}. The two black box routines below expose this mode with the same output-structure convention as the forward wrappers (the derivative first, the function value last; see \texttt{docs/DESIGN.md} Contract C-6).
+
+Reverse mode is most useful for \emph{dense} objective gradients --- sums, log-sum-exp, least-squares residual norms --- where the forward Jacobian would be a single full row and the adjoint gradient is one sweep; it also underlies the matrix-free transposed-Jacobian-vector product used by first-order embedded solvers. Both routines operate on the forward derivative file that \texttt{adigator} prints (a static tape of fixed-size statements with constant index maps) and emit a self-contained adjoint file, so the user code must first differentiate cleanly in forward mode with its loops \emph{unrolled} (\texttt{adigatorOptions('unroll',1)}) and its active operations drawn from the supported set: elementary arithmetic, \texttt{mtimes}, \texttt{sum}, \texttt{reshape}, \texttt{transpose}, constant-index gathers/scatters/concatenations, and the common unary math functions (\texttt{sin}, \texttt{cos}, \texttt{exp}, \texttt{log}, \texttt{sqrt}, \texttt{tanh}, \dots). Statements off the path from the variable of differentiation to the output pass through untouched; anything unsupported \emph{on} that path raises a clear generation-time error naming the offending statement.
+
+\subsection{adigatorGenRevGradFile}
+\underline{When to use}: You wish to compute the gradient of a \emph{scalar} cost with respect to one of its inputs at a cost independent of the number of variables (reverse/adjoint mode).\\\\
+\underline{User Function Input Restrictions}: Exactly one input is the variable of differentiation (created via \texttt{adigatorCreateDerivInput}); the file must have a single \emph{scalar} output. Loops must be unrolled (\texttt{adigatorOptions('unroll',1)}); the active operation set is as described above.\\\\
+\underline{Generated Reverse-Gradient File Info}: The wrapper file is named with the user's function name and \texttt{\_RGrd} appended. It takes the same (plain numeric) inputs as the original file and returns \texttt{[Grd, Fun]} --- the column gradient first, then the scalar value --- computed by one forward and one reverse sweep.\\\\
+\begin{tabular}{l|l}
+{\bf Usage} & \begin{tabular}{l}
+ \texttt{output = adigatorGenRevGradFile(UserFunName,UserFunInputs)}\end{tabular} \\ \hline
+{\bf Input Info} & \begin{tabular}{l}
+\texttt{UserFunName} - string name of file to be differentiated (single scalar output)\\
+\texttt{UserFunInputs} - cell array of inputs to user's function\\
+The cell element corresponding to the variable of differentiation must be created\\ via \texttt{adigatorCreateDerivInput}. All other inputs must be fixed.\\
+\texttt{options} - (optional) \texttt{overwrite}, \texttt{path}, \texttt{echo}, \texttt{unroll} are honored.
+\end{tabular}\\ \hline
+{\bf Output Info} & \begin{tabular}{l}
+\texttt{output.FunctionFile} - name of the generated reverse-gradient file\\
+\texttt{output.MatFile} / \texttt{output.Path} - generated artifacts (\texttt{MatFile} is\\ empty when the adjoint carries no constant data, as in the example below)\\
+Generated file signature: \texttt{[Grd,Fun] = <UserFunName>\_RGrd(inputs)}
+\end{tabular}\\ \hline
+{\bf Examples} & \begin{tabular}{l}
+\texttt{examples/gradients/logsumexp/}
+\end{tabular}
+\end{tabular}
+
+\subsection{adigatorGenJtVFile}
+\underline{When to use}: You wish to compute the transposed-Jacobian-vector product $\bfJ^\top\bfv$ of a vector function for a \emph{runtime} vector \texttt{v}, without ever forming the Jacobian --- the quantity gradient-based embedded solvers consume directly.\\\\
+\underline{User Function Input Restrictions}: As for \texttt{adigatorGenRevGradFile} (one derivative input; loops unrolled; the supported active operation set), except the user function may have a \emph{vector} output. \texttt{v} is a runtime input the size of that output and does not participate in generation.\\\\
+\underline{Generated JtV File Info}: The wrapper file is named with the user's function name and \texttt{\_JtV} appended. It takes the same inputs as the original file plus the runtime vector \texttt{v}, and returns \texttt{[Jtv, Fun]}, where \texttt{Jtv = J(x).'*v(:)}, in one forward plus one adjoint sweep (cost independent of \texttt{numel(x)}). A single generated file serves every \texttt{v}.\\\\
+\begin{tabular}{l|l}
+{\bf Usage} & \begin{tabular}{l}
+ \texttt{output = adigatorGenJtVFile(UserFunName,UserFunInputs)}\end{tabular} \\ \hline
+{\bf Input Info} & \begin{tabular}{l}
+\texttt{UserFunName} - string name of file to be differentiated (vector output allowed)\\
+\texttt{UserFunInputs} - cell array of inputs to user's function; the variable of\\ differentiation created via \texttt{adigatorCreateDerivInput}, all others fixed\\
+\texttt{options} - (optional) \texttt{overwrite}, \texttt{path}, \texttt{echo}, \texttt{unroll} are forwarded.
+\end{tabular}\\ \hline
+{\bf Output Info} & \begin{tabular}{l}
+\texttt{output.JtVName} - string name of the generated file, ex: \texttt{`myfun\_JtV'}\\
+Generated file signature: \texttt{[Jtv,Fun] = <UserFunName>\_JtV(inputs,v)}
+\end{tabular}\\ \hline
+{\bf Examples} & \begin{tabular}{l}
+Shares the reverse engine of \texttt{adigatorGenRevGradFile}\\ (with the output's adjoint seeded by \texttt{v} instead of $1$).
+\end{tabular}
+\end{tabular}
+
 \section{Embedded and Extended Features (Version 1.5 Fork)}\label{Sec:Embedded}
 The features described in this section are specific to the embedded fork of \emph{ADiGator} (Version 1.5; GMV / Pedro Louren\c{c}o, 2025--2026). They extend the base package with derivative files suitable for embedded code generation (MATLAB Coder), together with several capability and output-form additions. The underlying differentiation algorithm is unchanged; for the architecture and the binding output conventions see \texttt{docs/DESIGN.md}, and for the development log see \texttt{docs/ROADMAP.md} and \texttt{docs/analyses/ANALYSIS.md}.
 
@@ -451,8 +508,9 @@ The features described in this section are specific to the embedded fork of \emp
 \texttt{options} - (optional) options structure; see \texttt{EMBED\_MODE}, \texttt{PATH},\\ \texttt{DER\_LEVELS}, \texttt{SLIM\_EMBED}, \texttt{DER\_OUTPUT} in Table \ref{Tab:Options}
 \end{tabular}\\ \hline
 {\bf Examples} & \begin{tabular}{l}
-\texttt{examples/optimization/pipg/} (Hessian, mode \texttt{'l'})\\
-\texttt{examples/hessians/logsumexp/}
+\texttt{examples/jacobians/structinput/} (struct input, inline \texttt{'i'})\\
+\texttt{examples/hessians/logsumexp/}\\
+\texttt{examples/optimization/pipg/} (Hessian; uses the deprecated mode \texttt{'l'},\\ see Table \ref{Tab:Options})
 \end{tabular}
 \end{tabular}\\\\
 A minimal example, generating an inline (self-contained) Hessian of \texttt{gapfun} with respect to its second input:
@@ -479,8 +537,7 @@ The \texttt{LOOPBOUND} option (Table \ref{Tab:Options}) names input(s) of the di
 Several routines target first-order embedded solvers, which want the nonzero vector or matrix-vector products rather than a dense projection:
 \begin{itemize}
 \item {\bf Nonzero-vector output (\texttt{DER\_OUTPUT}).} With \texttt{DER\_OUTPUT = 'nonzeros'} (Table \ref{Tab:Options}) a generator returns its {\em top-order} derivative's nonzero vector in the fixed pattern order, exporting the constant sparsity pattern once through the matching \texttt{output.*Locs}/\texttt{output.*Structure} companion, with no per-call dense allocation or scatter. This covers the {\bf Jacobian} (\texttt{output.JacobianLocs}, via \texttt{adigatorGenJacFile}) and the {\bf Hessian} (\texttt{output.HessianLocs}, via \texttt{adigatorGenHesFile}); on a Hessian file it flips only the Hessian output, the gradient companion staying dense. \texttt{JAC\_OUTPUT} is retained as a first-derivative-level-only alias.
-\item {\bf Transposed Jacobian-vector products.} \texttt{adigatorGenJtVFile} generates a file computing $\bfJ^\top \bfv$ for a runtime vector \texttt{v} in a single forward-plus-adjoint sweep, without forming the Jacobian.
-\item {\bf Reverse-mode gradient.} \texttt{adigatorGenRevGradFile} generates a standalone reverse-mode (adjoint) gradient file for a scalar cost, computing the gradient in a fixed number of sweeps independent of the number of variables --- well suited to dense objective gradients (sums, log-sum-exp, least squares). See \texttt{examples/gradients/logsumexp/}. The same reverse gradient can be produced as an {\bf embeddable} file by passing \texttt{DerType = 'gradient-reverse'} to \texttt{adigatorGenDerFile\_embedded}, which routes the adjoint through the classic/coderload/inline pipeline exactly like the forward modes.
+\item {\bf Matrix-free reverse mode.} The transposed-Jacobian-vector product ($\bfJ^\top\bfv$) and the scalar-cost adjoint gradient are provided as the black box routines \texttt{adigatorGenJtVFile} and \texttt{adigatorGenRevGradFile}, documented in Section \ref{SubSec:ReverseBlackBox}. Within the embedded generator, the same adjoint gradient is produced as an {\bf embeddable} file by passing \texttt{DerType = 'gradient-reverse'} to \texttt{adigatorGenDerFile\_embedded}, which routes the adjoint through the classic/coderload/inline pipeline exactly like the forward modes.
 \end{itemize}
 
 \subsection{Additional Overloaded Operators}\label{SubSec:Operators}
@@ -833,7 +890,10 @@ Prior to integrating the differential equation is is required that the time deri
 
 Having generated these time derivative files, we then solve the ODE using \texttt{ode15s}. Here we note that we are just integrating the robot positions and velocities, but also an internal filter variable and a variable used in the parameter update law. Thus our states which we are integrating are defined as $\bfx = [\bfq^T, \dot{\bfq}^T, \bfp^T, \bfz^T]^T$, where $\bfq\in\bbR^2$ is the robot link position, $\dot{\bfq}\in\bbR^2$ is the robot link velocity, $\bfp\in\bbR^2$ is the internal filter variable, and $\bfz\in\bbR^5$ is the variable used in the parameter update law. The dynamic equations associated with all variables is calculated from within the \texttt{xdot = TwoLinkSys(t,x)} file (which calls \texttt{getDCAlcontrol}). We then take the derivative of the file \texttt{TwoLinkSys} with respect to \texttt{x} and supply this to the ODE solver \texttt{ode15s} in order to integrate the system.
 
-As with the previous example, a wrapper is used since the input/output scheme required by \texttt{ode15s} is different from that of \emph{ADiGator} generated files. Within the \texttt{main.m} file (which runs the simulation), the user is free to change the \texttt{supplyderiv} flag (to supply derivatives or not), the \texttt{displayplots} flag (to display plots or not), the \texttt{probinfo.noiseflag} (to add noise or not), or the value of final time, \texttt{tf}. Increasing the final time, not supplying derivatives, or adding noise will all increase the simulation run time. 
+As with the previous example, a wrapper is used since the input/output scheme required by \texttt{ode15s} is different from that of \emph{ADiGator} generated files. Within the \texttt{main.m} file (which runs the simulation), the user is free to change the \texttt{supplyderiv} flag (to supply derivatives or not), the \texttt{displayplots} flag (to display plots or not), the \texttt{probinfo.noiseflag} (to add noise or not), or the value of final time, \texttt{tf}. Increasing the final time, not supplying derivatives, or adding noise will all increase the simulation run time.
+
+\subsubsection{Burgers' Equation}
+This example integrates a moving-mesh discretisation of Burgers' equation (a benchmark from the MATLAB \texttt{ode15s} documentation) using a state-dependent mass matrix. The integrated state $\bfy = [\bfa^T,\bfx^T]^T$ stacks the nodal values $\bfa$ and the moving mesh coordinates $\bfx$. The code in \texttt{examples/stiffodes/burgers/} differentiates the loop-free form of the right-hand side, \texttt{burgersfun\_noloop}, with \texttt{adigatorGenJacFile} --- the loops are removed because the flattened form transforms more efficiently --- and supplies the resulting Jacobian and its sparsity pattern to \texttt{ode15s}, alongside the analytic mass matrix and its sparsity pattern. As with the other stiff-ODE examples, a wrapper adapts the generated file to the input/output scheme \texttt{ode15s} expects. The user may change the problem dimension \texttt{n} and the time span \texttt{tspan}.
 \subsection{Constrained Optimization}
 In this section we supply derivatives to the MATLAB constrained optimization solver \texttt{fmincon} to solve three different problems. The first example is given as a simple demonstration on how to supply Objective Gradients, Constraint Jacobians, and Lagrangian Hessians using \emph{ADiGator}. In the second example we divide our problem into a vectorized portion and a non-vectorized portion. Finally, in the last example, we take full advantage of the vectorized nature of the problem.
 \subsubsection{Simple Example}
@@ -1039,6 +1099,34 @@ and
 The code for this example may be found in the directory \texttt{examples/optimization/vectorized/minimumclimb}. In this directory there are four files which will solve the problem on three different meshes ($K = 10$, $K = 20$, and $K = 40$), where the initial guess for the second two iterations is calculated from the solution of the previous mesh. The files \texttt{main\_1stderivs\_nonvect} and \texttt{main\_2ndderivs\_nonvect} supply derivatives without using the vectorizated mode, while the files \texttt{main\_1stderivs\_vect} and \texttt{main\_2ndderivs\_vect} supply derivatives using the vectorizated mode. Furthermore, the function which computes the Constraint Jacobian (and calls the first dynamics derivative file) is given in \texttt{conswrap.m} and the function which computes the Lagrangian Hessian (and calls the second dynamics derivative file) is given in \texttt{laghesswrap.m}.
 
 Here we see that, since we are only differentiating the dynamics file, that, when we use the vectorized mode, we must only create the derivative files a single time and they may be used to solve on as many different meshes as desired. If using the non-vectorized mode, however, the derivative files must be generated each time the value of $K$ is changed. As far as performance goes, the user should note a slight increase in performance using the vectorized mode at the first derivative (the vectorized file should solve in 90-95\% of the time it takes the non-vectorized). At the second derivative level, though, we see a major increase in performance as the vectorized file should solve in 5-10\% of the time it takes the non-vectorized.
+
+\subsection{Extended-Feature and Embedded Examples (Version 1.5 Fork)}
+The following examples exercise the fork-specific capabilities of Section \ref{Sec:Embedded}. Each is self-checking --- it compares the generated derivative against a closed form and/or central finite differences and prints a one-line report.
+
+\subsubsection{Reverse-Mode Gradient of Log-Sum-Exp}
+The code in \texttt{examples/gradients/logsumexp/} takes the gradient of the scalar cost $\log\sum_i e^{w_i x_i}$ with respect to \texttt{x} using the reverse-mode routine \texttt{adigatorGenRevGradFile} (Section \ref{SubSec:ReverseBlackBox}). The generated \texttt{lse\_cost\_RGrd} returns the full $n$-vector gradient and the value from a single forward and reverse sweep, independent of $n$:
+\begin{verbatim}
+gx = adigatorCreateDerivInput([n 1],'x');
+gw = adigatorCreateAuxInput([n 1]);
+adigatorGenRevGradFile('lse_cost',{gx,gw},adigatorOptions('overwrite',1));
+[g,y] = lse_cost_RGrd(x,w);   % C-6 order: [Grd, Fun]
+\end{verbatim}
+The driver checks the gradient against the closed form $w_i e^{w_i x_i}/\sum_j e^{w_j x_j}$ and against central differences.
+
+\subsubsection{Runtime Loop Bounds}
+The code in \texttt{examples/jacobians/loopbound/} demonstrates the \texttt{LOOPBOUND} option (Section \ref{SubSec:Loopbound}): a reduction over \texttt{N} actuators is differentiated once at a maximum trip count \texttt{Nmax}, and the single generated file is then evaluated for several $\texttt{n} \le \texttt{Nmax}$ without regeneration, with exact structural zeros beyond \texttt{n}. This is the ``reconfigurable number of actuators'' use case; the driver confirms the gradient matches the directly computed \texttt{n}-sized problem and that the padded tail stays zero.
+
+\subsubsection{N-Dimensional Parameters}
+The code in \texttt{examples/jacobians/ndparam/} declares a parameter \texttt{B} of size $m\times n\times K$ with \texttt{adigatorCreateAuxInput([m n K])} and slices it inside the differentiated function with the natural \texttt{B(:,:,k)} syntax (Section \ref{SubSec:NDParam}). The generated file accepts \texttt{B} either as the 3-D array or as its 2-D column-major fold; the driver checks the Jacobian against the analytic result and finite differences.
+
+\subsubsection{Struct Inputs}
+The code in \texttt{examples/jacobians/structinput/} carries the variable of differentiation and the auxiliary data as fields of a scalar struct (Section \ref{SubSec:StructInput}), exercising four cases: a flat-struct Hessian, a nested-struct Hessian (the derivative field one level deeper), a vector-function Jacobian, and the same flat-struct Hessian through the embedded inline (\texttt{'i'}) pipeline. Each case is checked against the closed-form gradient and Hessian of $\tfrac12\bfx^\top \mathbf{Q}\bfx + \bfc^\top\bfx$.
+
+\subsubsection{Allocation over Time (Free Dimensions)}
+The code in \texttt{examples/optimization/vectorized/allocation/} differentiates the per-actuator, per-time-step terms of an optimal-allocation problem \emph{once} in vectorized mode over the product index $i = (k-1)N+a$, leaving both the actuator count \texttt{N} and the horizon \texttt{K} free at runtime. A single generated derivative file then serves every $(N,K)$; the reductions (objective sum, per-time-step moments) are assembled with plain linear algebra by \texttt{alloc\_assemble.m}. See the folder's \texttt{README.md} for the full pattern catalog (product fold, assembly wrappers, folded-2-D parameters, cell arrays).
+
+\subsubsection{Embedded Hessian: PIPG Gap Function}
+The code in \texttt{examples/optimization/pipg/} generates an embeddable Hessian of a small cone/gap function, $f = \bfw^\top\,\texttt{conefun}(\bfz) + \bfz^\top\,\texttt{setfun}(\bfz)$, with \texttt{adigatorGenDerFile\_embedded} (Section \ref{SubSec:GenDerEmbedded}), producing the wrapper triple \texttt{[H,G,f] = gapfun\_Hes(w,z)}. \emph{Note}: this example currently selects the deprecated coderload mode \texttt{'l'} (Table \ref{Tab:Options}); new code should use inline \texttt{'i'}.
 
 \subsection{Other}
 \subsubsection{Jacobian-Vector and Hessian-Vector Products}
