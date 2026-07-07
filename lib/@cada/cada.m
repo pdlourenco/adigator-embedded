@@ -538,6 +538,14 @@ classdef cada
         else
           out = 1;
         end
+      elseif isfield(x.func,'ndsize') && ndim == 2
+        % M12 (issue #11): 2-subscript folded reference B(:,end) / B(end,:)
+        % into an N-D declared parameter. func.size is the internal 2D fold
+        % [rows, prod(trailing declared dims)], so `end` resolves to the folded
+        % extent as a constant - the fold form subsref.m supports. Falling
+        % through to size(x,dim) below would hit size.m's size(...,dim>1)
+        % rejection and error, contradicting that fold-form guidance.
+        out = x.func.size(dim);
       elseif ndim == 1
         out = length(x);
       else

@@ -65,6 +65,54 @@ classdef INDParamTest < matlab.unittest.TestCase
             tc.verifyEqual(y2.dx, y.dx, 'AbsTol', 0);
         end
 
+        function foldedEndReferenceResolvesToFold(tc)
+            % M12 (issue #11): B(:,end) - the 2-subscript FOLDED reference into
+            % an N-D declared parameter - must resolve `end` to the folded
+            % trailing extent (func.size(2)), the fold form subsref.m supports.
+            % Pre-fix `end` routed through size(x,2) -> the size(...,dim>1)
+            % rejection in size.m and errored (adigator:ndparam:size), even
+            % though that rejection's own message points at this fold form.
+            % exercises `end` in BOTH fold positions: dim=2 (B(:,end)) and
+            % dim=1 (B(end,1)), so the new branch's func.size(1)/func.size(2)
+            % legs are both pinned.
+            writeFcn('ndp_foldend', { ...
+                'function y = ndp_foldend(x,B)', ...
+                'c = B(:,end);', ...   % last folded column [m x 1], end in dim 2
+                'd = B(:,1);', ...     % first folded column (control)
+                'e = B(end,1);', ...   % scalar Bf(m,1), end in dim 1
+                'y = c*sum(x) + d*x(1) + (e*d)*x(2);', ...
+                'end'});
+            m = 3; n = 2; K = 4;
+            gx = adigatorCreateDerivInput([n 1],'x');
+            gB = adigatorCreateAuxInput([m n K]);
+            adigator('ndp_foldend',{gx,gB},'ndp_foldend_dx', ...
+                adigatorOptions('overwrite',1,'echo',0));
+            rehash;
+
+            rng(4);
+            B = randn(m,n,K);
+            xf = randn(n,1);
+            x.f = xf; x.dx = ones(n,1);
+            y = ndp_foldend_dx(x,B);
+            J = full(sparse(y.dx_location(:,1), y.dx_location(:,2), ...
+                y.dx, y.dx_size(1), y.dx_size(2)));
+
+            Bf = reshape(B,m,[]);          % the internal 2D fold
+            c  = Bf(:,end);                % MATLAB's own B(:,end)   (dim 2)
+            d  = Bf(:,1);
+            e  = Bf(end,1);                % MATLAB's own B(end,1)   (dim 1)
+            tc.verifyEqual(y.f, c*sum(xf) + d*xf(1) + (e*d)*xf(2), ...
+                'AbsTol', 1e-12, 'RelTol', 1e-12);
+            % analytic: c*1 every column (c*sum(x)) + d in col 1 + e*d in col 2
+            Ja = c*ones(1,n) + [d, zeros(m,n-1)] + [zeros(m,1), e*d];
+            tc.verifyEqual(J, Ja, 'AbsTol', 1e-12, 'RelTol', 1e-12);
+
+            % same file, folded 2D argument: identical results
+            y2 = ndp_foldend_dx(x, Bf);
+            tc.verifyEqual(y2.f,  y.f,  'AbsTol', 0);
+            tc.verifyEqual(y2.dx, y.dx, 'AbsTol', 0);
+        end
+
         function counterSliceMatchesManualFold(tc)
             % B(:,:,k) by the loop counter inside a rolled loop must agree
             % with the proven manual folded-2D pattern Bf(:,(k-1)*n+(1:n))
