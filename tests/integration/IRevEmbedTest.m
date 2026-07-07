@@ -53,6 +53,10 @@ classdef IRevEmbedTest < matlab.unittest.TestCase
             txtL = readlines(fullfile(md.l,'ridx_RGrd.m'));
             tc.verifyTrue(any(contains(txtL,'persistent ADiGator_')),'l: persistent missing');
             tc.verifyTrue(any(contains(txtL,'coder.load(')),'l: coder.load missing');
+            % M15 (REQ-T-04): no bare load( survives - contains('coder.load')
+            % cannot catch a raw load( (substring of coder.load).
+            tc.verifyFalse(any(~cellfun(@isempty, regexp(txtL,'(?<!coder\.)\<load\(','once'))), ...
+                'l: a bare load( survives (only coder.load is permitted)');
             tc.verifyFalse(any(startsWith(strtrim(txtL),'global ')),'l: global left in');
             tc.verifyTrue(isfile(fullfile(md.l,'ridx_RGrd.mat')),'l: pruned .mat missing');
             txtI = readlines(fullfile(md.i,'ridx_RGrd.m'));

@@ -46,6 +46,16 @@ classdef ISmokeTest < matlab.unittest.TestCase
 
             wv = [0.5; 1.2];
             zv = [0.3; -0.7];
+            % M17: force a fresh runtime load from THIS test's .mat. The classic
+            % wrapper guards its load with `if isempty(ADiGator_gapfun_ADiGatorGrd)`;
+            % an alphabetically-earlier test (IEmbedModesTest) can leave that
+            % global populated, which would silently skip this smoke test's
+            % .mat-load leg - its data happens to match, so the numeric checks
+            % still pass - hiding a prune/load regression. Clear it so the load
+            % path is actually exercised (cf. IEmbedModesTest classic-mode dance).
+            clear('gapfun_Grd');
+            clear('global', 'ADiGator_gapfun_ADiGatorGrd');
+            rehash;
             [G, F] = gapfun_Grd(wv, zv);
 
             % function value passes through unchanged

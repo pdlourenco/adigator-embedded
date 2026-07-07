@@ -16,6 +16,15 @@ classdef SCodegenTest < matlab.unittest.TestCase
     % Coder-only runner still checks the MEX equivalence; the extended products
     % job (Coder + Embedded Coder) exercises both.
 
+    properties
+        % M16: Embedded Coder availability, probed ONCE at class setup.
+        % license('test',...) is unreliable inside a test-method body (it returns
+        % 0 for checkout-required products even when licensed), so the ERT gate
+        % reads this property instead - the same place SRolledErtCodegenTest
+        % checks its license.
+        ErtAvailable = false;
+    end
+
     methods (TestClassSetup)
         function addPaths(tc)
             import matlab.unittest.fixtures.PathFixture
@@ -27,6 +36,10 @@ classdef SCodegenTest < matlab.unittest.TestCase
             tc.applyFixture(PathFixture(fullfile(root,'util')));
             tc.applyFixture(PathFixture(fullfile(root,'embedding')));
             tc.applyFixture(PathFixture(fullfile(root,'examples','optimization','pipg')));
+        end
+
+        function detectErt(tc)
+            tc.ErtAvailable = license('test','RTW_Embedded_Coder') == 1;
         end
     end
 
@@ -60,22 +73,40 @@ classdef SCodegenTest < matlab.unittest.TestCase
             % end-to-end Coder round-trip on the shrunk data.
             tc.genCompileAndCheck(true);
         end
+
+        % M16: the Embedded-Coder (ERT) static-lib build (REQ-T-10) is its OWN
+        % test, gated by an assumeTrue on the Embedded Coder license - so a
+        % Coder-only runner shows it FILTERED (visibly not-run) instead of the
+        % old `if license(...)` tail that silently no-op'd and left the test
+        % green, indistinguishable from covered. The MEX-equivalence methods
+        % above keep running at their true MATLAB-Coder floor.
+        function ertLibBuildsFromFullData(tc)
+            tc.ertLibBuild(false);
+        end
+
+        function ertLibBuildsFromSlimData(tc)
+            tc.ertLibBuild(true);
+        end
     end
 
     methods (Access = private)
-        function genCompileAndCheck(tc, slim)
-            % Generate the pipg gap-function gradient in inline mode, build a
-            % MEX and a static lib, and assert MEX == MATLAB == analytic. SLIM
-            % toggles slim_embed (shrunk vs. full embedded data); the numeric
-            % checks are identical either way.
+        function generateInlineGradient(~, slim)
+            % Generate the pipg gap-function gradient in inline mode. SLIM
+            % toggles slim_embed (shrunk vs. full embedded data). The embedded
+            % generator now defaults slim_embed ON (ADR-0012), so the false case
+            % must opt out for the unshrunk-data point to be exercised.
             z = adigatorCreateDerivInput([2 1], 'z');
             w = adigatorCreateAuxInput([2 1]);
-            % slim is explicit (false = full unshrunk data, true = slice-before-
-            % prune). The embedded generator now defaults slim_embed ON (ADR-0012), so the false case must opt out for the unshrunk-data point to
-            % be exercised.
             opts = struct('embed_mode', 'i', 'path', pwd, 'echo', 0, 'slim_embed', slim);
             adigatorGenDerFile_embedded('gradient', 'gapfun', {w, z}, opts);
             rehash;
+        end
+
+        function genCompileAndCheck(tc, slim)
+            % Generate the inline gradient, build a MEX, and assert
+            % MEX == MATLAB == analytic. SLIM toggles slim_embed; the numeric
+            % checks are identical either way. (REQ-T-05, MATLAB Coder floor.)
+            tc.generateInlineGradient(slim);
 
             % MEX build + execution equivalence
             codegen('gapfun_Grd', '-args', {zeros(2,1), zeros(2,1)});
@@ -91,19 +122,24 @@ classdef SCodegenTest < matlab.unittest.TestCase
             tc.verifyEqual(Gm, wv + 2*zv, 'AbsTol', 1e-12, ...
                 'gradient differs from analytic value');
             clear gapfun_Grd_mex % release the MEX before folder teardown
+        end
 
+        function ertLibBuild(tc, slim)
             % static-library build through Embedded Coder (ERT): embedded-C
-            % viability under the strict target (#80 R20b, REQ-T-10). Guarded on
-            % the Embedded Coder license so a Coder-only runner still checks the
-            % MEX equivalence above (REQ-T-05) - only the ERT lib build needs it.
-            if license('test', 'RTW_Embedded_Coder')
-                cfg = coder.config('lib', 'ecoder', true);
-                cfg.GenerateReport = false;
-                codegen('gapfun_Grd', '-config', cfg, ...
-                    '-args', {zeros(2,1), zeros(2,1)}, '-d', 'codegen_lib');
-                tc.verifyTrue(isfolder('codegen_lib'), ...
-                    'lib codegen did not produce an output folder');
-            end
+            % viability under the strict target (#80 R20b, REQ-T-10). M16: an
+            % assumeTrue (not a silent `if license`) so a Coder-only runner
+            % records this as Filtered rather than a false pass. The license was
+            % probed at class setup (see ErtAvailable) because license('test',...)
+            % misreports inside a test-method body.
+            tc.assumeTrue(tc.ErtAvailable, ...
+                'REQ-T-10 ERT lib build requires Embedded Coder - skipping (Filtered).');
+            tc.generateInlineGradient(slim);
+            cfg = coder.config('lib', 'ecoder', true);
+            cfg.GenerateReport = false;
+            codegen('gapfun_Grd', '-config', cfg, ...
+                '-args', {zeros(2,1), zeros(2,1)}, '-d', 'codegen_lib');
+            tc.verifyTrue(isfolder('codegen_lib'), ...
+                'lib codegen did not produce an output folder');
         end
     end
 end
