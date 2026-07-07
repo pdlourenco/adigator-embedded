@@ -4,8 +4,10 @@ function c = mcGenShapeFuzz(uid)
 % Broader-coverage generator (ADR-0007 Phase A): each output entry is a small
 % expression drawn from operations that are differentiable everywhere (no
 % log/sqrt/asin domain traps), so a randomly drawn sample point is always
-% valid. No closed-form derivative is emitted; the FD oracle carries the
-% value check while the cross-mode and sparsity oracles still apply exactly.
+% valid. No closed-form derivative is emitted, so these cases currently have
+% NO value oracle (an FD oracle is a later ADR-0007 phase); the cross-mode and
+% sparsity oracles still apply, but structurally - they do not check the value
+% against ground truth, so a cross-mode-consistent wrong value would pass.
 if nargin < 1, uid = 0; end
 
 n = randi([2 6]);
@@ -37,7 +39,7 @@ body = sprintf('y = [%s];', strjoin(entries, '; '));
 name = sprintf('mc_shape_%d', uid);
 c = mcCase('name', name, 'body', body, 'xsize', [n 1], ...
     'deriv', 'jacobian', 'x0', x0, ...
-    'exactJac', [], ...   % FD oracle carries the value check
+    'exactJac', [], ...   % no closed form; no value oracle yet (FD is a later phase)
     'tags', struct('gen','shapefuzz','ops',{unique(ops)}, ...
                    'inShape',[n 1],'outShape',[m 1], ...
                    'density','sparse','order',1));

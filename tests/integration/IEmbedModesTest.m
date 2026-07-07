@@ -69,6 +69,14 @@ classdef IEmbedModesTest < matlab.unittest.TestCase
                 'mode l: global declaration left in generated code');
             tc.verifyFalse(any(contains(txtL, 'ADiGator_LoadData')), ...
                 'mode l: runtime loader left in generated code');
+            % M15 (REQ-T-04): no BARE runtime `load(` survives. contains(...,
+            % 'coder.load') cannot catch a raw `load(` (it is a substring of
+            % `coder.load`); a patcher regression leaving `load(` would pass every
+            % static + numeric check (the 'l' .mat legitimately exists) and
+            % surface only under codegen, which no test runs on 'l' files.
+            tc.verifyFalse(any(~cellfun(@isempty, ...
+                regexp(txtL, '(?<!coder\.)\<load\(', 'once'))), ...
+                'mode l: a bare load( survives (only coder.load is permitted)');
             tc.verifyTrue(isfile(fullfile(modeDir.l, 'gapfun_ADiGatorGrd.mat')), ...
                 'mode l: pruned .mat missing');
 
