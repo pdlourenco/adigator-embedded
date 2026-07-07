@@ -236,6 +236,13 @@ for derf = 1:N_derivs
         'longer be used as input to another adigator differentiation.\n'],...
         AdigatorGeneratedFiles(derf).mat);
 
+    % M8: the derivative source (.m) and static-data (.mat) files are the only
+    % thing to regenerate from if the embed below errors. Collect them here and
+    % delete them ONLY after every writelines has succeeded (see end of loop) -
+    % deleting them up-front, as before, left a truncated wrapper and nothing to
+    % recover from on any mid-embed failure.
+    filesToDelete = {};
+
     %%% if user requests inline option, the data is loaded from a function
     if inline
         % generate new data function (tmp)
@@ -253,10 +260,10 @@ for derf = 1:N_derivs
         fprintf('done.\n');
 
         % cleanup (derivative file) - kept for a self-contained file, which is
-        % rewritten in place by the embed step below
-        if ~selfContained; delete(AdigatorGeneratedFiles(derf).m); end
-        % cleanup (static data file)
-        delete(AdigatorGeneratedFiles(derf).mat);
+        % rewritten in place by the embed step below. M8: deferred to loop end.
+        if ~selfContained; filesToDelete{end+1} = AdigatorGeneratedFiles(derf).m; end %#ok<AGROW> bounded by file count
+        % cleanup (static data file) - deferred to loop end (M8)
+        filesToDelete{end+1} = AdigatorGeneratedFiles(derf).mat; %#ok<AGROW> bounded by file count
     end
 
     %%% if user requests the coderload option, the data is loaded at compile time from a file
@@ -267,8 +274,9 @@ for derf = 1:N_derivs
         fprintf('done.\n');
 
         % cleanup (remove derivative file) - kept for a self-contained file,
-        % which is rewritten in place by the embed step below
-        if ~selfContained; delete(AdigatorGeneratedFiles(derf).m); end
+        % which is rewritten in place by the embed step below. M8: deferred to
+        % loop end (the .mat is retained: coderload reads it via coder.load).
+        if ~selfContained; filesToDelete{end+1} = AdigatorGeneratedFiles(derf).m; end %#ok<AGROW> bounded by file count
     end
 
     %%% #80 (Gap A): strip the dead output-index metadata so the embeddable file
@@ -307,7 +315,14 @@ for derf = 1:N_derivs
             delete(AdigatorGeneratedFiles(derf).datapath{dataf});
         end
     end
-    
+
+    % M8: the wrapper is now fully written - reaching here means every writelines
+    % above succeeded. Only now remove the deferred source files; on any earlier
+    % error these are skipped, so the .m/.mat survive for regeneration.
+    for df = 1:numel(filesToDelete)
+        delete(filesToDelete{df});
+    end
+
     fprintf('done.\n')
 end
 

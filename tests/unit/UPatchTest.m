@@ -83,6 +83,26 @@ classdef UPatchTest < matlab.unittest.TestCase
                 'function-name struct level not removed in inline mode');
         end
 
+        function missingGlobalDeclarationErrors(tc)
+            % M9: a derivative file whose subfunction has a header but no
+            % `global ADiGator_<name>` line must fail loudly. find_in_file scans
+            % from the header to EOF, so a missing global yields an empty gidx ->
+            % the `txt(gidx)=[]` / `txt(1:gidx)` splice below would corrupt the
+            % file with a cryptic indexing error (or bind a later subfunction's
+            % identically-named global). The generator emits the global
+            % unconditionally, so a miss means a corrupted/hand-edited source.
+            lines = [ ...
+                "function y = gone_ADiGatorJac(x)"
+                "Gator1Data = ADiGator_gone_ADiGatorJac.gone_ADiGatorJac.Gator1Data;"
+                "y.f = x + Gator1Data.Index1(1);"
+                "end"];
+            fpath = fullfile(pwd, 'gone_ADiGatorJac.m');
+            writelines(lines, fpath);
+            tc.verifyError(@() adigator_patch_derivative(fpath, ...
+                'gone_ADiGatorJac', {'gone_ADiGatorJac'}, 0, {}), ...
+                'adigator_patch_derivative:globalNotFound');
+        end
+
         function matPathOverride(tc)
             fpath = writeSyntheticDerivFile();
             txt = adigator_patch_derivative(fpath, 'myfun_ADiGatorJac', ...

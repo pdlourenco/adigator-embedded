@@ -96,6 +96,19 @@ for fun = 1:length(subfun_list)
     % find the global variable declaration
     patterns = {'global', globalName};
     gidx = find_in_file(txt,patterns,fidx,1,[]);
+    % v1.5 (M9): guard the global-declaration search the same way the function
+    % header is guarded (B4). find_in_file scans from fidx to EOF, so a missing
+    % `global <globalName>` line for this subfunction returns empty -> the
+    % `txt(gidx)=[]` / `txt(1:gidx)` below would corrupt the file with a cryptic
+    % indexing error (and, since the scan runs past this subfunction, a later
+    % subfunction's identically-named global could be patched by mistake). The
+    % generator emits the global unconditionally, so a miss means a corrupted or
+    % hand-edited source; fail loudly.
+    if isempty(gidx)
+        error('adigator_patch_derivative:globalNotFound',...
+            'global declaration ''%s'' not found for subfunction ''%s'' in %s',...
+            globalName,subfun_list{fun},deriv_filepath);
+    end
     if ~isempty(data_functions) % inline option
         txt(gidx) = []; % remove the declaration
         gidx = gidx-1;
