@@ -180,12 +180,16 @@ end
 end
 
 function tf = raisesMatrixNorm(fn)
+% A matrix-norm case must be rejected by a *specific* error, not merely any
+% error whose message happens to contain "matrix". Accept adigator's
+% contractual C-5 error, or MATLAB's own rejection of an unsupported matrix-norm
+% spec (e.g. p=-Inf), which fires before adigator's check is reached.
 tf = false;
 try
     fn();
 catch ME
-    tf = strcmp(ME.identifier,'adigator:norm:matrixNorm') || ...
-         contains(lower(ME.message),'matrix');
+    tf = any(strcmp(ME.identifier, ...
+        {'adigator:norm:matrixNorm', 'MATLAB:norm:unknownNorm'}));
 end
 end
 
