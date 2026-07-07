@@ -5,9 +5,10 @@ function c = mcGenShapeFuzz(uid)
 % expression drawn from operations that are differentiable everywhere (no
 % log/sqrt/asin domain traps), so a randomly drawn sample point is always
 % valid. No closed-form derivative is emitted, so these cases currently have
-% NO value oracle (an FD oracle is a later ADR-0007 phase); the cross-mode and
-% sparsity oracles still apply, but structurally - they do not check the value
-% against ground truth, so a cross-mode-consistent wrong value would pass.
+% NO value oracle (an FD oracle is a later ADR-0007 phase, R9 C; gap tracked in
+% #145); the cross-mode and sparsity oracles still apply, but structurally -
+% they do not check the value against ground truth, so a cross-mode-consistent
+% wrong value would pass.
 if nargin < 1, uid = 0; end
 
 n = randi([2 6]);

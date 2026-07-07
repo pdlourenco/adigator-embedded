@@ -25,7 +25,8 @@ function c = mcCase(varargin)
 % The exact* handles are the "known-derivative-by-construction" oracle inputs
 % (ADR-0007); leave them [] when no closed form is generated. M18: a []-exact
 % case currently gets NO value oracle - no FD oracle exists yet (a later phase,
-% ROADMAP R9 C-D; see tests/montecarlo/README.md) - so only the structural oracles
+% ROADMAP R9 C; see tests/montecarlo/README.md; gap tracked in #145) - so only
+% the structural oracles
 % (cross-mode agreement, sparsity superset, Hessian symmetry) apply; none
 % checks the value against ground truth. Supply a closed form where one exists.
 

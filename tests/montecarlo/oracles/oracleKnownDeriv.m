@@ -6,7 +6,8 @@ function r = oracleKnownDeriv(c)
 % c.x0 to the closed form the generator supplied (c.exactJac / c.exactHess).
 % Skips cleanly when no closed form was provided. M18: a skipped case gets no
 % value check from any oracle - no FD value oracle exists yet (a later ADR-0007
-% phase); only the structural oracles (cross-mode/sparsity/symmetry) apply.
+% phase, R9 C; gap tracked in #145); only the structural oracles
+% (cross-mode/sparsity/symmetry) apply.
 r = struct('name','knownDeriv','pass',true,'skipped',false,'message','');
 
 needsHess = strcmp(c.deriv,'hessian');
