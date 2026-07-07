@@ -136,3 +136,10 @@ Contracts section (binding conventions), or for purely mechanical choices
   (not a contract change); the fix is *error quality* (an actionable error
   pointing to the logical-weight-sum rewrite), never a wrong derivative
   (B19/B20; issues #101/#108; pinned by `ISymbolicIndexTest`).
+- [ADR-0025](ADR-0025-guide-code-snippets-from-fixtures.md) — **Accepted**:
+  user-guide *generated*-code samples load an excerpt from the committed golden
+  fixture via `listings` `\lstinputlisting` with **named text-marker ranges**
+  (`% BEGIN-<tag>`/`% END-<tag>`) that the fixture producer emits — snippet, not
+  whole file; marker-keyed (regeneration-resilient), not line-number-keyed; no
+  `-shell-escape`. Docs-tooling + on-disk convention, no Contract touched;
+  fallback B2 = curated excerpt + substring test (issue #139).
