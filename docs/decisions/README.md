@@ -145,5 +145,6 @@ Contracts section (binding conventions), or for purely mechanical choices
   fallback B2 = curated excerpt + substring test (issue #139). **Extended
   2026-07-07**: measured/computed bench comparison content (not source code) is
   emitted by the bench producer as a committed, ready-to-`\input` `.tex` fragment
-  the guide `\input`s — tables only, deterministic, no machine-dependent runtimes
-  or Coder-sensitive C-sizes in the committed artifact.
+  the guide `\input`s — tables only; the deterministic metrics (code-lines, ROM
+  bytes) exact, and the host/Coder-sensitive figures (C-size, runtime) kept as a
+  rounded, environment-stamped snapshot with ratios, refreshed deliberately.
