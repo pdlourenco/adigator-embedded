@@ -179,10 +179,14 @@ Code excerpts stay on the `\lstinputlisting` path; the bench fragment carries
 
 **Ownership / location.** The emitter is MATLAB-session bench code; the guide
 `\input` wiring is this (docs) session's. Recommended: the committed fragment
-lives under the guide (e.g. `docs/userguide/generated/bench_compare.tex`) with a
-`% GENERATED — do not hand-edit` header, so the guide is self-contained and the
-generated status is unmistakable; the exact path is an implementation detail for
-the wiring PR.
+lives under the guide with a `% GENERATED — do not hand-edit` header marking its
+status, so the guide is self-contained and the generated status is unmistakable.
+Prefer a **normally-named file** (e.g. `docs/userguide/bench_compare.tex`) over a
+`…/generated/` directory: a committed artifact under a `generated/` path is one
+`.gitignore` generalization away from being silently untracked (the #134 class —
+cf. the existing `examples/**/generated/` rule), so the wiring PR should also run
+`git check-ignore -v` on the final path (the #134 discipline). The exact path
+stays an implementation detail for the wiring PR.
 
 **Revisit when:** the same B2-style pressure the original decision names — if a
 needed table has no bench producer, a curated committed fragment (with a test
