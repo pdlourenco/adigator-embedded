@@ -142,4 +142,8 @@ Contracts section (binding conventions), or for purely mechanical choices
   (`% BEGIN-<tag>`/`% END-<tag>`) that the fixture producer emits — snippet, not
   whole file; marker-keyed (regeneration-resilient), not line-number-keyed; no
   `-shell-escape`. Docs-tooling + on-disk convention, no Contract touched;
-  fallback B2 = curated excerpt + substring test (issue #139).
+  fallback B2 = curated excerpt + substring test (issue #139). **Extended
+  2026-07-07**: measured/computed bench comparison content (not source code) is
+  emitted by the bench producer as a committed, ready-to-`\input` `.tex` fragment
+  the guide `\input`s — tables only, deterministic, no machine-dependent runtimes
+  or Coder-sensitive C-sizes in the committed artifact.
