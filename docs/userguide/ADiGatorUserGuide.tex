@@ -4,6 +4,19 @@
 \usepackage{array,subfig,verbatim}
 \usepackage{longtable}
 \usepackage[T1]{fontenc}
+% lmodern: scalable Latin Modern (visually ~identical to the default Computer
+% Modern) so microtype font expansion works (expansion needs scalable fonts).
+\usepackage{lmodern}
+% microtype: character protrusion + font expansion micro-adjust glyph widths to
+% clear the small prose overflows from long \texttt tokens (function names,
+% option strings) without visible loosening. No shell-escape; shifts pagination
+% slightly, which is fine (the PDF is a build artifact rebuilt by CI).
+\usepackage{microtype}
+% emergency stretch absorbs the small prose overflows (long \texttt tokens) by
+% stretching interword glue only on lines that would otherwise be overfull -
+% cleaner than a global \sloppy. Does not help glue-free lines (table
+% signatures, display equations), which are fixed structurally instead.
+\setlength{\emergencystretch}{3em}
 \usepackage{framed,fancybox}
 \usepackage{multicol}
 \usepackage{amsmath,amsfonts,latexsym,graphics,graphicx,epsfig,enumerate,color,colortbl,hhline,psfrag}
@@ -249,7 +262,7 @@ The \emph{ADiGator} package currently has different options which may given to t
 \centerline{\texttt{options = adigatorOptions(field1,value1,field2,value2,...)}}
 A list of all options, values, and descriptions is given in Table \ref{Tab:Options}.
 
-\begin{longtable}{|c|c|p{12cm}|}
+\begin{longtable}{|c|c|p{9.9cm}|}
 \caption{Options for ADiGator \label{Tab:Options}}\\
 \hline
 \multicolumn{1}{|c|}{Option Field} & Value & \multicolumn{1}{c|}{Description}  \\ \hline
@@ -314,7 +327,7 @@ All other inputs must be fixed.
 {\bf Output Info} & \begin{tabular}{l}
 \texttt{output.FunctionFile} - same as \texttt{UserFunName}, ex: \texttt{`myfun'}\\
 \texttt{output.JacobianFile} - string name of generated Jacobian file, ex: \texttt{`myfun\_Jac'}\\
-\texttt{output.JacobianStructure} - sparse ones and zeros defining Jacobian sparsity pattern
+\texttt{output.JacobianStructure} - sparse ones and zeros defining the\\ Jacobian sparsity pattern
 \end{tabular}\\ \hline
 {\bf Examples} & \begin{tabular}{l}
 \texttt{examples/jacobians/arrowhead/}\\
@@ -520,9 +533,9 @@ The features described in this section are specific to the embedded fork of \emp
 \underline{Generated File Info}: For \texttt{DerType} \texttt{'jacobian'} the wrapper is named with \texttt{\_Jac} appended; for \texttt{'gradient'}, with \texttt{\_Grd}; for \texttt{'hessian'}, with \texttt{\_Hes} (returning the Hessian, gradient, and function value). The wrapper takes the same inputs as the original file. The number and nature of the additional generated files depends on \texttt{EMBED\_MODE}: classic \texttt{'c'} writes a wrapper, a \texttt{.mat}, and the derivative file; coderload \texttt{'l'} writes a wrapper (reading the \texttt{.mat} through \texttt{coder.load}) and the \texttt{.mat}; inline \texttt{'i'} writes a single self-contained file with no \texttt{.mat}. All three modes return numerically identical results.\\\\
 \begin{tabular}{l|l}
 {\bf Usage} & \begin{tabular}{l}
- \texttt{info = adigatorGenDerFile\_embedded(DerType,UserFunName,UserFunInputs,options)}\end{tabular} \\ \hline
+ \texttt{info = adigatorGenDerFile\_embedded(DerType,}\\ \texttt{\ \ \ \ \ \ \ UserFunName,UserFunInputs,options)}\end{tabular} \\ \hline
 {\bf Input Info} & \begin{tabular}{l}
-\texttt{DerType} - \texttt{'jacobian'}, \texttt{'gradient'}, \texttt{'gradient-reverse'} (reverse-mode adjoint gradient, Section \ref{SubSec:OutputForms}), or \texttt{'hessian'}\\
+\texttt{DerType} - \texttt{'jacobian'}, \texttt{'gradient'}, \texttt{'gradient-reverse'}\\ \ \ \ (reverse-mode adjoint gradient, Section \ref{SubSec:OutputForms}), or \texttt{'hessian'}\\
 \texttt{UserFunName} - string name of file to be differentiated\\
 \texttt{UserFunInputs} - cell array of inputs to user's function; the variable of\\ differentiation created via \texttt{adigatorCreateDerivInput}, auxiliary inputs via\\ \texttt{adigatorCreateAuxInput}\\
 \texttt{options} - (optional) options structure; see \texttt{EMBED\_MODE}, \texttt{PATH},\\ \texttt{DER\_LEVELS}, \texttt{SLIM\_EMBED}, \texttt{DER\_OUTPUT} in Table \ref{Tab:Options}
@@ -726,7 +739,8 @@ In order to evaluate this function, \texttt{myderiv2}, we note that the input is
 Now, assuming the output has second order derivatives, the output \texttt{y} would have the following fields: \texttt{.f, .dx, .dx\_size, .dx\_location, .dxdx, .dxdx\_size, .dxdx\_location} corresponding to the function value, first derivative value, first derivative array size, first derivative mapping indices, second derivative value, second derivative array size, and second derivative mapping indices, respectively. Assuming the output \texttt{y.f} is a scalar, we could then build a sparse Gradient and Hessian using the commands:
 \begin{verbatim}
     Grad = sparse(ones(length(y.dx),1),y.dx_location,y.dx,1,y.dx_size);
-    Hes = sparse(y.dxdx_location(:,1),y.dxdx_location(:,2),y.dxdx,y.dxdx_size(1),y.dxdx_size(2));
+    Hes = sparse(y.dxdx_location(:,1),y.dxdx_location(:,2),y.dxdx,...
+                 y.dxdx_size(1),y.dxdx_size(2));
 \end{verbatim}
 This process may be repeated as many times as desired.
 
