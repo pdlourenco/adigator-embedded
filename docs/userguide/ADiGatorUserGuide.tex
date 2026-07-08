@@ -359,6 +359,9 @@ All other inputs must be fixed.
 \texttt{examples/hessians/logsumexp/}
 \end{tabular}
 \end{tabular}
+\subsection{Solver-Integration Wrappers (Inherited from Upstream)}\label{SubSec:SolverWrappers}
+\emph{Note (v1.5 fork).} The five \texttt{adigatorGenFiles4*} commands documented in the following subsections (for \texttt{fsolve}, \texttt{fminunc}, \texttt{fmincon}, IPOPT, and GPOPS~II) are convenience wrappers carried over from upstream \emph{ADiGator}. They emit \textbf{host-only} derivative files (the classic runtime-\texttt{load}/global mechanism) and are \textbf{not at feature parity} with the rest of this fork: they do not support embedded code generation (\texttt{EMBED\_MODE}, MATLAB / Embedded Coder), the \texttt{PATH} option, the \texttt{nonzeros} output form, or reverse mode, and are not maintained or tested to the depth of the core generators. For embeddable derivatives use the core generators instead (Section~\ref{Sec:Embedded}); these wrappers are retained only for upstream compatibility.
+
 \subsection{adigatorGenFiles4Fsolve}
 \underline{When to use}: You wish to compute the Jacobian of a function with respect to its first input to be used with \texttt{fsolve}. (\texttt{fsolve} is provided in the MATLAB optimization package and is used for solving a system of non-linear equations)\\\\
 \underline{User Function Input Restrictions}: The first input must be the variable of differentiation. One extra variable is allowed for auxiliary data if desired.\\\\
@@ -821,6 +824,7 @@ Here we note that one should be careful when using this command as it will only 
 The first vectorized coding restriction is that, if the vectorized dimension of the input is $N$, then all vectorized variables must be of size $N \times n$, where $n$ must be a known value (and not equal to $N$). Furthermore, one may not sum over any vectorized dimension, as this results in derivatives of the output being dependent upon all points in time. Similarly, referencing off of the vectorized dimension, but not taking the entire row/column is not allowed, e.g.~if \texttt{X} is of size $N \times 3$, you cannot perform \texttt{xi = X(1,:)}, but you can perform \texttt{xi = X(:,1)}. Finally, you are not allowed to loop on a vectorized dimension, e.g.~ if \texttt{Y} is of size $1 \times N$, you may not do \texttt{for yi = 1:Y}. It is noted here that unknown logical referencing/assignments are coded up for vectorized dimensions and that these may be used (in accordance with the guidelines given in Section \ref{SubSec:Logical}) instead of a \texttt{for} loop if you need to search through the vectorized dimension.
 
 \section{Generating Files for GPOPS II}
+\emph{Note (v1.5 fork).} Like the other \texttt{adigatorGenFiles4*} wrappers (Section~\ref{SubSec:SolverWrappers}), \texttt{adigatorGenFiles4gpops2} is inherited from upstream \emph{ADiGator} and is \textbf{not at feature parity} with this fork's embedded pipeline (host-only; no \texttt{EMBED\_MODE}/code generation/\texttt{PATH}/\texttt{nonzeros}/reverse mode). It is retained for upstream compatibility.\\
 {\em GPOPS II} is a commercial MATLAB optimal control software which utilizes direct collocation methods to solve optimal control problems.
 The creators of {\em ADiGator} have collaborated with those of {\em GPOPS II} in order to allow for {\em ADiGator} to supply first- and second-order derivatives to {\em GPOPS II}.
 In order to generate the derivative files using {\em ADiGator} please see the file \texttt{adigatorGenFiles4gpops2}.

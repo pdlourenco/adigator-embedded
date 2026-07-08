@@ -1,6 +1,16 @@
 function adigatorfilenames = adigatorGenFiles4gpops2(setup,varargin)
 % function adigatorfilenames = adigatorGenFiles4gpops2(setup)
 %
+% *** INHERITED-UPSTREAM WRAPPER -- NOT AT EMBEDDED FEATURE PARITY (v1.5) ***
+% Carried over from stock ADiGator. Emits a HOST-ONLY derivative file (the
+% classic runtime-load/global mechanism) and does NOT support this fork's
+% embedded features: EMBED_MODE, code generation (MATLAB/Embedded Coder),
+% PATH, nonzeros output, or reverse mode. Not maintained or tested to the
+% depth of the core generators (adigator, adigatorGenJacFile,
+% adigatorGenHesFile, adigatorGenDerFile_embedded) -- prefer those for
+% embeddable derivatives. Retained for upstream compatibility. See
+% ADR-0026 and issue #156.
+%
 % This function is for use with the GPOPS2 optimal control software. By
 % inputting the setup (the input to the gpops2 function), this function
 % will generate the necessary derivative files which the user can then

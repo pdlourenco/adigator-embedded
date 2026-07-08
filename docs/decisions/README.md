@@ -152,3 +152,10 @@ Contracts section (binding conventions), or for purely mechanical choices
   any committed *source* file, including hand-written example code loaded directly
   from `examples/…` (small single-function files whole; markers only for partial
   excerpts) — `verbatim` kept only for ad-hoc sketches not backed by a file.
+- [ADR-0026](ADR-0026-inherited-solver-wrappers-not-at-parity.md) — **Accepted**:
+  the inherited-upstream solver wrappers `adigatorGenFiles4{Fminunc,Fsolve,Fmincon,
+  Ipopt,gpops2}` are **kept but flagged as not at embedded feature parity** (host-only;
+  no `EMBED_MODE`/codegen/`PATH`/`nonzeros`/reverse mode), via a header banner on each
+  generator + a user-guide note, rather than removed or brought to parity. Preserves
+  upstream drop-in compatibility; removal stays the revisit path if that goal is dropped
+  (issue #156).
