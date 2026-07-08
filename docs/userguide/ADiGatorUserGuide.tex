@@ -8,6 +8,13 @@
 \usepackage{multicol}
 \usepackage{amsmath,amsfonts,latexsym,graphics,graphicx,epsfig,enumerate,color,colortbl,hhline,psfrag}
 \usepackage{fancyvrb}
+\usepackage{listings}
+% ADR-0025: samples that reproduce GENERATED output are loaded from committed
+% golden fixtures via \lstinputlisting keyed on named comment-marker ranges (not
+% line numbers), so they cannot silently drift from what the generator emits.
+% Hand-written user code keeps using verbatim. Plain pdflatex, no shell-escape.
+\lstset{language=Matlab,basicstyle=\ttfamily\footnotesize,columns=fullflexible,%
+  keepspaces=true,breaklines=true,showstringspaces=false,frame=single,captionpos=b}
 \usepackage{alltt,rotating, amsbsy}
 \usepackage{tikz,xfrac}
 \usepackage{etoolbox}
@@ -468,6 +475,19 @@ Generated file signature: \texttt{[Grd,Fun] = <UserFunName>\_RGrd(inputs)}
 \texttt{examples/gradients/logsumexp/}
 \end{tabular}
 \end{tabular}
+
+A concrete sample: the reverse-gradient file \emph{ADiGator} generates for the
+weighted log-sum-exp cost $y(\bfx)=\log\sum_i e^{w_i x_i}$ (the
+\texttt{examples/gradients/logsumexp/} example). One forward sweep evaluates the
+cost; one reverse (adjoint) sweep then accumulates the entire gradient in a
+single pass, independent of $\dim\bfx$. Because this fully vectorised cost has a
+data-free adjoint, the generated file is self-contained --- no \texttt{.mat}, no
+globals. The excerpt below is loaded directly from the committed golden fixture
+(ADR-0025), so it is a slice of the same bytes the generator emits:
+
+\lstinputlisting[includerangemarker=false,%
+  linerange={BEGIN-rgrd-core}-{END-rgrd-core}]%
+  {../../tests/fixtures/guide/lse_cost_RGrd.m}
 
 \subsection{adigatorGenJtVFile}
 \underline{When to use}: You wish to compute the transposed-Jacobian-vector product $\bfJ^\top\bfv$ of a vector function for a \emph{runtime} vector \texttt{v}, without ever forming the Jacobian --- the quantity gradient-based embedded solvers consume directly.\\\\
