@@ -1140,16 +1140,20 @@ gw = adigatorCreateAuxInput([n 1]);
 adigatorGenRevGradFile('lse_cost',{gx,gw},adigatorOptions('overwrite',1));
 [g,y] = lse_cost_RGrd(x,w);   % C-6 order: [Grd, Fun]
 \end{verbatim}
-The driver checks the gradient against the closed form $w_i e^{w_i x_i}/\sum_j e^{w_j x_j}$ and against central differences.
+The driver checks the gradient against the closed form $w_i e^{w_i x_i}/\sum_j e^{w_j x_j}$ and against central differences. The differentiated cost function \texttt{lse\_cost.m} is:
+\lstinputlisting{../../examples/gradients/logsumexp/lse_cost.m}
 
 \subsubsection{Runtime Loop Bounds}
-The code in \texttt{examples/jacobians/loopbound/} demonstrates the \texttt{LOOPBOUND} option (Section \ref{SubSec:Loopbound}): a reduction over \texttt{N} actuators is differentiated once at a maximum trip count \texttt{Nmax}, and the single generated file is then evaluated for several $\texttt{n} \le \texttt{Nmax}$ without regeneration, with exact structural zeros beyond \texttt{n}. This is the ``reconfigurable number of actuators'' use case; the driver confirms the gradient matches the directly computed \texttt{n}-sized problem and that the padded tail stays zero.
+The code in \texttt{examples/jacobians/loopbound/} demonstrates the \texttt{LOOPBOUND} option (Section \ref{SubSec:Loopbound}): a reduction over \texttt{N} actuators is differentiated once at a maximum trip count \texttt{Nmax}, and the single generated file is then evaluated for several $\texttt{n} \le \texttt{Nmax}$ without regeneration, with exact structural zeros beyond \texttt{n}. This is the ``reconfigurable number of actuators'' use case; the driver confirms the gradient matches the directly computed \texttt{n}-sized problem and that the padded tail stays zero. The differentiated function \texttt{lb\_alloc.m} is:
+\lstinputlisting{../../examples/jacobians/loopbound/lb_alloc.m}
 
 \subsubsection{N-Dimensional Parameters}
-The code in \texttt{examples/jacobians/ndparam/} declares a parameter \texttt{B} of size $m\times n\times K$ with \texttt{adigatorCreateAuxInput([m n K])} and slices it inside the differentiated function with the natural \texttt{B(:,:,k)} syntax (Section \ref{SubSec:NDParam}). The generated file accepts \texttt{B} either as the 3-D array or as its 2-D column-major fold; the driver checks the Jacobian against the analytic result and finite differences.
+The code in \texttt{examples/jacobians/ndparam/} declares a parameter \texttt{B} of size $m\times n\times K$ with \texttt{adigatorCreateAuxInput([m n K])} and slices it inside the differentiated function with the natural \texttt{B(:,:,k)} syntax (Section \ref{SubSec:NDParam}). The generated file accepts \texttt{B} either as the 3-D array or as its 2-D column-major fold; the driver checks the Jacobian against the analytic result and finite differences. The differentiated function \texttt{tvmap.m} is:
+\lstinputlisting{../../examples/jacobians/ndparam/tvmap.m}
 
 \subsubsection{Struct Inputs}
-The code in \texttt{examples/jacobians/structinput/} carries the variable of differentiation and the auxiliary data as fields of a scalar struct (Section \ref{SubSec:StructInput}), exercising four cases: a flat-struct Hessian, a nested-struct Hessian (the derivative field one level deeper), a vector-function Jacobian, and the same flat-struct Hessian through the embedded inline (\texttt{'i'}) pipeline. Each case is checked against the closed-form gradient and Hessian of $\tfrac12\bfx^\top \mathbf{Q}\bfx + \bfc^\top\bfx$.
+The code in \texttt{examples/jacobians/structinput/} carries the variable of differentiation and the auxiliary data as fields of a scalar struct (Section \ref{SubSec:StructInput}), exercising four cases: a flat-struct Hessian, a nested-struct Hessian (the derivative field one level deeper), a vector-function Jacobian, and the same flat-struct Hessian through the embedded inline (\texttt{'i'}) pipeline. Each case is checked against the closed-form gradient and Hessian of $\tfrac12\bfx^\top \mathbf{Q}\bfx + \bfc^\top\bfx$. The flat-struct objective \texttt{structobj.m} is:
+\lstinputlisting{../../examples/jacobians/structinput/structobj.m}
 
 \subsubsection{Allocation over Time (Free Dimensions)}
 The code in \texttt{examples/optimization/vectorized/allocation/} differentiates the per-actuator, per-time-step terms of an optimal-allocation problem \emph{once} in vectorized mode over the product index $i = (k-1)N+a$, leaving both the actuator count \texttt{N} and the horizon \texttt{K} free at runtime. A single generated derivative file then serves every $(N,K)$; the reductions (objective sum, per-time-step moments) are assembled with plain linear algebra by \texttt{alloc\_assemble.m}. See the folder's \texttt{README.md} for the full pattern catalog (product fold, assembly wrappers, folded-2-D parameters, cell arrays).
