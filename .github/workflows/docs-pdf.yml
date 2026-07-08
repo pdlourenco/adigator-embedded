@@ -9,13 +9,20 @@
 # conflict — #149). So:
 #   - pull_request  -> BUILD the PDF (catches LaTeX errors) and upload it as a
 #                      downloadable artifact for review; commit NOTHING.
-#   - push (master) -> BUILD and COMMIT the one tracked PDF, using PDF_PUSH_TOKEN
-#                      (a PAT / GitHub App token allowed to push to the protected
-#                      branch; the built-in GITHUB_TOKEN cannot). If the secret is
-#                      absent the commit step is skipped cleanly and the PDF is
-#                      simply refreshed on the next master build once it is set.
+#   - push (master) -> BUILD and COMMIT the one tracked PDF. The built-in
+#                      GITHUB_TOKEN cannot push to the protected branch, so the
+#                      job mints an installation token from a GitHub App
+#                      (client id below) using the PDF_APP_PRIVATE_KEY secret and
+#                      pushes with that. If the secret is absent the token/commit
+#                      steps skip cleanly and the PDF simply refreshes on the next
+#                      master build once it is configured.
 # Restricted to same-repo events: a fork PR's head branch is not in this repo and
 # its token is read-only, so it is skipped rather than failed.
+#
+# One-time setup for the master auto-commit:
+#   1. Install the GitHub App on this repo with Contents: write (metadata: read).
+#   2. Add its private key as the repo secret PDF_APP_PRIVATE_KEY.
+#   3. Add the App to master's branch-protection bypass list.
 name: User Guide PDF
 
 on:
@@ -35,16 +42,27 @@ jobs:
     if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     env:
-      PDF_PUSH_TOKEN: ${{ secrets.PDF_PUSH_TOKEN }}
+      # hoisted so the step `if:` can test it (secrets are not available in `if`)
+      APP_KEY: ${{ secrets.PDF_APP_PRIVATE_KEY }}
     steps:
+      # master only: mint a short-lived App installation token that can push to
+      # the protected branch. Skipped cleanly until PDF_APP_PRIVATE_KEY is set.
+      - name: Generate App token
+        id: app-token
+        if: ${{ github.event_name == 'push' && env.APP_KEY != '' }}
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: 'Iv23lioJAoBr9stfwapb'   # GitHub App client id (not a secret)
+          private-key: ${{ secrets.PDF_APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@v4
         with:
           # PR: the head branch. push: github.head_ref is empty, so fall back to
           # the pushed ref name (master).
           ref: ${{ github.head_ref || github.ref_name }}
-          # master commit needs a token that can push to the protected branch;
-          # PRs only build (no push) so the default token is fine.
-          token: ${{ secrets.PDF_PUSH_TOKEN || github.token }}
+          # master commit pushes with the App token (protected branch); PRs only
+          # build (no push) so the default token is fine.
+          token: ${{ steps.app-token.outputs.token || github.token }}
 
       # Full TeXLive in a container; latexmk runs the pdflatex/bibtex/pdflatex
       # passes (the same sequence as docs/userguide/makepdf.sh). The PDF is
@@ -71,11 +89,11 @@ jobs:
           path: docs/userguide/ADiGatorUserGuide.pdf
           if-no-files-found: error
 
-      # master: commit the regenerated PDF (the single tracked copy). Only runs
-      # when PDF_PUSH_TOKEN is configured; the checkout above used it, so the
-      # auto-commit can push to the protected branch. Skipped cleanly otherwise.
+      # master: commit the regenerated PDF (the single tracked copy) with the App
+      # token minted above. [skip ci] is load-bearing - App-token pushes DO
+      # re-trigger workflows (unlike GITHUB_TOKEN), so it prevents a push loop.
       - name: Commit regenerated PDF (master only)
-        if: ${{ github.event_name == 'push' && env.PDF_PUSH_TOKEN != '' }}
+        if: ${{ github.event_name == 'push' && steps.app-token.outputs.token != '' }}
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           file_pattern: docs/userguide/ADiGatorUserGuide.pdf
