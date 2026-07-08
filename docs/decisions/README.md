@@ -148,3 +148,7 @@ Contracts section (binding conventions), or for purely mechanical choices
   the guide `\input`s — tables only; the deterministic metrics (code-lines, ROM
   bytes) exact, and the host/Coder-sensitive figures (C-size, runtime) kept as a
   rounded, environment-stamped snapshot with ratios, refreshed deliberately.
+  **Extended 2026-07-08**: `\lstinputlisting` extends from generated fixtures to
+  any committed *source* file, including hand-written example code loaded directly
+  from `examples/…` (small single-function files whole; markers only for partial
+  excerpts) — `verbatim` kept only for ad-hoc sketches not backed by a file.
