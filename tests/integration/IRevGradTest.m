@@ -199,6 +199,43 @@ classdef IRevGradTest < matlab.unittest.TestCase
             tc.verifyEqual(g_ad(:), g_fd(:), 'AbsTol', 1e-6, 'RelTol', 1e-6, ...
                 'scalar-denominator division reverse gradient must match FD');
         end
+
+        function overwriteGuardIsFailFast(tc)
+            % M6 (#121): the overwrite guard must fire BEFORE the (expensive)
+            % forward generation, so an overwrite=0 collision costs nothing and
+            % leaves no forward intermediate (<UserFun>_ADiGatorRGrdFwd.*)
+            % behind. Pre-fix the guard ran only after the whole reverse file
+            % had been built, littering the forward .m/.mat on the error path.
+            writeFcn('rg_ff', {'function y = rg_ff(x)','y = sum(x.^2);','end'});
+            % a pre-existing output file the generator must refuse to clobber
+            writeFcn('rg_ff_RGrd', {'function y = rg_ff_RGrd(x)','y = x;','end'});
+            gx = adigatorCreateDerivInput([3 1],'x');
+            tc.verifyError(@() adigatorGenRevGradFile('rg_ff',{gx}, ...
+                adigatorOptions('overwrite',0,'echo',0)), ...
+                'adigator:revgrad:overwrite', ...
+                'an existing output with overwrite=0 must raise the overwrite error');
+            tc.verifyNotEqual(exist('rg_ff_ADiGatorRGrdFwd.m','file'), 2, ...
+                'the guard must fire before forward generation (no _RGrdFwd.m left)');
+            tc.verifyNotEqual(exist('rg_ff_ADiGatorRGrdFwd.mat','file'), 2, ...
+                'the guard must fire before forward generation (no _RGrdFwd.mat left)');
+        end
+
+        function forwardIntermediateIsCleanedUp(tc)
+            % M6 (#121): after a SUCCESSFUL generation the forward throwaway
+            % intermediate (<UserFun>_ADiGatorRGrdFwd.m/.mat) is removed on
+            % return (onCleanup), leaving only the reverse file.
+            writeFcn('rg_cl', {'function y = rg_cl(x)','y = sum(exp(x));','end'});
+            gx = adigatorCreateDerivInput([3 1],'x');
+            adigatorGenRevGradFile('rg_cl',{gx}, ...
+                adigatorOptions('overwrite',1,'echo',0));
+            rehash;
+            tc.verifyEqual(exist('rg_cl_RGrd.m','file'), 2, ...
+                'the reverse file must exist after a successful generation');
+            tc.verifyNotEqual(exist('rg_cl_ADiGatorRGrdFwd.m','file'), 2, ...
+                'the forward intermediate .m must be cleaned up after success');
+            tc.verifyNotEqual(exist('rg_cl_ADiGatorRGrdFwd.mat','file'), 2, ...
+                'the forward intermediate .mat must be cleaned up after success');
+        end
     end
 end
 

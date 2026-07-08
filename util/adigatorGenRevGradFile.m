@@ -118,11 +118,23 @@ if isfield(opts,'filename') && ~isempty(opts.filename)
 else
   RevName = [UserFun,'_RGrd'];
 end
+RevFile = fullfile(OutDir,[RevName,'.m']);
+RevMat  = fullfile(OutDir,[RevName,'.mat']);
+% fail fast: check the output guard BEFORE the (expensive) forward
+% generation, so an overwrite=0 collision costs nothing and leaves no
+% forward intermediate behind (matches adigatorGenJacFile/adigatorGenHesFile).
+if exist(RevFile,'file') && ~opts.overwrite
+  error('adigator:revgrad:overwrite','%s exists; set overwrite',RevFile);
+end
+% the forward file/.mat are throwaway intermediates: remove them on EVERY
+% exit (success or error) so a mid-generation failure does not litter (cf.
+% the deferred-cleanup pattern in adigatorGenDerFile_embedded).
+FwdFile = fullfile(OutDir,[FwdName,'.m']);
+FwdMat  = fullfile(OutDir,[FwdName,'.mat']);
+cleanupFwd = onCleanup(@() removeFwdIntermediates(FwdFile,FwdMat,FwdName));   % on return/error
 fwdopts = opts; fwdopts.overwrite = 1;
 adigator(UserFun,UserFunInputs,FwdName,fwdopts);
 rehash;
-FwdFile = fullfile(OutDir,[FwdName,'.m']);
-FwdMat  = fullfile(OutDir,[FwdName,'.mat']);
 FwdGator = struct();
 if exist(FwdMat,'file')
   fwddata = load(FwdMat);
@@ -185,12 +197,6 @@ end
 [revtxt,RevGator] = emitReverse(S,FwdGator,RevName,InNames,VodName,...
   OutName,vodsize,UserFun,seedname);
 
-RevFile = fullfile(OutDir,[RevName,'.m']);
-RevMat  = fullfile(OutDir,[RevName,'.mat']);
-if exist(RevFile,'file') && ~opts.overwrite
-  error('adigator:revgrad:overwrite','%s exists; set overwrite',RevFile);
-end
-
 % R16b (issue #73): when the adjoint references no constant index tables the
 % gradient is fully vectorized (ANALYSIS §3.5: reverse gradients carry ~0 static
 % data). Emit NO data dependency in that case - drop the global/load/Gator1Data
@@ -215,17 +221,21 @@ if ~hasData
 end
 
 fid = fopen(RevFile,'w');
+if fid == -1
+  error('adigator:revgrad:io','could not open ''%s'' for writing',RevFile);
+end
+fidCloser = onCleanup(@() fclose(fid));   % closes on an fprintf throw
 fprintf(fid,'%s\n',revtxt{:});
-fclose(fid);
+clear fidCloser;   % flush + close now (before the .mat save / rehash below)
 if hasData
   % .mat layout matches forward-generated files: <RevName>.Gator1Data
   revdata = struct();
   revdata.(RevName) = struct('Gator1Data',RevGator);
   save(RevMat,'-struct','revdata');
 end
-% the reverse file is self-contained: remove the forward intermediate
-delete(FwdFile); delete(FwdMat);
-clear('global',['ADiGator_',FwdName]);
+% the reverse file is self-contained: the forward intermediates are removed
+% by cleanupFwd on return; drop the reverse file's load-global so a fresh
+% generation reloads its .mat rather than a stale cached copy
 clear('global',['ADiGator_',RevName]);
 rehash;
 if opts.echo
@@ -236,6 +246,16 @@ output.FunctionFile = RevFile;
 output.MatFile      = '';
 if hasData; output.MatFile = RevMat; end
 output.Path         = OutDir;
+end
+
+%% ------------------------------------------------------------------- %%
+function removeFwdIntermediates(FwdFile,FwdMat,FwdName)
+% Delete the forward-mode throwaway intermediates and clear their load
+% global. exist-guarded so it is safe on the error path (the files may not
+% have been written yet) and never masks an in-flight error.
+if exist(FwdFile,'file'); delete(FwdFile); end
+if exist(FwdMat,'file');  delete(FwdMat);  end
+clear('global',['ADiGator_',FwdName]);
 end
 
 %% ------------------------------------------------------------------- %%

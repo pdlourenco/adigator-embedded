@@ -131,6 +131,11 @@ else
 end
 
 Jfid = fopen([JacFileName,'.m'],'w+');
+if Jfid == -1
+  error('adigator:genfiles4fsolve:io','could not open ''%s'' for writing',...
+    [JacFileName,'.m']);
+end
+JfidCloser = onCleanup(@() fclose(Jfid));   % closes on an emission throw
 fprintf(Jfid,['function [f, J] = ',JacFileName,'(',InVarStr,')\n']);
 
 % Print Function Header
@@ -174,7 +179,7 @@ end
 fprintf(Jfid,'end\n\n');
 
 % --------------------------- Close All Files --------------------------- %
-fclose(Jfid);
+clear JfidCloser   % flush + close now; the guard above also closes on a throw
 rehash
 
 % -------------------------- Create Function Calls ---------------------- %
@@ -184,4 +189,6 @@ else
   funcs.jacobian = str2func(JacFileName);
 end
 
-fprintf('\n<strong>adigatorGenFiles4Fsolve</strong> successfully generated Jac wrapper file\n\n');
+if ~isfield(opts,'echo') || opts.echo   % opts may be a partial setup.options struct
+  fprintf('\n<strong>adigatorGenFiles4Fsolve</strong> successfully generated Jac wrapper file\n\n');
+end

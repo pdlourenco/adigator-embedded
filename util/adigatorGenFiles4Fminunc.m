@@ -160,6 +160,11 @@ else
 end
 
 Hfid = fopen([HesFileName,'.m'],'w+');
+if Hfid == -1
+  error('adigator:genfiles4fminunc:io','could not open ''%s'' for writing',...
+    [HesFileName,'.m']);
+end
+HfidCloser = onCleanup(@() fclose(Hfid));   % closes on an emission throw
 if order == 2
   fprintf(Hfid,['function [f, g, h] = ',HesFileName,'(',InVarStr,')\n']);
 else
@@ -234,7 +239,7 @@ if order == 2
 end
 
 % --------------------------- Close All Files --------------------------- %
-fclose(Hfid);
+clear HfidCloser   % flush + close now; the guard above also closes on a throw
 rehash
 
 % -------------------------- Create Function Calls ---------------------- %
@@ -249,8 +254,10 @@ if order == 2
 else
   funcs.gradient = func;
 end
-if order == 1
-  fprintf('\n<strong>adigatorGenFiles4Fminunc</strong> successfully generated Grd wrapper file\n\n');
-else
-  fprintf('\n<strong>adigatorGenFiles4Fminunc</strong> successfully generated Hes wrapper file\n\n');  
+if ~isfield(opts,'echo') || opts.echo   % opts may be a partial setup.options struct
+  if order == 1
+    fprintf('\n<strong>adigatorGenFiles4Fminunc</strong> successfully generated Grd wrapper file\n\n');
+  else
+    fprintf('\n<strong>adigatorGenFiles4Fminunc</strong> successfully generated Hes wrapper file\n\n');
+  end
 end
