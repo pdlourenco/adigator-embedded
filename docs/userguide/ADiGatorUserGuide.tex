@@ -4,6 +4,19 @@
 \usepackage{array,subfig,verbatim}
 \usepackage{longtable}
 \usepackage[T1]{fontenc}
+% lmodern: scalable Latin Modern (visually ~identical to the default Computer
+% Modern) so microtype font expansion works (expansion needs scalable fonts).
+\usepackage{lmodern}
+% microtype: character protrusion + font expansion micro-adjust glyph widths to
+% clear the small prose overflows from long \texttt tokens (function names,
+% option strings) without visible loosening. No shell-escape; shifts pagination
+% slightly, which is fine (the PDF is a build artifact rebuilt by CI).
+\usepackage{microtype}
+% emergency stretch absorbs the small prose overflows (long \texttt tokens) by
+% stretching interword glue only on lines that would otherwise be overfull -
+% cleaner than a global \sloppy. Does not help glue-free lines (table
+% signatures, display equations), which are fixed structurally instead.
+\setlength{\emergencystretch}{3em}
 \usepackage{framed,fancybox}
 \usepackage{multicol}
 \usepackage{amsmath,amsfonts,latexsym,graphics,graphicx,epsfig,enumerate,color,colortbl,hhline,psfrag}
@@ -137,7 +150,7 @@ Prior to calling the main transformation routine, \texttt{adigator}, the user mu
 \begin{itemize}
 
 
-\item {\bf Derivative Inputs}: This refers to any input arrays which are to have derivatives with respect to the VOD - the user must use the \texttt{adigatorCreateDerivInput} command to generate these inputs. The syntax of the \texttt{adigatorCreateDerivInput} is as follows:\\
+\item {\bf Derivative Inputs}: This refers to any input arrays which are to have derivatives with respect to the VOD; these inputs are generated with the \texttt{adigatorCreateDerivInput} command, whose syntax is as follows:\\
 \centerline{\texttt{x = adigatorCreateDerivInput(xsize,derivinfo)}}
 where
 \begin{itemize}
@@ -154,7 +167,7 @@ where
 Please see the \hyperlink{Appendix}{Appendix} for further clarification on the term ``unrolled Jacobian''.
 \end{enumerate}
 \end{itemize}
-\item {\bf Unknown Auxiliary Inputs}: This refers to any input arrays to the user function which do not contain derivatives with respect to the VOD, but are not a fixed, known, numeric value. That is, they may change numeric values on any given call to the user function file. - the user must use the \texttt{adigatorCreateAuxInput} command to generate these inputs. The syntax for this is as follows:\\
+\item {\bf Unknown Auxiliary Inputs}: This refers to any input arrays to the user function which do not contain derivatives with respect to the VOD, but are not a fixed, known, numeric value. That is, they may change numeric values on any given call to the user function file. These inputs are generated with the \texttt{adigatorCreateAuxInput} command, whose syntax is as follows:\\
 \centerline{\texttt{x = adigatorCreateAuxInput(xsize)}},
 where \texttt{xsize} = $[m,n]$ is the size of the input array. \\
 NOTE: An alternative to defining Unknown Auxiliary Inputs is discussed in Section \ref{Sec:Options} by using the \texttt{auxdata} option.
@@ -249,7 +262,7 @@ The \emph{ADiGator} package currently has different options which may given to t
 \centerline{\texttt{options = adigatorOptions(field1,value1,field2,value2,...)}}
 A list of all options, values, and descriptions is given in Table \ref{Tab:Options}.
 
-\begin{longtable}{|c|c|p{12cm}|}
+\begin{longtable}{|c|c|p{9.9cm}|}
 \caption{Options for ADiGator \label{Tab:Options}}\\
 \hline
 \multicolumn{1}{|c|}{Option Field} & Value & \multicolumn{1}{c|}{Description}  \\ \hline
@@ -314,7 +327,7 @@ All other inputs must be fixed.
 {\bf Output Info} & \begin{tabular}{l}
 \texttt{output.FunctionFile} - same as \texttt{UserFunName}, ex: \texttt{`myfun'}\\
 \texttt{output.JacobianFile} - string name of generated Jacobian file, ex: \texttt{`myfun\_Jac'}\\
-\texttt{output.JacobianStructure} - sparse ones and zeros defining Jacobian sparsity pattern
+\texttt{output.JacobianStructure} - sparse ones and zeros defining the\\ Jacobian sparsity pattern
 \end{tabular}\\ \hline
 {\bf Examples} & \begin{tabular}{l}
 \texttt{examples/jacobians/arrowhead/}\\
@@ -453,7 +466,7 @@ The routines above accumulate derivatives in \emph{forward} mode, whose cost sca
 
 Reverse mode is most useful for \emph{dense} objective gradients --- sums, log-sum-exp, least-squares residual norms --- where the forward Jacobian would be a single full row and the adjoint gradient is one sweep; it also underlies the matrix-free transposed-Jacobian-vector product used by first-order embedded solvers. Both routines operate on the forward derivative file that \texttt{adigator} prints (a static tape of fixed-size statements with constant index maps) and emit a self-contained adjoint file, so the user code must first differentiate cleanly in forward mode with its loops \emph{unrolled} (\texttt{adigatorOptions('unroll',1)}) and its active operations drawn from the supported set: elementary arithmetic, \texttt{mtimes}, \texttt{sum}, \texttt{reshape}, \texttt{transpose}, constant-index gathers/scatters/concatenations, and the common unary math functions (\texttt{sin}, \texttt{cos}, \texttt{exp}, \texttt{log}, \texttt{sqrt}, \texttt{tanh}, \dots). Statements off the path from the variable of differentiation to the output pass through untouched; anything unsupported \emph{on} that path raises a clear generation-time error naming the offending statement.
 
-\subsection{adigatorGenRevGradFile}
+\subsubsection{adigatorGenRevGradFile}
 \underline{When to use}: You wish to compute the gradient of a \emph{scalar} cost with respect to one of its inputs at a cost independent of the number of variables (reverse/adjoint mode).\\\\
 \underline{User Function Input Restrictions}: Exactly one input is the variable of differentiation (created via \texttt{adigatorCreateDerivInput}); the file must have a single \emph{scalar} output. Loops must be unrolled (\texttt{adigatorOptions('unroll',1)}); the active operation set is as described above.\\\\
 \underline{Generated Reverse-Gradient File Info}: The wrapper file is named with the user's function name and \texttt{\_RGrd} appended. It takes the same (plain numeric) inputs as the original file and returns \texttt{[Grd, Fun]} --- the column gradient first, then the scalar value --- computed by one forward and one reverse sweep.\\\\
@@ -489,7 +502,7 @@ globals. The excerpt below is loaded directly from the committed golden fixture
   linerange={BEGIN-rgrd-core}-{END-rgrd-core}]%
   {../../tests/fixtures/guide/lse_cost_RGrd.m}
 
-\subsection{adigatorGenJtVFile}
+\subsubsection{adigatorGenJtVFile}
 \underline{When to use}: You wish to compute the transposed-Jacobian-vector product $\bfJ^\top\bfv$ of a vector function for a \emph{runtime} vector \texttt{v}, without ever forming the Jacobian --- the quantity gradient-based embedded solvers consume directly.\\\\
 \underline{User Function Input Restrictions}: As for \texttt{adigatorGenRevGradFile} (one derivative input; loops unrolled; the supported active operation set), except the user function may have a \emph{vector} output. \texttt{v} is a runtime input the size of that output and does not participate in generation.\\\\
 \underline{Generated JtV File Info}: The wrapper file is named with the user's function name and \texttt{\_JtV} appended. It takes the same inputs as the original file plus the runtime vector \texttt{v}, and returns \texttt{[Jtv, Fun]}, where \texttt{Jtv = J(x).'*v(:)}, in one forward plus one adjoint sweep (cost independent of \texttt{numel(x)}). A single generated file serves every \texttt{v}.\\\\
@@ -520,9 +533,9 @@ The features described in this section are specific to the embedded fork of \emp
 \underline{Generated File Info}: For \texttt{DerType} \texttt{'jacobian'} the wrapper is named with \texttt{\_Jac} appended; for \texttt{'gradient'}, with \texttt{\_Grd}; for \texttt{'hessian'}, with \texttt{\_Hes} (returning the Hessian, gradient, and function value). The wrapper takes the same inputs as the original file. The number and nature of the additional generated files depends on \texttt{EMBED\_MODE}: classic \texttt{'c'} writes a wrapper, a \texttt{.mat}, and the derivative file; coderload \texttt{'l'} writes a wrapper (reading the \texttt{.mat} through \texttt{coder.load}) and the \texttt{.mat}; inline \texttt{'i'} writes a single self-contained file with no \texttt{.mat}. All three modes return numerically identical results.\\\\
 \begin{tabular}{l|l}
 {\bf Usage} & \begin{tabular}{l}
- \texttt{info = adigatorGenDerFile\_embedded(DerType,UserFunName,UserFunInputs,options)}\end{tabular} \\ \hline
+ \texttt{info = adigatorGenDerFile\_embedded(DerType,}\\ \texttt{\ \ \ \ \ \ \ UserFunName,UserFunInputs,options)}\end{tabular} \\ \hline
 {\bf Input Info} & \begin{tabular}{l}
-\texttt{DerType} - \texttt{'jacobian'}, \texttt{'gradient'}, \texttt{'gradient-reverse'} (reverse-mode adjoint gradient, Section \ref{SubSec:OutputForms}), or \texttt{'hessian'}\\
+\texttt{DerType} - \texttt{'jacobian'}, \texttt{'gradient'}, \texttt{'gradient-reverse'}\\ \ \ \ (reverse-mode adjoint gradient, Section \ref{SubSec:OutputForms}), or \texttt{'hessian'}\\
 \texttt{UserFunName} - string name of file to be differentiated\\
 \texttt{UserFunInputs} - cell array of inputs to user's function; the variable of\\ differentiation created via \texttt{adigatorCreateDerivInput}, auxiliary inputs via\\ \texttt{adigatorCreateAuxInput}\\
 \texttt{options} - (optional) options structure; see \texttt{EMBED\_MODE}, \texttt{PATH},\\ \texttt{DER\_LEVELS}, \texttt{SLIM\_EMBED}, \texttt{DER\_OUTPUT} in Table \ref{Tab:Options}
@@ -726,7 +739,8 @@ In order to evaluate this function, \texttt{myderiv2}, we note that the input is
 Now, assuming the output has second order derivatives, the output \texttt{y} would have the following fields: \texttt{.f, .dx, .dx\_size, .dx\_location, .dxdx, .dxdx\_size, .dxdx\_location} corresponding to the function value, first derivative value, first derivative array size, first derivative mapping indices, second derivative value, second derivative array size, and second derivative mapping indices, respectively. Assuming the output \texttt{y.f} is a scalar, we could then build a sparse Gradient and Hessian using the commands:
 \begin{verbatim}
     Grad = sparse(ones(length(y.dx),1),y.dx_location,y.dx,1,y.dx_size);
-    Hes = sparse(y.dxdx_location(:,1),y.dxdx_location(:,2),y.dxdx,y.dxdx_size(1),y.dxdx_size(2));
+    Hes = sparse(y.dxdx_location(:,1),y.dxdx_location(:,2),y.dxdx,...
+                 y.dxdx_size(1),y.dxdx_size(2));
 \end{verbatim}
 This process may be repeated as many times as desired.
 
@@ -1125,7 +1139,7 @@ and
 \bigtriangledown _{t_N}^2 L  = 0.
 \end{equation}
 
-The code for this example may be found in the directory \texttt{examples/optimization/vectorized/minimumclimb}. In this directory there are four files which will solve the problem on three different meshes ($K = 10$, $K = 20$, and $K = 40$), where the initial guess for the second two iterations is calculated from the solution of the previous mesh. The files \texttt{main\_1stderivs\_nonvect} and \texttt{main\_2ndderivs\_nonvect} supply derivatives without using the vectorizated mode, while the files \texttt{main\_1stderivs\_vect} and \texttt{main\_2ndderivs\_vect} supply derivatives using the vectorizated mode. Furthermore, the function which computes the Constraint Jacobian (and calls the first dynamics derivative file) is given in \texttt{conswrap.m} and the function which computes the Lagrangian Hessian (and calls the second dynamics derivative file) is given in \texttt{laghesswrap.m}.
+The code for this example may be found in the directory \texttt{examples/optimization/vectorized/minimumclimb}. In this directory there are four files which will solve the problem on three different meshes ($K = 10$, $K = 20$, and $K = 40$), where the initial guess for the second two iterations is calculated from the solution of the previous mesh. The files \texttt{main\_1stderivs\_nonvect} and \texttt{main\_2ndderivs\_nonvect} supply derivatives without using the vectorized mode, while the files \texttt{main\_1stderivs\_vect} and \texttt{main\_2ndderivs\_vect} supply derivatives using the vectorized mode. Furthermore, the function which computes the Constraint Jacobian (and calls the first dynamics derivative file) is given in \texttt{conswrap.m} and the function which computes the Lagrangian Hessian (and calls the second dynamics derivative file) is given in \texttt{laghesswrap.m}.
 
 Here we see that, since we are only differentiating the dynamics file, that, when we use the vectorized mode, we must only create the derivative files a single time and they may be used to solve on as many different meshes as desired. If using the non-vectorized mode, however, the derivative files must be generated each time the value of $K$ is changed. As far as performance goes, the user should note a slight increase in performance using the vectorized mode at the first derivative (the vectorized file should solve in 90-95\% of the time it takes the non-vectorized). At the second derivative level, though, we see a major increase in performance as the vectorized file should solve in 5-10\% of the time it takes the non-vectorized.
 
