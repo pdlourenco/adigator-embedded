@@ -26,6 +26,8 @@
 name: User Guide PDF
 
 on:
+  workflow_dispatch:   # manual "Run workflow" on a branch (default master):
+                       # rebuild + commit the PDF like a master push.
   push:
     branches: [master]
     paths:
@@ -39,7 +41,8 @@ permissions:
 
 jobs:
   build-pdf:
-    if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+    # run on master push, manual dispatch, and same-repo PRs; skip fork PRs
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     env:
       # hoisted so the step `if:` can test it (secrets are not available in `if`)
@@ -49,7 +52,7 @@ jobs:
       # the protected branch. Skipped cleanly until PDF_APP_PRIVATE_KEY is set.
       - name: Generate App token
         id: app-token
-        if: ${{ github.event_name == 'push' && env.APP_KEY != '' }}
+        if: ${{ github.event_name != 'pull_request' && env.APP_KEY != '' }}
         uses: actions/create-github-app-token@v1
         with:
           app-id: 'Iv23lioJAoBr9stfwapb'   # GitHub App client id (not a secret)
@@ -92,8 +95,8 @@ jobs:
       # master: commit the regenerated PDF (the single tracked copy) with the App
       # token minted above. [skip ci] is load-bearing - App-token pushes DO
       # re-trigger workflows (unlike GITHUB_TOKEN), so it prevents a push loop.
-      - name: Commit regenerated PDF (master only)
-        if: ${{ github.event_name == 'push' && steps.app-token.outputs.token != '' }}
+      - name: Commit regenerated PDF (master push / manual dispatch)
+        if: ${{ github.event_name != 'pull_request' && steps.app-token.outputs.token != '' }}
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           file_pattern: docs/userguide/ADiGatorUserGuide.pdf
