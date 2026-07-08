@@ -150,7 +150,7 @@ Prior to calling the main transformation routine, \texttt{adigator}, the user mu
 \begin{itemize}
 
 
-\item {\bf Derivative Inputs}: This refers to any input arrays which are to have derivatives with respect to the VOD - the user must use the \texttt{adigatorCreateDerivInput} command to generate these inputs. The syntax of the \texttt{adigatorCreateDerivInput} is as follows:\\
+\item {\bf Derivative Inputs}: This refers to any input arrays which are to have derivatives with respect to the VOD; these inputs are generated with the \texttt{adigatorCreateDerivInput} command, whose syntax is as follows:\\
 \centerline{\texttt{x = adigatorCreateDerivInput(xsize,derivinfo)}}
 where
 \begin{itemize}
@@ -167,7 +167,7 @@ where
 Please see the \hyperlink{Appendix}{Appendix} for further clarification on the term ``unrolled Jacobian''.
 \end{enumerate}
 \end{itemize}
-\item {\bf Unknown Auxiliary Inputs}: This refers to any input arrays to the user function which do not contain derivatives with respect to the VOD, but are not a fixed, known, numeric value. That is, they may change numeric values on any given call to the user function file. - the user must use the \texttt{adigatorCreateAuxInput} command to generate these inputs. The syntax for this is as follows:\\
+\item {\bf Unknown Auxiliary Inputs}: This refers to any input arrays to the user function which do not contain derivatives with respect to the VOD, but are not a fixed, known, numeric value. That is, they may change numeric values on any given call to the user function file. These inputs are generated with the \texttt{adigatorCreateAuxInput} command, whose syntax is as follows:\\
 \centerline{\texttt{x = adigatorCreateAuxInput(xsize)}},
 where \texttt{xsize} = $[m,n]$ is the size of the input array. \\
 NOTE: An alternative to defining Unknown Auxiliary Inputs is discussed in Section \ref{Sec:Options} by using the \texttt{auxdata} option.
@@ -1139,7 +1139,7 @@ and
 \bigtriangledown _{t_N}^2 L  = 0.
 \end{equation}
 
-The code for this example may be found in the directory \texttt{examples/optimization/vectorized/minimumclimb}. In this directory there are four files which will solve the problem on three different meshes ($K = 10$, $K = 20$, and $K = 40$), where the initial guess for the second two iterations is calculated from the solution of the previous mesh. The files \texttt{main\_1stderivs\_nonvect} and \texttt{main\_2ndderivs\_nonvect} supply derivatives without using the vectorizated mode, while the files \texttt{main\_1stderivs\_vect} and \texttt{main\_2ndderivs\_vect} supply derivatives using the vectorizated mode. Furthermore, the function which computes the Constraint Jacobian (and calls the first dynamics derivative file) is given in \texttt{conswrap.m} and the function which computes the Lagrangian Hessian (and calls the second dynamics derivative file) is given in \texttt{laghesswrap.m}.
+The code for this example may be found in the directory \texttt{examples/optimization/vectorized/minimumclimb}. In this directory there are four files which will solve the problem on three different meshes ($K = 10$, $K = 20$, and $K = 40$), where the initial guess for the second two iterations is calculated from the solution of the previous mesh. The files \texttt{main\_1stderivs\_nonvect} and \texttt{main\_2ndderivs\_nonvect} supply derivatives without using the vectorized mode, while the files \texttt{main\_1stderivs\_vect} and \texttt{main\_2ndderivs\_vect} supply derivatives using the vectorized mode. Furthermore, the function which computes the Constraint Jacobian (and calls the first dynamics derivative file) is given in \texttt{conswrap.m} and the function which computes the Lagrangian Hessian (and calls the second dynamics derivative file) is given in \texttt{laghesswrap.m}.
 
 Here we see that, since we are only differentiating the dynamics file, that, when we use the vectorized mode, we must only create the derivative files a single time and they may be used to solve on as many different meshes as desired. If using the non-vectorized mode, however, the derivative files must be generated each time the value of $K$ is changed. As far as performance goes, the user should note a slight increase in performance using the vectorized mode at the first derivative (the vectorized file should solve in 90-95\% of the time it takes the non-vectorized). At the second derivative level, though, we see a major increase in performance as the vectorized file should solve in 5-10\% of the time it takes the non-vectorized.
 
