@@ -1,6 +1,16 @@
 function funcs = adigatorGenFiles4Fminunc(setup)
 % funcs = adigatorGenFiles4Fminunc(setup)
 %
+% *** INHERITED-UPSTREAM WRAPPER -- NOT AT EMBEDDED FEATURE PARITY (v1.5) ***
+% Carried over from stock ADiGator. Emits a HOST-ONLY derivative file (the
+% classic runtime-load/global mechanism) and does NOT support this fork's
+% embedded features: EMBED_MODE, code generation (MATLAB/Embedded Coder),
+% PATH, nonzeros output, or reverse mode. Not maintained or tested to the
+% depth of the core generators (adigator, adigatorGenJacFile,
+% adigatorGenHesFile, adigatorGenDerFile_embedded) -- prefer those for
+% embeddable derivatives. Retained for upstream compatibility. See
+% ADR-0026 and issue #156.
+%
 % ADiGator Gradient or Hessian File Generation Function: this function is
 % used when you wish to generate derivative files for use in Matlab's
 % optimization toolbox. The user must specify their objective function.
