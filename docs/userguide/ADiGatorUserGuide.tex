@@ -466,7 +466,7 @@ The routines above accumulate derivatives in \emph{forward} mode, whose cost sca
 
 Reverse mode is most useful for \emph{dense} objective gradients --- sums, log-sum-exp, least-squares residual norms --- where the forward Jacobian would be a single full row and the adjoint gradient is one sweep; it also underlies the matrix-free transposed-Jacobian-vector product used by first-order embedded solvers. Both routines operate on the forward derivative file that \texttt{adigator} prints (a static tape of fixed-size statements with constant index maps) and emit a self-contained adjoint file, so the user code must first differentiate cleanly in forward mode with its loops \emph{unrolled} (\texttt{adigatorOptions('unroll',1)}) and its active operations drawn from the supported set: elementary arithmetic, \texttt{mtimes}, \texttt{sum}, \texttt{reshape}, \texttt{transpose}, constant-index gathers/scatters/concatenations, and the common unary math functions (\texttt{sin}, \texttt{cos}, \texttt{exp}, \texttt{log}, \texttt{sqrt}, \texttt{tanh}, \dots). Statements off the path from the variable of differentiation to the output pass through untouched; anything unsupported \emph{on} that path raises a clear generation-time error naming the offending statement.
 
-\subsection{adigatorGenRevGradFile}
+\subsubsection{adigatorGenRevGradFile}
 \underline{When to use}: You wish to compute the gradient of a \emph{scalar} cost with respect to one of its inputs at a cost independent of the number of variables (reverse/adjoint mode).\\\\
 \underline{User Function Input Restrictions}: Exactly one input is the variable of differentiation (created via \texttt{adigatorCreateDerivInput}); the file must have a single \emph{scalar} output. Loops must be unrolled (\texttt{adigatorOptions('unroll',1)}); the active operation set is as described above.\\\\
 \underline{Generated Reverse-Gradient File Info}: The wrapper file is named with the user's function name and \texttt{\_RGrd} appended. It takes the same (plain numeric) inputs as the original file and returns \texttt{[Grd, Fun]} --- the column gradient first, then the scalar value --- computed by one forward and one reverse sweep.\\\\
@@ -502,7 +502,7 @@ globals. The excerpt below is loaded directly from the committed golden fixture
   linerange={BEGIN-rgrd-core}-{END-rgrd-core}]%
   {../../tests/fixtures/guide/lse_cost_RGrd.m}
 
-\subsection{adigatorGenJtVFile}
+\subsubsection{adigatorGenJtVFile}
 \underline{When to use}: You wish to compute the transposed-Jacobian-vector product $\bfJ^\top\bfv$ of a vector function for a \emph{runtime} vector \texttt{v}, without ever forming the Jacobian --- the quantity gradient-based embedded solvers consume directly.\\\\
 \underline{User Function Input Restrictions}: As for \texttt{adigatorGenRevGradFile} (one derivative input; loops unrolled; the supported active operation set), except the user function may have a \emph{vector} output. \texttt{v} is a runtime input the size of that output and does not participate in generation.\\\\
 \underline{Generated JtV File Info}: The wrapper file is named with the user's function name and \texttt{\_JtV} appended. It takes the same inputs as the original file plus the runtime vector \texttt{v}, and returns \texttt{[Jtv, Fun]}, where \texttt{Jtv = J(x).'*v(:)}, in one forward plus one adjoint sweep (cost independent of \texttt{numel(x)}). A single generated file serves every \texttt{v}.\\\\
