@@ -199,6 +199,11 @@ adiout = adiout{1};
 path(original_path);
 
 fid = fopen(ADiGator_GeneratedFiles.Jac,'w+');
+if fid == -1
+  error('adigator:genjac:io','could not open ''%s'' for writing',...
+    ADiGator_GeneratedFiles.Jac);
+end
+fidCloser = onCleanup(@() fclose(fid));   % closes on an emission throw
 
 InputStrs = FunctionInfo.Input.Names.';
 xstr = InputStrs{derflag};
@@ -417,7 +422,7 @@ if wantFun % roadmap R7a (issue #21): emit Fun only when level 0 is requested
   fprintf(fid,['Fun = ',ystr,'.f;\n']);
 end
 fprintf(fid,'end');
-fclose(fid);
+clear fidCloser;   % flush + close now; onCleanup still closes on any throw above
 rehash
 
 %% --------------------- OUTPUT PROCESSING ------------------------------%%
@@ -452,4 +457,6 @@ output.JacobianStructure = sparse(strrows,strcols,...
 % should use JacobianLocs
 output.JacobianLocs = [strrows(:) strcols(:)];
 
-fprintf(['\n<strong>adigatorGenJacFile</strong> successfully generated Jacobian wrapper file: ''',JacFileName,''';\n\n']);
+if opts.echo
+  fprintf(['\n<strong>adigatorGenJacFile</strong> successfully generated Jacobian wrapper file: ''',JacFileName,''';\n\n']);
+end

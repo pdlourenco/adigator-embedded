@@ -116,6 +116,27 @@ classdef IGenFiles4Test < matlab.unittest.TestCase
             tc.verifyFalse(isfield(funcs,'congrd'), ...
                 'the misspelled funcs.congrd must be gone (M3)');
         end
+
+        function echoOptionGatesSuccessBanner(tc)
+            % M6 (#121): the success banner must honor the echo option (it was
+            % printed unconditionally). echo=0 -> silent; echo unset (the
+            % default, no options field) -> the banner still prints.
+            n = 4;
+            writeRaw('m6q_obj', {'function y = m6q_obj(x)', 'y = sum(x.^2);', 'end'});
+            setupQuiet = struct('order',1,'numvar',n,'objective','m6q_obj', ...
+                'options',adigatorOptions('echo',0)); %#ok<NASGU> read by evalc
+            outQuiet = evalc('adigatorGenFiles4Fminunc(setupQuiet);');
+            rehash;
+            tc.verifyEmpty(regexp(outQuiet,'successfully generated','once'), ...
+                'echo=0 must suppress the success banner (M6)');
+
+            writeRaw('m6l_obj', {'function y = m6l_obj(x)', 'y = sum(x.^2);', 'end'});
+            setupLoud = struct('order',1,'numvar',n,'objective','m6l_obj'); %#ok<NASGU> read by evalc
+            outLoud = evalc('adigatorGenFiles4Fminunc(setupLoud);');
+            rehash;
+            tc.verifyNotEmpty(regexp(outLoud,'successfully generated','once'), ...
+                'the default (echo unset) must still print the banner (M6)');
+        end
     end
 
     methods

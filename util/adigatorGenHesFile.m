@@ -233,7 +233,18 @@ adiout2 = adiout2{1};
 path(original_path);
 
 Gfid = fopen(ADiGator_GeneratedFiles.Grd,'w+');
+if Gfid == -1
+  error('adigator:genhes:io','could not open ''%s'' for writing',...
+    ADiGator_GeneratedFiles.Grd);
+end
+GfidCloser = onCleanup(@() fclose(Gfid));   % closes on an emission throw
 Hfid = fopen(ADiGator_GeneratedFiles.Hes,'w+');
+if Hfid == -1
+  % GfidCloser closes the already-open Grd handle as this error unwinds
+  error('adigator:genhes:io','could not open ''%s'' for writing',...
+    ADiGator_GeneratedFiles.Hes);
+end
+HfidCloser = onCleanup(@() fclose(Hfid));   % closes on an emission throw
 
 InputStrs = FunctionInfo.Input.Names.';
 xstr = InputStrs{derflag};
@@ -599,9 +610,10 @@ for fid = [Gfid,Hfid]
   fprintf(fid,'end');
 end
 % v1.5 (B13 fix): close both wrapper files, not just the loop's last fid;
-% the embedded pipeline reads these files back immediately.
-fclose(Gfid);
-fclose(Hfid);
+% the embedded pipeline reads these files back immediately. Clearing the
+% cleanup objects flushes+closes both here; the guards above also close on an
+% emission throw.
+clear GfidCloser HfidCloser
 rehash
 %% --------------------- OUTPUT PROCESSING ------------------------------%%
 output.FunctionFile = UserFunName;
@@ -637,6 +649,8 @@ else
   output.HessianLocs = [HesRow(:) HesCol(:)];
 end
 
-fprintf(['\n<strong>adigatorGenHesFile</strong> successfully generated Hessian wrapper file: ''',HesFileName,''';\n\n']);
+if opts.echo
+  fprintf(['\n<strong>adigatorGenHesFile</strong> successfully generated Hessian wrapper file: ''',HesFileName,''';\n\n']);
+end
 
 end

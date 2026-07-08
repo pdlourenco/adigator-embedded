@@ -211,14 +211,26 @@ else
   dInVarStr = 'gx';
 end
 Gfid = fopen([GrdFileName,'.m'],'w+');
+if Gfid == -1
+  error('adigator:genfiles4fmincon:io','could not open ''%s'' for writing',[GrdFileName,'.m']);
+end
+GfidCloser = onCleanup(@() fclose(Gfid));   % closes on an emission throw
 fprintf(Gfid,['function [f, gradf] = ',GrdFileName,'(',InVarStr,')\n']);
 
 if order == 2
   Hfid = fopen([HesFileName,'.m'],'w+');
+  if Hfid == -1   % GfidCloser closes Gfid as this unwinds
+    error('adigator:genfiles4fmincon:io','could not open ''%s'' for writing',[HesFileName,'.m']);
+  end
+  HfidCloser = onCleanup(@() fclose(Hfid));   % closes on an emission throw
   fprintf(Hfid,['function Hes = ',HesFileName,'(',InVarStr,',lambda)\n']);
 end
 if consflag
   Jfid = fopen([JacFileName,'.m'],'w+');
+  if Jfid == -1   % the Gfid/Hfid closers fire as this unwinds
+    error('adigator:genfiles4fmincon:io','could not open ''%s'' for writing',[JacFileName,'.m']);
+  end
+  JfidCloser = onCleanup(@() fclose(Jfid));   % closes on an emission throw
   fprintf(Jfid,['function [c, ceq, gradc, gradceq] = ',JacFileName,'(',InVarStr,')\n']);
   if order == 2
     allFid = [Gfid Jfid Hfid];
@@ -478,10 +490,11 @@ if order == 2
 end
 
 % --------------------------- Close All Files --------------------------- %
-for fid = allFid
-  fclose(fid);
-  rehash
-end
+% clearing the cleanup objects flushes+closes every open handle here; the
+% guards also close them on an emission throw above (clear ignores the
+% conditionally-unset HfidCloser/JfidCloser).
+clear GfidCloser HfidCloser JfidCloser
+rehash
 
 % -------------------------- Create Function Calls ---------------------- %
 if auxflag
@@ -502,7 +515,9 @@ else
   end
 end
 
-fprintf('\n<strong>adigatorGenFiles4Fmincon</strong> successfully generated fmincon wrapper files\n\n');
+if ~isfield(opts,'echo') || opts.echo   % opts may be a partial setup.options struct
+  fprintf('\n<strong>adigatorGenFiles4Fmincon</strong> successfully generated fmincon wrapper files\n\n');
+end
 end
 function setGlobalHesData(flag,ConD2FileName,HesData1,HesData2) %#ok<INUSD>
 eval(['global ADiGator_',ConD2FileName]);
