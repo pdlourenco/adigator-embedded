@@ -7,6 +7,11 @@ Accepted — 2026-07-07. **Extended 2026-07-07** (see
 adds a second mechanism for *measured/computed* bench comparison content — the
 bench producer emits a committed, ready-to-`\input` `.tex` fragment — keyed by
 artifact class alongside the original `\lstinputlisting`-on-source-fixture path.
+**Extended 2026-07-08** (see
+[Extension](#extension--2026-07-08-hand-written-example-source-via-lstinputlisting)):
+`\lstinputlisting` is extended from generated fixtures to any committed source
+file, including hand-written example code loaded directly from `examples/…`;
+`verbatim` is kept only for ad-hoc sketches not backed by a file.
 
 ## Context
 
@@ -191,4 +196,42 @@ stays an implementation detail for the wiring PR.
 **Revisit when:** the same B2-style pressure the original decision names — if a
 needed table has no bench producer, a curated committed fragment (with a test
 asserting it against the real bench output) is the fallback.
+
+## Extension — 2026-07-08: hand-written example source via `\lstinputlisting`
+
+The original decision reserved `\lstinputlisting` for **generated** output and
+kept **hand-written user code** in `verbatim`, reasoning that user code has no
+fixture and no regeneration to drift against. Issue #139 item 3 (document every
+example with a code snippet) exposes the gap: the example sections would paste
+the example *input* functions (`lse_cost.m`, `lb_alloc.m`, `tvmap.m`,
+`structobj.m`, …) into `verbatim` — a second hand-maintained copy of files that
+already live, committed, under `examples/`. That is the same silent rot this ADR
+exists to prevent, only for committed example source rather than generated
+output: edit the example, and the guide's paste drifts.
+
+**Extended decision.** A guide code sample that reproduces a **committed source
+file** — generated *or* hand-written example code — is **loaded** from that file
+with `\lstinputlisting`, never pasted. Small single-function example files are
+loaded **whole** (the file *is* the snippet); a partial excerpt uses the same
+named `% BEGIN-<tag>` / `% END-<tag>` marker range as the generated-fixture path.
+`verbatim` is retained only for **ad-hoc illustrative code not backed by a
+committed file** (e.g. a short usage sketch composed for the prose).
+
+- *Generated derivative code* → marked golden fixture under `tests/fixtures/…` +
+  `\lstinputlisting` (original decision).
+- *Committed example source* → the real file under `examples/…` +
+  `\lstinputlisting` (this extension) — no fixture copy; the example *is* the
+  single source of truth.
+- *Ad-hoc sketch with no file* → `verbatim` (unchanged).
+
+**Consequences.** The guide build reads files under `examples/…` (present at
+build time — they are tracked), so a renamed or removed example breaks the build
+(caught in CI), not a silently stale paste. No new producer or fixture is needed:
+an example loaded whole carries no marker, and no drift test beyond the guide
+build itself, because there is no generation step for it to fall out of sync
+with. Markers, where used for a partial excerpt, are added to the example file by
+hand (its author owns them) and are inert MATLAB comments.
+
+**Revisit when:** an example grows past a single small function such that loading
+it whole is too much — switch that one to a marker range.
 
