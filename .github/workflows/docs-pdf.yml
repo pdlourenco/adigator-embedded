@@ -1,18 +1,28 @@
-# Build the LaTeX user guide and commit the regenerated PDF.
+# Build the LaTeX user guide; commit the regenerated PDF only on master.
 #
 # Separate from ci.yml and NOT a required gate. Path-filtered to the guide
 # sources (docs/userguide/) so it only runs when those change
-# (docs/CI_PLAN.md §3.1). To avoid
-# pushing to the protected `master` branch (which would need a GitHub App /
-# PAT), it runs on pull requests and commits the rebuilt PDF back to the PR
-# branch, so the PDF merges into master through the normal PR flow using only
-# the built-in GITHUB_TOKEN. The job is restricted to same-repo PRs: a fork
-# PR's head branch is not in this repo (so the head_ref checkout cannot run)
-# and its GITHUB_TOKEN is read-only (so the commit could not push) - it is
-# skipped cleanly rather than failing.
+# (docs/CI_PLAN.md §3.1).
+#
+# The committed PDF is a non-reproducible binary, so committing it to every PR
+# branch made parallel/stacked guide PRs collide on it (an unmergeable binary
+# conflict — #149). So:
+#   - pull_request  -> BUILD the PDF (catches LaTeX errors) and upload it as a
+#                      downloadable artifact for review; commit NOTHING.
+#   - push (master) -> BUILD and COMMIT the one tracked PDF, using PDF_PUSH_TOKEN
+#                      (a PAT / GitHub App token allowed to push to the protected
+#                      branch; the built-in GITHUB_TOKEN cannot). If the secret is
+#                      absent the commit step is skipped cleanly and the PDF is
+#                      simply refreshed on the next master build once it is set.
+# Restricted to same-repo events: a fork PR's head branch is not in this repo and
+# its token is read-only, so it is skipped rather than failed.
 name: User Guide PDF
 
 on:
+  push:
+    branches: [master]
+    paths:
+      - 'docs/userguide/**'
   pull_request:
     paths:
       - 'docs/userguide/**'
@@ -22,13 +32,19 @@ permissions:
 
 jobs:
   build-pdf:
-    # Same-repo PRs only (see header): fork PRs are skipped, not failed.
-    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
+    env:
+      PDF_PUSH_TOKEN: ${{ secrets.PDF_PUSH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          # PR: the head branch. push: github.head_ref is empty, so fall back to
+          # the pushed ref name (master).
+          ref: ${{ github.head_ref || github.ref_name }}
+          # master commit needs a token that can push to the protected branch;
+          # PRs only build (no push) so the default token is fine.
+          token: ${{ secrets.PDF_PUSH_TOKEN || github.token }}
 
       # Full TeXLive in a container; latexmk runs the pdflatex/bibtex/pdflatex
       # passes (the same sequence as docs/userguide/makepdf.sh). The PDF is
@@ -45,9 +61,21 @@ jobs:
           working_directory: docs/userguide
           root_file: ADiGatorUserGuide.tex
 
-      # Commit only when the PDF actually changed. GITHUB_TOKEN pushes do not
-      # retrigger workflows, so this cannot loop.
-      - name: Commit regenerated PDF to the PR branch
+      # PRs: publish the built PDF for review; do NOT commit it (that is what
+      # caused the feature-branch churn / stacked-merge conflicts).
+      - name: Upload PDF artifact (pull requests)
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ADiGatorUserGuide-pdf
+          path: docs/userguide/ADiGatorUserGuide.pdf
+          if-no-files-found: error
+
+      # master: commit the regenerated PDF (the single tracked copy). Only runs
+      # when PDF_PUSH_TOKEN is configured; the checkout above used it, so the
+      # auto-commit can push to the protected branch. Skipped cleanly otherwise.
+      - name: Commit regenerated PDF (master only)
+        if: ${{ github.event_name == 'push' && env.PDF_PUSH_TOKEN != '' }}
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           file_pattern: docs/userguide/ADiGatorUserGuide.pdf
