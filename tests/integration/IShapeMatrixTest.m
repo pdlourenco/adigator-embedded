@@ -40,13 +40,14 @@ classdef IShapeMatrixTest < matlab.unittest.TestCase
             writeFixture('fixt_jvv', ...
                 'y = [x(1)*x(2); sin(x(3)); x(1)^2; exp(x(2))*x(3)];');
             ax = adigatorCreateDerivInput([3 1],'x');
-            adigatorGenJacFile('fixt_jvv',{ax},struct('echo',0));
+            out = adigatorGenJacFile('fixt_jvv',{ax},struct('echo',0));
             rehash;
             xv = [0.7; -1.3; 0.4];
             [J,F] = fixt_jvv_Jac(xv);
             tc.verifyEqual(F, fixt_jvv(xv), 'AbsTol', 1e-14);
             tc.verifySize(J, [4 3]);
             tc.verifyEqual(J, fdjac(@fixt_jvv, xv), 'AbsTol', 1e-5, 'RelTol', 1e-5);
+            verifyExportedStructure(tc, out, 'Jacobian', J);
         end
 
         function gradScalarOfVectorDense(tc)
@@ -66,13 +67,14 @@ classdef IShapeMatrixTest < matlab.unittest.TestCase
             % f: R4 -> R, sparse gradient, Jacobian convention -> 1 x n row
             writeFixture('fixt_jss', 'y = x(1)^2 + sin(x(3));');
             ax = adigatorCreateDerivInput([4 1],'x');
-            adigatorGenJacFile('fixt_jss',{ax},struct('echo',0));
+            out = adigatorGenJacFile('fixt_jss',{ax},struct('echo',0));
             rehash;
             xv = [0.7; -1.3; 0.4; 2.1];
             [J,F] = fixt_jss_Jac(xv);
             tc.verifyEqual(F, fixt_jss(xv), 'AbsTol', 1e-14);
             tc.verifySize(J, [1 4]);
             tc.verifyEqual(J, fdjac(@fixt_jss, xv), 'AbsTol', 1e-5, 'RelTol', 1e-5);
+            verifyExportedStructure(tc, out, 'Jacobian', J);
         end
 
         function jacVectorOfScalar(tc)
@@ -80,20 +82,21 @@ classdef IShapeMatrixTest < matlab.unittest.TestCase
             % guard for the upstream zeros(dydxsize(2),1) allocation bug.
             writeFixture('fixt_jvs', 'y = [x^2; sin(x); 2];');
             ax = adigatorCreateDerivInput([1 1],'x');
-            adigatorGenJacFile('fixt_jvs',{ax},struct('echo',0));
+            out = adigatorGenJacFile('fixt_jvs',{ax},struct('echo',0));
             rehash;
             xv = 0.8;
             [J,F] = fixt_jvs_Jac(xv);
             tc.verifyEqual(F, fixt_jvs(xv), 'AbsTol', 1e-14);
             tc.verifySize(J, [3 1]);
             tc.verifyEqual(J, fdjac(@fixt_jvs, xv), 'AbsTol', 1e-5, 'RelTol', 1e-5);
+            verifyExportedStructure(tc, out, 'Jacobian', J);
         end
 
         function hesScalarOfVector(tc)
             % f: R3 -> R: Hes n x n, Grd n x 1 (the dominant use case)
             writeFixture('fixt_hsv', 'y = x(1)^2*x(2) + sin(x(3));');
             ax = adigatorCreateDerivInput([3 1],'x');
-            adigatorGenHesFile('fixt_hsv',{ax},struct('echo',0));
+            out = adigatorGenHesFile('fixt_hsv',{ax},struct('echo',0));
             rehash;
             xv = [0.7; -1.3; 0.4];
             [H,G,F] = fixt_hsv_Hes(xv);
@@ -103,6 +106,7 @@ classdef IShapeMatrixTest < matlab.unittest.TestCase
             tc.verifySize(H, [3 3]);
             Hfd = squeeze(fdhess(@fixt_hsv, xv));
             tc.verifyEqual(H, Hfd, 'AbsTol', 1e-4, 'RelTol', 1e-4);
+            verifyExportedStructure(tc, out, 'Hessian', H);
         end
 
         function hesScalarOfMatrix(tc)
@@ -111,7 +115,7 @@ classdef IShapeMatrixTest < matlab.unittest.TestCase
             writeFixture('fixt_hsm', ...
                 'y = x(1,1)^2*x(2,2) + sin(x(1,2))*x(2,1);');
             ax = adigatorCreateDerivInput([2 2],'x');
-            adigatorGenHesFile('fixt_hsm',{ax},struct('echo',0));
+            out = adigatorGenHesFile('fixt_hsm',{ax},struct('echo',0));
             rehash;
             Xv = [0.7 -1.3; 0.4 2.1];
             [H,G,F] = fixt_hsm_Hes(Xv);
@@ -124,6 +128,7 @@ classdef IShapeMatrixTest < matlab.unittest.TestCase
             tc.verifySize(H, [4 4]);
             Hfd = squeeze(fdhess(fvec, Xv(:)));
             tc.verifyEqual(H, Hfd, 'AbsTol', 1e-4, 'RelTol', 1e-4);
+            verifyExportedStructure(tc, out, 'Hessian', H);
         end
     end
 
@@ -247,6 +252,27 @@ classdef IShapeMatrixTest < matlab.unittest.TestCase
 end
 
 %% ============================ helpers ================================ %%
+
+function verifyExportedStructure(tc, out, kind, D)
+% Assert the generator's exported sparsity metadata is consistent with the
+% actual derivative D (the AD wrapper's dense output, whose structural zeros
+% are exact). Guards the TS-I-01 claim (c) and the B23 class (corrupted
+% *Structure/*Locs built with a mutated output size):
+%   (1) <kind>Structure has the derivative's shape (B23 was a size leak);
+%   (2) it is a sparsity SUPERSET - every structural zero is a true zero;
+%   (3) <kind>Locs reproduces the <kind>Structure pattern.
+S = full(out.([kind 'Structure'])) ~= 0;
+locs = out.([kind 'Locs']);
+tc.verifySize(S, size(D), ...
+    sprintf('%sStructure size must match the derivative shape (B23)', kind));
+tc.verifyEqual(nnz(D(~S)), 0, ...
+    sprintf('%sStructure must cover every nonzero of the derivative', kind));
+tc.verifyEqual(size(locs,2), 2, ...
+    sprintf('%sLocs must be an [nnz x 2] list of [row col]', kind));
+Sl = full(sparse(locs(:,1), locs(:,2), 1, size(D,1), size(D,2))) ~= 0;
+tc.verifyEqual(Sl, S, ...
+    sprintf('%sLocs must reproduce the %sStructure pattern', kind, kind));
+end
 
 function writeFixture(name, body)
 % write function y = <name>(x) with the given body line(s) into pwd

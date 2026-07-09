@@ -118,10 +118,12 @@ The `DER_LEVELS` option selects *which* of these outputs a wrapper returns but
 unaffected by it. Which outputs appear, in what order, and the selection
 invariants are governed by **C-6**.
 
-*Verified by:* `tests/integration/IShapeMatrixTest.m` (shape matrix; `CI_PLAN.md`
-TS-I-01), `ISecondDerivTest` (TS-I-04), `ILevelSelectTest` (TS-I-05, output
-selection). *Note:* several branches here had dimension bugs (`ANALYSIS.md`
-B7–B10); see `ANALYSIS.md` for current status.
+*Verified by:* `tests/integration/IShapeMatrixTest.m` (shape matrix + the
+exported `JacobianStructure`/`HessianStructure`/`*Locs`; `CI_PLAN.md` TS-I-01),
+`ILevelSelectTest` (TS-I-05, output selection); `ISecondDerivTest` (TS-I-04)
+*(planned — an analytic-Hessian enhancement; Hessian correctness is already
+guarded, see the TS-I-04 note in `CI_PLAN.md`)*. *Note:* several branches here
+had dimension bugs (`ANALYSIS.md` B7–B10); see `ANALYSIS.md` for current status.
 
 ### C-2 — Generated-file evaluation interface
 
@@ -136,7 +138,9 @@ DerType exports its constant pattern once via its `*Locs` companion
 ([ADR-0022](decisions/ADR-0022-generalized-der-output-nonzeros.md); the
 higher-order `*Locs` of ADR-0020 drop in on this).
 
-*Verified by:* `CI_PLAN.md` TS-U-03 (structural ops vs. dense FD).
+*Verified by:* `tests/unit/UStructuralOpsTest.m` (`CI_PLAN.md` TS-U-03) — each
+structural op's raw `y.dX`/`y.dX_location`/`y.dX_size` reconstructed and checked
+against a dense FD Jacobian.
 
 ### C-3 — Gator data layout
 
