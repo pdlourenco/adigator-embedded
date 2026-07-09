@@ -46,7 +46,15 @@ deterministically.
 - **sparsitySuperset** — `find(|D|>0) ⊆ find(Structure)` (REQ-T-03).
 - **crossMode** — `embed_mode` `c`/`l`/`i` static invariants (REQ-T-04) plus
   bit-identical results; the `l`/`i` numeric check needs MATLAB Coder and
-  skips cleanly otherwise.
+  skips cleanly otherwise. Interpreter-only — never invokes Coder.
+- **codegenEquiv** — compiled-C ≡ MATLAB (R15, #64, ADR-0014): builds the case's
+  embedded `'i'` wrapper through **Embedded Coder** (`coder.config('lib','ecoder',
+  true)`, born-ERT — proves strict-target codegen) plus a MEX, and checks the
+  compiled result against MATLAB over `c.x0` + perturbations. The compiled-side
+  proof `crossMode` can't give. **Expensive** (a codegen build per case), so it is
+  **not in the default oracle set** — opt in for a sampled / release-checklist
+  run: `mcCampaign('oracles',{'oracleCodegenEquivalence'})`. Skips cleanly without
+  MATLAB Coder; the born-ERT lib build additionally needs Embedded Coder.
 - **hessSymmetry** — `H == H'` for scalar Hessian cases (skips otherwise).
 - **fwdRev** — for scalar costs, the reverse-mode gradient
   (`adigatorGenRevGradFile`) equals the forward `Grd` wrapper and the closed

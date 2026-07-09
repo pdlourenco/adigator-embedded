@@ -189,6 +189,34 @@ classdef MCSmokeTest < matlab.unittest.TestCase
                 'derOutput oracle never passed — harness not exercising the matrix/nonzeros forms');
             tc.verifyEqual(do.fail, 0, 'derOutput oracle reported a hard failure');
         end
+
+        function codegenEquivalenceIsClean(tc)
+            % R15 (#64, ADR-0014): the codegen-equivalence oracle — compiled-C ==
+            % MATLAB over randomized cases, born ERT. This is the compiled-side
+            % proof the cross-mode oracle can't give (it compares embed modes
+            % interpreter-only). Skip-clean without MATLAB Coder (PR-gate / floor
+            % runners filter it); with Coder each case's inline wrapper is built
+            % through Embedded Coder (proving strict-target codegen) plus a MEX,
+            % and the compiled result is checked against MATLAB. EXPENSIVE
+            % (codegen per case) — a tiny deterministic set here (a jacobian and a
+            % Hessian case); the full sampled sweep is a release-checklist
+            % mcCampaign that includes oracleCodegenEquivalence.
+            tc.assumeTrue(license('test','MATLAB_Coder') && ~isempty(which('codegen')), ...
+                'codegen-equivalence oracle requires MATLAB Coder (extended/nightly only)');
+            report = mcCampaign('nIters', 2, 'seed', 424242, ...
+                'generators', {'mcGenAffine','mcGenQuadratic'}, ...
+                'oracles', {'oracleCodegenEquivalence'}, ...
+                'promote', false, 'verbose', false);
+
+            tc.verifyEqual(report.nFail, 0, ...
+                sprintf('codegen-equivalence found %d failing case(s); see report.failures', ...
+                report.nFail));
+            ce = report.oracleStats.oracleCodegenEquivalence;
+            tc.verifyGreaterThan(ce.pass, 0, ...
+                'codegen-equivalence never passed — compiled==MATLAB not actually exercised');
+            tc.verifyEqual(ce.fail, 0, ...
+                'codegen-equivalence reported a compiled != MATLAB case');
+        end
     end
 end
 

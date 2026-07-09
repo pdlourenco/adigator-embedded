@@ -7,6 +7,16 @@ and the re-based `SCodegenTest` are **born ERT** — the build targets Embedded
 Coder (`coder.config('lib','ecoder',true)`), not plain MATLAB Coder `lib` — so
 the whole codegen-equivalence surface exercises the strict target per REQ-T-10.
 (`SCodegenTest`'s ERT lib build landed in PR #92; see Decision 1 / 2.)
+**Campaign oracle landed 2026-07-09** (Decision 2 / roadmap R15 (b) — the
+highest-leverage piece): `tests/montecarlo/oracles/oracleCodegenEquivalence.m`
+implements Build→Execute→verify via the **retained hand-rolled `codegen`+compare
+path**, born ERT (`coder.config('lib','ecoder',true)`), opt-in / sampled, and
+skip-clean without Coder; verified in a MATLAB session (affine jacobian +
+quadratic Hessian compile and match), pinned by
+`MCSmokeTest.codegenEquivalenceIsClean`. Still open: the `matlabtest.coder.TestCase`
+supported-API migration (Decision 1 re-base of `SCodegenTest` + swapping the
+oracle's hand-rolled build for the supported API + `GeneratedCodeCoveragePlugin`
+generated-C coverage), gated on MATLAB Test R2023a+.
 
 ## Context
 
