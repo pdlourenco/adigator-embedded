@@ -220,6 +220,58 @@ classdef ILoopboundTest < matlab.unittest.TestCase
                 'adigator:loopbound:option');
         end
     end
+
+    %% --------------------- known-issue detection ---------------------- %%
+    methods (Test, TestTags = {'KnownIssue'})
+        function nestedRuntimeBoundInnerExitDerivative(tc)
+            % B27 (#162): an INNER runtime-bound loop whose exit variable's
+            % DERIVATIVE location depends on the trip count -- a gather by the
+            % loop counter read after the loop -- is not exit-unioned (the union
+            % is applied to outermost loops only, adigatorForIterEnd.m:477). So
+            % the Nmax file run at n < Nmax yields the correct VALUE but a
+            % silently ZEROED derivative. Detects the buggy outcome -> assumeFail
+            % (a self-healing tripwire); when the exit-union is extended to inner
+            % loops (#162) the trailing assertions run as the regression guard.
+            % Settles #120 as a wrong-derivative bug (reading 2), not a doc drift.
+            writeFcn('lb_inner_exit', { ...
+                'function y = lb_inner_exit(x,N,K)', ...
+                'y = 0;', ...
+                'for k = 1:K', ...
+                '  w = 0;', ...
+                '  for a = 1:N', ...       % inner runtime-bound loop
+                '    w = x(a)^2;', ...       % exit deriv location = column a = N
+                '  end', ...
+                '  y = y + w;', ...          % y = K*x(N)^2 -> dy/dx nonzero at col N
+                'end', ...
+                'end'});
+            Nmax = 4; Kmax = 2; K = 2; N = 2;   % evaluate at N < Nmax
+            gx = adigatorCreateDerivInput([Nmax 1],'x');
+            adigator('lb_inner_exit',{gx,Nmax,Kmax},'lb_inner_exit_dx', ...
+                adigatorOptions('overwrite',1,'echo',0,'loopbound',{'N','K'}));
+            rehash;
+
+            rng(11); xf = randn(Nmax,1);
+            x.f = xf; x.dx = ones(Nmax,1);
+            y = lb_inner_exit_dx(x, N, K);
+
+            % the VALUE is correct (not the bug)
+            tc.verifyEqual(y.f, K*xf(N)^2, 'AbsTol', 1e-12, 'RelTol', 1e-12);
+
+            % the DERIVATIVE should be nonzero only at column N, value 2*K*x(N)
+            g = zeros(1, Nmax);
+            if isfield(y,'dx_location') && ~isempty(y.dx_location)
+                g(y.dx_location(:,end)) = y.dx;
+            end
+            gExp = zeros(1, Nmax); gExp(N) = 2*K*xf(N);
+            if max(abs(g - gExp)) > 1e-10
+                tc.assumeFail(sprintf(['Known issue B27 (#162): inner ', ...
+                    'runtime-bound loop exit-variable derivative zeroed at ', ...
+                    'n<Nmax; got %s, expected %s'], mat2str(g,4), mat2str(gExp,4)));
+            end
+            tc.verifyEqual(g, gExp, 'AbsTol', 1e-10, ...
+                'inner runtime-bound loop exit derivative must match the n-sized program');
+        end
+    end
 end
 
 function writeFcn(name, lines)
