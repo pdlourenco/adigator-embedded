@@ -20,6 +20,8 @@ embed modes verified equivalent and codegen-compatible; literal scatter
 indices, data dedup/range compression in the inline emitter.
 
 **Active frontier (R10–R30).** R1–R9 are landed bar the R6 decision gate.
+Cross-cutting priority rationale (dated snapshot, not maintained):
+[`analyses/2026-07-09-objective-reassessment.md`](analyses/2026-07-09-objective-reassessment.md).
 **R13 (documentation) is done:** README (#58) and user guide (#59) merged;
 the two policy calls are decided — **(3) fork-versioning** and **(4) defer the
 paper** (issue #18). **R10 is done** — both (a) the rolled-`for…end`-in-a-
