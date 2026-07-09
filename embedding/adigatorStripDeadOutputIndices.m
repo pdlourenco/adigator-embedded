@@ -35,6 +35,18 @@ function out = adigatorStripDeadOutputIndices(lines)
 %   distinguish from metadata; such a field would be stripped. Any non-literal
 %   user RHS is safe.
 %
+%   REACHABILITY (2026-07-09, issue #164): this residual is currently UNREACHABLE
+%   end-to-end. The only way to inject a user-named *_size / *_location struct
+%   field into the generated output is a struct OUTPUT, which the derivative
+%   generators reject before this strip runs (they require a numeric output; see
+%   #164). So the residual is latent, gated behind that struct-output limitation.
+%   The validated fix for when it becomes reachable: bring this strip under a
+%   value-equivalence round-trip (run the stripped vs unstripped derivative on the
+%   generation-time test point, compare all output fields; on any mismatch keep
+%   the unstripped file and warn, naming the offending field) - the strip is the
+%   one embedded transform not yet under the slim's round-trip guard
+%   (adigatorGenDerFile_embedded slim.checked). Tracked by #164.
+%
 %   Copyright 2026 Pedro Lourenço @ GMV. Distributed under the GNU General
 %   Public License version 3.0.
 

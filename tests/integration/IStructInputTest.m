@@ -155,6 +155,32 @@ classdef IStructInputTest < matlab.unittest.TestCase
             tc.verifyEqual(H.l, H.c, 'AbsTol', 0, 'coderload vs classic Hessian');
             tc.verifyEqual(H.i, H.c, 'AbsTol', 0, 'inline vs classic Hessian');
         end
+
+        function structOutputIsRejected(tc)
+            % Tripwire for the struct-OUTPUT limitation (issue #164) and the
+            % coupled LATENT R20 metadata-strip residual. Struct INPUTS are
+            % supported (above); struct OUTPUTS are not: the derivative-file
+            % generators require a single numeric output, so a struct-returning
+            % function must ERROR rather than generate. (The core adigator()
+            % itself handles struct outputs; the matrix-output wrappers cannot.)
+            % If struct-output support is ever added this test flips red -- that
+            % is the reminder to first close the *_size/*_location residual in
+            % embedding/adigatorStripDeadOutputIndices.m (add the value-equivalence
+            % round-trip guard) before it goes live.
+            fid = fopen('so_fun.m','w');
+            fprintf(fid, '%s\n', 'function y = so_fun(x)', ...
+                'y.cost = sum(x.^2);', 'y.aux = x(1)*x(2);', 'end');
+            fclose(fid); rehash;
+            gx = adigatorCreateDerivInput([3 1],'x');
+            tc.verifyError(@() adigatorGenJacFile('so_fun',{gx},struct('echo',0)), ...
+                ?MException, ...
+                'a struct-returning function must be rejected by adigatorGenJacFile (#164)');
+            gx2 = adigatorCreateDerivInput([3 1],'x');
+            tc.verifyError(@() adigatorGenDerFile_embedded('jacobian','so_fun',{gx2}, ...
+                adigatorOptions('overwrite',1,'echo',0,'embed_mode','i')), ...
+                ?MException, ...
+                'a struct-returning function must be rejected by adigatorGenDerFile_embedded (#164)');
+        end
     end
 end
 

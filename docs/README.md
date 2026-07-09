@@ -159,6 +159,14 @@ Operators and inputs
 - Struct inputs (issue #24): the variable of differentiation and auxiliary
   inputs may be carried as fields of a (scalar) struct, nested struct/cell
   fields supported; the generated wrappers accept the same struct shape.
+- Struct/cell **outputs** are **not** supported by the derivative-file
+  generators (`adigatorGenJacFile` / `adigatorGenHesFile` /
+  `adigatorGenDerFile_embedded`): they require the differentiated function to
+  return a **single numeric array** and currently error on a struct-returning
+  function (issue #164) — a Jacobian/Hessian of a struct-valued output is not a
+  single matrix. (Struct *inputs*, above, are fully supported; the lower-level
+  `adigator` command can itself differentiate a struct-returning function, but
+  the matrix-output wrappers cannot assemble their result from it.)
 - `norm` (issue #28): vector p-norms (2, 1, Inf, -Inf, general p) and the
   Frobenius norm are differentiable; the induced/spectral matrix norms
   (which would require an SVD) raise a clear error instead of
