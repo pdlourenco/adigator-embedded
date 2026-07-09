@@ -97,66 +97,77 @@ correctness + the headline relationships, not the exact figures.)
   derivatives double as the **gold correctness oracle** (FD-checked once, then the
   equivalence reference).
 
-## C level (R17b)
+## C level (R17b + R17c)
 
 `bench/derivShowcaseC.m` carries the embeddable (`i`/inline) cells the rest of
-the way: through MATLAB Coder to a static `lib` (generated-C size) and a MEX
-(numeric equivalence + runtime), with compile time. Skip-clean where Coder is
-absent.
+the way: through **Embedded Coder (ERT)** to a static `lib`, then measures the
+**honest compiled footprint** of the derivative function — ROM (`.text`+`.rdata`),
+static RAM (`.data`+`.bss`) via `size -A`, and max stack via `gcc -fstack-usage`
+(**R17c**) — alongside a MEX for numeric equivalence + runtime, and compile time.
+Skip-clean where Coder (or the standalone `gcc`/`size` toolchain) is absent.
 
 ```matlab
 addpath bench
 rc = derivShowcaseC('n',8,'figPath','bench/showcase_scaling.png');
 ```
 
-Snapshot (inline mode, n = 8, MATLAB R2024a + MinGW):
+Snapshot (inline mode, n = 8, MATLAB R2024a + MinGW; ROM/RAM/stack in bytes):
 
-| function | DerType | impl | unroll | C-source bytes¹ | MEX≡analytic | MEX (ms) | MATLAB (ms) | compile (s) |
-|---|---|---|---:|---:|---|---:|---:|---:|
-| vcostfun | gradient | AD | 1 | 19505 | yes | 0.003 | 0.118 | 13.5 |
-| vcostfun | gradient-reverse | AD | 1 | 17940 | yes | 0.002 | 0.006 | 2.8 |
-| vcostfun | gradient | analytic | — | 17766 | yes | 0.002 | 0.001 | 3.0 |
-| vcostfun | hessian | AD | 1 | 20666 | yes | 0.002 | 0.114 | 2.3 |
-| vcostfun | hessian | analytic | — | 18635 | yes | 0.003 | 0.002 | 2.2 |
-| vvecfun | jacobian | AD | 1 | 19309 | yes | 0.003 | 0.064 | 2.3 |
-| vfun | jacobian | AD | 0 | 20484 | yes | 0.004 | 0.190 | 2.7 |
-| vvecfun | jacobian | analytic | — | 17950 | yes | 0.003 | 0.002 | 2.6 |
+| function | DerType | impl | unroll | ROM | RAM | stack | MEX≡analytic | MEX (ms)² | MATLAB (ms)² | compile (s)² | C src (B)¹ |
+|---|---|---|---:|---:|---:|---:|---|---:|---:|---:|---:|
+| vcostfun | gradient | AD | 1 | 208 | 0 | 160 | yes | 0.003 | 0.168 | 14.9 | 19505 |
+| vcostfun | gradient-reverse | AD | 1 | 208 | 0 | 160 | yes | 0.002 | 0.006 | 3.2 | 17940 |
+| vcostfun | gradient | analytic | — | 160 | 0 | 160 | yes | 0.002 | 0.001 | 3.7 | 17764 |
+| vcostfun | hessian | AD | 1 | 224 | 0 | 160 | yes | 0.002 | 0.075 | 2.9 | 20576 |
+| vcostfun | hessian | analytic | — | 224 | 0 | 144 | yes | 0.002 | 0.002 | 3.0 | 18633 |
+| vvecfun | jacobian | AD | 1 | 224 | 0 | 304 | yes | 0.002 | 0.051 | 2.7 | 19307 |
+| vfun | jacobian | AD | 0 | 448 | 0 | 288 | yes | 0.003 | 0.248 | 3.5 | 20484 |
+| vvecfun | jacobian | analytic | — | 176 | 0 | 176 | yes | 0.003 | 0.001 | 2.8 | 17948 |
 
-> ¹ **This column is a sum of generated `.c`/`.h` *source* bytes — a poor ROM
-> proxy, dominated by comments and `initialize`/`terminate` boilerplate.** Do
-> **not** read the small forward-vs-reverse spread as a real footprint
-> difference: measuring the *compiled* object (Embedded Coder + `size` /
-> `-fstack-usage`) shows the vectorized forward/reverse/analytical footprints
-> **converge** (~192 / 192 / 176 ROM bytes), because the embeddable forms carry
-> ≈0 static data. The honest ROM / static-RAM / max-stack comparison is **R17c**
-> (the forms that would actually differ are blocked on the Embedded-Coder codegen
-> gaps in [#80](https://github.com/pdlourenco/adigator-embedded/issues/80)).
+> **ROM/RAM/stack are the compiled footprint of the derivative *function*** —
+> the `<wrapper>.c` (+ `<wrapper>_data.c` static tables) object, excluding the
+> lifecycle stubs, the `examples/` main and the `interface/` MEX gateway (none
+> deploy to the target). Measured from the ERT object with `size` /
+> `-fstack-usage`, not the codegen report (whose static-code-metrics tables
+> silently do not populate for generated AD code — [ADR-0027](../docs/decisions/ADR-0027-compiled-memory-metrics.md)).
+> ¹ `C src (B)` is the old sum of generated `.c`/`.h` *source* bytes — kept only
+> as a boilerplate-dominated proxy; **do not read it as ROM** (its small
+> forward-vs-reverse spread is comments, not footprint). ² runtime + compile
+> columns are single-sample and machine-dependent — read as order-of-magnitude.
 
-![AD vs analytical C-source size (proxy¹) and runtime vs n](showcase_scaling.png)
+**The honest finding: for these vectorized costs the footprints CONVERGE.**
+Forward and reverse gradient are byte-identical (ROM 208 / 208), the analytical
+floor is only ~50 B under, and **static RAM is 0 across the board** — the
+embeddable (`i`) forms carry ≈0 static data, so there is no ROM/RAM story to tell
+them apart. This retires the earlier "reverse compiled C is ~8% leaner" reading,
+which was computed from *source* bytes (boilerplate-dominated) and does **not**
+survive to the compiled object. The forms that *would* differ (data-heavy index
+tables) are exactly the ones still blocked on the Embedded-Coder codegen gaps in
+[#80](https://github.com/pdlourenco/adigator-embedded/issues/80).
 
-- **AD vs analytical is a *code-lines* story here, not a byte one.** The hand
+![AD vs analytical compiled ROM and runtime vs n](showcase_scaling.png)
+
+- **AD vs analytical is a *code-lines* story here, not a footprint one.** The hand
   derivative is 4–5 lines vs the AD wrapper's 18–187 (MATLAB-level table above),
-  and it carries no data. For these *simple* costs hand-coding is cheapest, as
-  expected — the value of AD is the **crossover** at scale, where the derivative
-  grows large/sparse enough that hand-deriving it becomes impractical or silently
-  drops sparsity. The analytical column also doubles as the gold correctness
-  oracle (`SDerivShowcaseTest` FD-checks it once). The compiled-footprint side of
-  this comparison lands in **R17c**.
+  and both compile to ≈0-data objects of comparable ROM. For these *simple* costs
+  hand-coding is cheapest, as expected — the value of AD is the **crossover** at
+  scale, where the derivative grows large/sparse enough that hand-deriving it
+  becomes impractical or silently drops sparsity. The analytical column also
+  doubles as the gold correctness oracle (`SDerivShowcaseTest` FD-checks it once).
 - **Runtime is COMPARABLE, not a reverse win** (the figure's right panel,
   and #73's runtime axis). Across `n` = 256 / 1024 / 4096 the compiled MEX times
-  are forward 0.006 / 0.014 / 0.045 ms vs reverse 0.006 / 0.010 / 0.045 ms — both
-  O(n) and within noise of each other. So whichever way the footprint comparison
-  lands (R17c), it is **not** bought with speed.
-- **Source size is roughly `n`-flat for a vectorized cost** (left panel): `n` is
-  a runtime array length, not unrolled code, so the generated source barely grows
-  with the number of variables. (Treat the small forward/reverse offset as
-  boilerplate, per the note above — the real ROM/RAM comparison is R17c.)
-- **rolled vs unrolled, to C:** `vvecfun` (unrolled) vs `vfun` (rolled) Jacobian
-  both compile and match. Note **rolled *scalar-cost* gradient/Hessian do not
-  codegen** (a separate concern, ANALYSIS §2.3(7) / roadmap R19), so the rolled
-  axis reaches C here only for the Jacobian; the MATLAB-level table above covers
-  the rest.
+  are forward and reverse both O(n) and within noise of each other. The
+  forward-vs-reverse choice here is bought with **neither footprint nor speed** —
+  it is a code-generation-style preference at this scale.
+- **Compiled ROM is roughly `n`-flat for a vectorized cost** (left panel): `n` is
+  a runtime array length, not unrolled code, so neither the generated code nor its
+  ≈0 static data grows with the number of variables.
+- **rolled vs unrolled, to C:** `vvecfun` (unrolled, ROM 224) vs `vfun` (rolled,
+  ROM 448) Jacobian both compile and match — the rolled loop pays a modest ROM +
+  stack premium here. Note **rolled *scalar-cost* gradient/Hessian do not codegen**
+  (a separate concern, ANALYSIS §2.3(7) / roadmap R19), so the rolled axis reaches
+  C here only for the Jacobian; the MATLAB-level table above covers the rest.
 - **MEX ≡ analytic exactly** on every cell (the embed-mode C-4 guarantee
-  compiled). (`SCodegenShowcaseTest` pins build + numeric equivalence; the
-  compiled memory comparison is R17c.)
+  compiled). `SCodegenShowcaseTest` pins build + numeric equivalence **and** the
+  measured footprint (ROM/RAM/stack populated, forward/reverse convergence).
 

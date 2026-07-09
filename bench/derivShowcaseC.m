@@ -1,12 +1,15 @@
 function report = derivShowcaseC(varargin)
 %DERIVSHOWCASEC  C-level half of the all-axes derivative showcase (R17b, #73).
 %
-% Compiles the embeddable derivative cells through MATLAB Coder and measures the
-% compiled artifact: generated-C size (a static-`lib` build), MEX-vs-MATLAB
-% numeric equivalence, MEX runtime, and compile time. Complements the MATLAB-
-% level complexity table of derivShowcase (R17a) with the on-target numbers, and
-% can emit a code-size-vs-n scaling figure for the headline forward-vs-reverse
-% gradient contrast.
+% Compiles the embeddable derivative cells through Embedded Coder (ERT) and
+% measures the compiled artifact: the honest on-target footprint - ROM
+% (.text+.rdata), static RAM (.data+.bss) via `size -A`, and max stack via
+% `gcc -fstack-usage` (R17c) - plus MEX-vs-MATLAB numeric equivalence, MEX
+% runtime, and compile time. (The generated-C source-byte sum is retained only
+% as a labelled secondary column - it is boilerplate-dominated and a poor ROM
+% proxy; see R17c / ADR-0027.) Complements the MATLAB-level complexity table of
+% derivShowcase (R17a) with the on-target numbers, and can emit a
+% compiled-ROM-vs-n scaling figure for the headline forward-vs-reverse contrast.
 %
 %   report = derivShowcaseC('Name',value,...)
 % Options (defaults in brackets):
@@ -76,7 +79,8 @@ cells = [ mk('vcostfun','gradient',         1, 'AD',      ''), ...
           mk('vvecfun','jacobian',          1, 'AD',      ''), ...
           mk('vfun','jacobian',             0, 'AD',      ''), ...
           mk('vvecfun','jacobian',         -1, 'analytic','vvecfun_jac_analytic') ];
-rows = struct('fn',{},'DerType',{},'impl',{},'unroll',{},'cBytes',{},'mexErr',{},...
+rows = struct('fn',{},'DerType',{},'impl',{},'unroll',{},...
+    'romBytes',{},'ramBytes',{},'stackBytes',{},'cBytes',{},'mexErr',{},...
     'mexMs',{},'matMs',{},'compileS',{},'ok',{},'note',{});
 for ci = 1:numel(cells)
     if o.verbose; fprintf('  building %-8s %-16s %-9s (n=%d)...\n',cells(ci).fn,cells(ci).DerType,cells(ci).impl,o.n); end
@@ -109,7 +113,8 @@ function r = buildCell(c, n, timeReps)
 if nargin < 3; timeReps = 1; end   % sweep callers time once; the fragment averages
 impl = 'AD'; if isfield(c,'impl'); impl = c.impl; end
 analytic = ''; if isfield(c,'analytic'); analytic = c.analytic; end
-r = struct('fn',c.fn,'DerType',c.DerType,'impl',impl,'unroll',c.unroll,'cBytes',-1,'mexErr',-1,...
+r = struct('fn',c.fn,'DerType',c.DerType,'impl',impl,'unroll',c.unroll,...
+    'romBytes',-1,'ramBytes',-1,'stackBytes',-1,'cBytes',-1,'mexErr',-1,...
     'mexMs',-1,'matMs',-1,'compileS',-1,'ok',false,'note','');
 base = pwd; d = tempname; mkdir(d);
 restore = onCleanup(@() cleanupBuild(base, d));
@@ -143,6 +148,13 @@ try
     cfg = coder.config('lib','ecoder',true); cfg.GenerateReport = false;  % Embedded Coder / ERT (#80 R20b)
     codegen(wrapper,'-config',cfg,'-args',{zeros(n,1)},'-d','clib');
     r.cBytes = sumCBytes(fullfile(d,'clib'));
+    % R17c (#73): the HONEST footprint - compile the ERT-generated C and read the
+    % compiled object (ROM = .text+.rdata, static RAM = .data+.bss via `size -A`;
+    % max stack via `gcc -fstack-usage`). Skip-clean (fields stay -1) when the
+    % standalone gcc/size toolchain is absent; cBytes above is the source-byte
+    % proxy kept only as a secondary column.
+    fp = coreFootprint(fullfile(d,'clib'), wrapper);
+    r.romBytes = fp.rom; r.ramBytes = fp.ram; r.stackBytes = fp.stack;
 
     r.ok = r.mexErr <= 1e-9*max(1,norm(ga(:),inf));
     r.note = ternstr(r.ok,'ok',sprintf('MEX mismatch %.1e',r.mexErr));
@@ -164,32 +176,38 @@ end
 function sweep = runSweep(ns, verbose)
 % Forward AD vs reverse AD vs hand-coded analytical gradient (vcostfun, inline):
 % compiled-C size + MEX runtime vs n - the AD-vs-analytical crossover (#73).
-sweep = struct('n',ns,'fwdC',nan(size(ns)),'revC',nan(size(ns)),'anaC',nan(size(ns)),...
+% R17c: the size panel tracks compiled ROM (.text+.rdata), not source bytes.
+sweep = struct('n',ns,'fwdRom',nan(size(ns)),'revRom',nan(size(ns)),'anaRom',nan(size(ns)),...
     'fwdMs',nan(size(ns)),'revMs',nan(size(ns)),'anaMs',nan(size(ns)));
 for i = 1:numel(ns)
     if verbose; fprintf('  sweep n=%d ...\n',ns(i)); end
     f  = buildCell(struct('fn','vcostfun','DerType','gradient','unroll',1,'impl','AD','analytic',''), ns(i));
     rv = buildCell(struct('fn','vcostfun','DerType','gradient-reverse','unroll',1,'impl','AD','analytic',''), ns(i));
     an = buildCell(struct('fn','vcostfun','DerType','gradient','unroll',-1,'impl','analytic','analytic','vcostfun_grad_analytic'), ns(i));
-    if f.ok;  sweep.fwdC(i)=f.cBytes;  sweep.fwdMs(i)=f.mexMs;  end
-    if rv.ok; sweep.revC(i)=rv.cBytes; sweep.revMs(i)=rv.mexMs; end
-    if an.ok; sweep.anaC(i)=an.cBytes; sweep.anaMs(i)=an.mexMs; end
+    if f.ok  && f.romBytes  >= 0; sweep.fwdRom(i)=f.romBytes;  end
+    if rv.ok && rv.romBytes >= 0; sweep.revRom(i)=rv.romBytes; end
+    if an.ok && an.romBytes >= 0; sweep.anaRom(i)=an.romBytes; end
+    if f.ok;  sweep.fwdMs(i)=f.mexMs;  end
+    if rv.ok; sweep.revMs(i)=rv.mexMs; end
+    if an.ok; sweep.anaMs(i)=an.mexMs; end
 end
 end
 
 function makeFigure(s, figPath)
 % Forward AD vs reverse AD vs hand-coded analytical gradient (vcostfun, inline)
 % across a size range - the AD-vs-analytical crossover (#73):
-%  left  - compiled-C size: analytical is the floor, reverse AD nearly matches
-%          it, forward AD is larger; all roughly n-flat (vectorized).
+%  left  - compiled ROM (.text+.rdata, Embedded Coder + `size`): the honest
+%          footprint (R17c). For this vectorized cost the embeddable forms carry
+%          ~0 static data, so forward/reverse/analytical CONVERGE and stay n-flat.
 %  right - MEX runtime: all O(n) and essentially COMPARABLE - for this simple
-%          cost the difference is code size, not speed.
+%          cost the difference is neither code size nor speed.
 fig = figure('Visible','off','Position',[100 100 820 340]);
 subplot(1,2,1);
-plot(s.n,s.fwdC,'-o', s.n,s.revC,'-s', s.n,s.anaC,'-^','LineWidth',1.6,'MarkerSize',6);
-grid on; set(gca,'XScale','log'); xlabel('n'); ylabel('generated C (bytes)');
-title('Compiled-C size'); legend('forward AD','reverse AD','analytical','Location','northwest');
-ylim([0 max([s.fwdC s.revC s.anaC])*1.15]);
+plot(s.n,s.fwdRom,'-o', s.n,s.revRom,'-s', s.n,s.anaRom,'-^','LineWidth',1.6,'MarkerSize',6);
+grid on; set(gca,'XScale','log'); xlabel('n'); ylabel('compiled ROM (bytes)');
+title('Compiled ROM (ERT)'); legend('forward AD','reverse AD','analytical','Location','northwest');
+mx = max([s.fwdRom s.revRom s.anaRom]);   % all-NaN when the footprint toolchain is absent
+if isfinite(mx) && mx > 0; ylim([0 mx*1.15]); end
 subplot(1,2,2);
 loglog(s.n,s.fwdMs,'-o', s.n,s.revMs,'-s', s.n,s.anaMs,'-^','LineWidth',1.6,'MarkerSize',6);
 grid on; xlabel('n'); ylabel('MEX eval (ms)');
@@ -207,6 +225,77 @@ end
 function b = sumCBytes(dir0)
 b = 0; cf = dir(fullfile(dir0,'**','*.c'));
 for k = 1:numel(cf); b = b + cf(k).bytes; end
+end
+
+%% --------------------------------------------------------------------- %%
+function fp = coreFootprint(clibDir, wrapper)
+% R17c (#73, showcase-memory-metrics): the honest compiled footprint of the
+% derivative FUNCTION - ROM (.text+.rdata), static RAM (.data+.bss) via
+% `size -A`, and max stack frame via `gcc -Os -fstack-usage` (.su). Measures the
+% CORE derivative object(s) only - `<wrapper>.c` and `<wrapper>_data.c` (the
+% static index tables, where the ROM that differs between modes/forms actually
+% lives) - deliberately EXCLUDING the lifecycle stubs (`_initialize`/`_terminate`),
+% the `examples/` main and the `interface/` MEX gateway, none of which deploy to
+% the embedded target. Why the compiled object and not the codegen report: the
+% ERT static-code-metrics tables silently do not populate for generated AD code
+% (a ~574 B stub vs a full report for a hand function) and GlobalVariables is
+% empty for inline mode (const tables are .rdata, not globals) - so `size` /
+% stack on the object is the reliable source (ADR-0027). rom/ram/stack stay -1
+% (rendered as an em dash, treated as skip) when the standalone toolchain is
+% absent - a Coder machine without gcc/size on disk still runs the rest.
+fp = struct('rom',-1,'ram',-1,'stack',-1);
+mingw = getenv('MW_MINGW64_LOC');
+if isempty(mingw); mingw = fullfile(matlabroot,'bin',computer('arch'),'mingw64'); end
+gcc  = fullfile(mingw,'bin','gcc.exe');
+sizx = fullfile(mingw,'bin','size.exe');
+if ~isfile(gcc) || ~isfile(sizx); return; end
+inc  = fullfile(matlabroot,'extern','include');   % tmwtypes.h etc.
+want = {[wrapper '.c'], [wrapper '_data.c']};
+rom = 0; ram = 0; stack = 0; got = false;
+for w = want
+    cpath = fullfile(clibDir, w{1});
+    if ~isfile(cpath); continue; end
+    obj = [cpath '.o']; su = regexprep(obj,'\.o$','.su');
+    % compile from the clib dir so the generated headers resolve and the .su
+    % lands predictably next to the object
+    cmd = sprintf('cd /d "%s" && "%s" -Os -fstack-usage -c "%s" -I"%s" -I"%s" -o "%s"', ...
+        clibDir, gcc, w{1}, clibDir, inc, obj);
+    % A hard toolchain failure below surfaces as a warning + an unmeasured (-1)
+    % cell, never a wrong number - but on a non-gating bench it does NOT redden
+    % the test (the footprint asserts skip on romBytes<0). Honest-or-nothing.
+    [st, out] = system(cmd);
+    if st ~= 0
+        warning('derivShowcaseC:footprint','gcc failed on %s: %s', w{1}, strtrim(out));
+        return   % partial measure would be misleading; report unmeasured
+    end
+    [sz, so] = system(sprintf('"%s" -A "%s"', sizx, obj));
+    if sz ~= 0
+        warning('derivShowcaseC:footprint','size failed on %s: %s', w{1}, strtrim(so));
+        return   % symmetric with the gcc path: unmeasured, not a silent 0
+    end
+    got = true;
+    rom = rom + sectBytes(so,{'.text','.rdata'});   % MinGW COFF: read-only is .rdata
+    ram = ram + sectBytes(so,{'.data','.bss'});
+    if isfile(su)
+        T = string(splitlines(fileread(su)));
+        for i = 1:numel(T)
+            m = regexp(T(i),'\t(\d+)\t','tokens','once');
+            if ~isempty(m); stack = max(stack, str2double(m(1))); end
+        end
+    end
+end
+if got; fp.rom = rom; fp.ram = ram; fp.stack = stack; end
+end
+
+function b = sectBytes(sizeOut, sects)
+% sum the size column of the named sections from `size -A` output
+b = 0; L = splitlines(sizeOut);
+for i = 1:numel(L)
+    p = regexp(strtrim(L{i}), '\s+', 'split');
+    if numel(p) >= 2 && any(strcmp(p{1}, sects))
+        v = str2double(p{2}); if ~isnan(v); b = b + v; end
+    end
+end
 end
 
 function g = analyticRef(fn, dt, xv)
@@ -242,16 +331,19 @@ function s = ternstr(c,a,b); if c; s=a; else; s=b; end; end
 
 %% --------------------------------------------------------------------- %%
 function md = renderCTable(rows, n)
-hdr = sprintf("| function | DerType | impl | unroll | C bytes (n=%d) | MEX≡analytic | MEX (ms) | MATLAB (ms) | compile (s) |",n);
-sep = "|---|---|---|---:|---:|---|---:|---:|---:|";
+% R17c: lead with the compiled footprint (ROM/RAM/stack); the source-byte proxy
+% is retained only as a trailing, explicitly-labelled column.
+hdr = sprintf("| function | DerType | impl | unroll | ROM (B, n=%d) | RAM (B) | stack (B) | MEX≡analytic | MEX (ms) | MATLAB (ms) | compile (s) | C src (B) |",n);
+sep = "|---|---|---|---:|---:|---:|---:|---|---:|---:|---:|---:|";
 lines = [hdr; sep];
 for k = 1:numel(rows)
     r = rows(k);
     eq = '—'; if r.mexErr>=0; eq = ternstr(r.ok,'yes',sprintf('NO (%.0e)',r.mexErr)); end
     ur = '—'; if r.unroll>=0; ur = sprintf('%d',r.unroll); end
-    lines(end+1,1) = string(sprintf("| %s | %s | %s | %s | %s | %s | %s | %s | %s |",...
-        r.fn, r.DerType, r.impl, ur, fmt(r.cBytes,'%d'), eq, fmt(r.mexMs,'%.3f'),...
-        fmt(r.matMs,'%.3f'), fmt(r.compileS,'%.1f'))); %#ok<AGROW>
+    lines(end+1,1) = string(sprintf("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |",...
+        r.fn, r.DerType, r.impl, ur, fmt(r.romBytes,'%d'), fmt(r.ramBytes,'%d'), ...
+        fmt(r.stackBytes,'%d'), eq, fmt(r.mexMs,'%.3f'), fmt(r.matMs,'%.3f'), ...
+        fmt(r.compileS,'%.1f'), fmt(r.cBytes,'%d'))); %#ok<AGROW>
 end
 md = char(strjoin(lines, newline));
 end
