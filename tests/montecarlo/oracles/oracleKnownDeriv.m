@@ -4,10 +4,11 @@ function r = oracleKnownDeriv(c)
 % Generates the classic derivative for case c (assumed: cwd is a fresh
 % working dir holding the fixture) and compares the evaluated derivative at
 % c.x0 to the closed form the generator supplied (c.exactJac / c.exactHess).
-% Skips cleanly when no closed form was provided. M18: a skipped case gets no
-% value check from any oracle - no FD value oracle exists yet (a later ADR-0007
-% phase, R9 C; gap tracked in #145); only the structural oracles
-% (cross-mode/sparsity/symmetry) apply.
+% Skips cleanly when no closed form was provided; in that case the FD secondary
+% oracle oracleFiniteDiff (#145, ADR-0007 R9 Phase C) carries the value check
+% (finite differences vs the generated derivative), so a []-exact case is no
+% longer value-unchecked. This oracle stays the tolerance-free authoritative
+% check wherever a closed form exists.
 r = struct('name','knownDeriv','pass',true,'skipped',false,'message','');
 
 needsHess = strcmp(c.deriv,'hessian');

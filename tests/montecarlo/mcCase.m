@@ -23,12 +23,13 @@ function c = mcCase(varargin)
 %               consumed by mcCoverage; defaults to an empty struct.
 %
 % The exact* handles are the "known-derivative-by-construction" oracle inputs
-% (ADR-0007); leave them [] when no closed form is generated. M18: a []-exact
-% case currently gets NO value oracle - no FD oracle exists yet (a later phase,
-% ROADMAP R9 C; see tests/montecarlo/README.md; gap tracked in #145) - so only
-% the structural oracles
-% (cross-mode agreement, sparsity superset, Hessian symmetry) apply; none
-% checks the value against ground truth. Supply a closed form where one exists.
+% (ADR-0007); leave them [] when no closed form is generated. A []-exact
+% first-derivative case is value-checked by the FD secondary oracle
+% oracleFiniteDiff (#145, ADR-0007 R9 Phase C): it finite-differences the user
+% function and compares the generated derivative's values, closing the gap where
+% only the structural oracles (cross-mode agreement, sparsity superset, Hessian
+% symmetry) applied. Supply a closed form where one exists - oracleKnownDeriv is
+% then the tolerance-free authoritative check and FD skips.
 
 p = inputParser;
 p.FunctionName = 'mcCase';

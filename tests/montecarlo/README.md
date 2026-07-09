@@ -36,6 +36,13 @@ deterministically.
   (affine → `J = A`; quadratic → gradient `Qx+c`, Hessian `Q`; elementwise →
   diagonal `diag(a.*g'(a.*x+b))`, with each `g'` mirroring `cadaunarymath`'s
   emitted form). Tight tolerance (1e-9), not FD.
+- **finiteDiff** — FD secondary value oracle (#145, ADR-0007 R9 Phase C): for a
+  case with **no** closed form (e.g. `mcGenShapeFuzz`), finite-differences the
+  user function and compares the generated derivative's values (`atol 1e-5`,
+  `rtol 1e-4`). Skips when a closed form exists (knownDeriv is authoritative
+  there) and for the hessian case (FD-Hessian value oracle is future work).
+  Closes the gap where a value-wrong but cross-mode-consistent fuzzed case (the
+  B7/B10 class) passed with only structural oracles.
 - **sparsitySuperset** — `find(|D|>0) ⊆ find(Structure)` (REQ-T-03).
 - **crossMode** — `embed_mode` `c`/`l`/`i` static invariants (REQ-T-04) plus
   bit-identical results; the `l`/`i` numeric check needs MATLAB Coder and
@@ -55,5 +62,6 @@ deterministically.
 
 The `mcGenElementwise` / `mcGenScalarSum` rule-table generators exercise
 `cadaunarymath` (and the reverse adjoint rules) under randomization. The
-finite-difference oracle and the typed expression-tree generator are later
+finite-difference value oracle landed with #145 (R9 Phase C); the typed
+expression-tree generator (and an FD-Hessian value oracle) are still later
 phases (ROADMAP R9 C–D).

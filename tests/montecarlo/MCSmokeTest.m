@@ -90,6 +90,30 @@ classdef MCSmokeTest < matlab.unittest.TestCase
             tc.verifyEqual(fr.fail, 0, 'fwdRev reported a hard failure');
         end
 
+        function finiteDiffValueOracleIsClean(tc)
+            % #145 (ADR-0007 R9 Phase C): the FD secondary value oracle closes
+            % the gap where a closed-form-free shape-fuzz case got NO value check
+            % (knownDeriv skips; the rest are structural). Run the shape-fuzz
+            % generator -- which emits exactJac=[] cases -- with oracleFiniteDiff
+            % and assert it actually value-checked them (pass > 0, so the guard
+            % is non-vacuous) and found no wrong values.
+            report = mcCampaign('nIters', 16, 'seed', 161803, ...
+                'generators', {'mcGenShapeFuzz'}, ...
+                'oracles', {'oracleFiniteDiff','oracleKnownDeriv','oracleCrossMode'}, ...
+                'promote', false, 'verbose', false);
+
+            tc.verifyEqual(report.nFail, 0, ...
+                sprintf('finiteDiff smoke found %d failing case(s); see report.failures', ...
+                report.nFail));
+            fd = report.oracleStats.oracleFiniteDiff;
+            tc.verifyGreaterThan(fd.pass, 0, ...
+                'finiteDiff never value-checked a case — the shape-fuzz value gap is still open');
+            tc.verifyEqual(fd.fail, 0, 'finiteDiff reported a wrong-value case');
+            % on these closed-form-free cases knownDeriv must be the one skipping
+            tc.verifyGreaterThan(report.oracleStats.oracleKnownDeriv.skip, 0, ...
+                'knownDeriv should skip the shape-fuzz cases (no closed form) — FD is why they are now checked');
+        end
+
         function negativeHygieneIsClean(tc)
             % Malformed fixtures must fail generation cleanly and leave the
             % session hygienic — no stray transformation globals, path

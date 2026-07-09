@@ -14,8 +14,11 @@ function report = mcCampaign(varargin)
 %   seed       [0]    base RNG seed (>= 0); iteration i uses seed+i.
 %   generators [affine, quadratic, shapefuzz, elementwise, scalarSum,
 %              paramDelivery]  generator function names, cycled.
-%   oracles    [knownDeriv, sparsitySuperset, crossMode, hessSymmetry, fwdRev,
-%              paramDeliveryInvariance, derOutputInvariance]  oracle names.
+%   oracles    [knownDeriv, finiteDiff, sparsitySuperset, crossMode,
+%              hessSymmetry, fwdRev, paramDeliveryInvariance,
+%              derOutputInvariance]  oracle names. finiteDiff is the FD secondary
+%              value oracle (#145): it value-checks the closed-form-free cases
+%              (e.g. shapefuzz) that knownDeriv skips.
 %   stopOnFail [false] stop at the first failing case.
 %   promote    [true]  write a regression reproducer per failure.
 %   reportPath ['']    also write the summary to this file.
@@ -29,8 +32,9 @@ p.addParameter('generators', ...
     {'mcGenAffine','mcGenQuadratic','mcGenShapeFuzz','mcGenElementwise','mcGenScalarSum', ...
      'mcGenParamDelivery'}, @iscellstr);
 p.addParameter('oracles', ...
-    {'oracleKnownDeriv','oracleSparsitySuperset','oracleCrossMode','oracleHessSymmetry', ...
-     'oracleFwdRev','oracleParamDeliveryInvariance','oracleDerOutputInvariance'}, @iscellstr);
+    {'oracleKnownDeriv','oracleFiniteDiff','oracleSparsitySuperset','oracleCrossMode', ...
+     'oracleHessSymmetry','oracleFwdRev','oracleParamDeliveryInvariance', ...
+     'oracleDerOutputInvariance'}, @iscellstr);
 p.addParameter('stopOnFail', false, @(x) islogical(x) && isscalar(x));
 p.addParameter('promote', true, @(x) islogical(x) && isscalar(x));
 p.addParameter('reportPath', '', @(x) ischar(x) || isstring(x));
