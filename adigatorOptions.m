@@ -105,10 +105,12 @@ function options = adigatorOptions(varargin)
 %                  tail: no - they see max). Loops are matched BY
 %                  TRIP-COUNT VALUE: give each runtime-bound parameter a
 %                  distinct max value that no fixed loop in the code
-%                  shares. Not compatible with 'unroll'. (The exit-variable
-%                  union applies to the first-derivative pass; the Hessian
-%                  (second-derivative) level is not yet exit-unioned - B27/#162
-%                  residual.)
+%                  shares. Not compatible with 'unroll'. (First-derivative
+%                  only: a loopbound HESSIAN currently errors at generation -
+%                  the second-derivative pass cannot process the gradient
+%                  file's `assert(name <= max)` guard - so no derivative is
+%                  emitted at that level; characterization + fix tracked by
+%                  issue #173.)
 % DER_OUTPUT: 'matrix' (default) | 'nonzeros' - the derivative output FORM,
 %                  generalized across DerTypes (#84/R25, ADR-0022). 'nonzeros'
 %                  returns the nonzero VECTOR in the fixed pattern order, with
