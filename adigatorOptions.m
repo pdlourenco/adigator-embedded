@@ -82,12 +82,13 @@ function options = adigatorOptions(varargin)
 %                  bounds (roadmap R3; issue #6 Tier 1). Each named input
 %                  must be passed to adigator as a plain numeric positive
 %                  integer scalar: its value is the MAXIMUM trip count,
-%                  used for the analysis. Every outermost rolled loop in
-%                  the main differentiated function (and every inner
-%                  rolled loop with a constant analyzed bound) whose trip
-%                  count equals that value is then printed with the named
-%                  input as its bound, guarded by assert(name <= max), and
-%                  its exit variables take the union over all iterations.
+%                  used for the analysis. Every rolled loop in the main
+%                  differentiated function - outermost OR nested - whose
+%                  trip count equals that value is then printed with the
+%                  named input as its bound, guarded by assert(name <= max),
+%                  and its exit variables take the union over all iterations
+%                  (at any nesting depth, so an inner loop's counter-indexed
+%                  exit derivative is correct at n < Nmax; B27/#162).
 %                  The generated file may be called with any 1 <= n <= max.
 %                  PADDED-PROGRAM SEMANTICS: the file differentiates the
 %                  max-padded program. Generated code references the named
@@ -104,19 +105,10 @@ function options = adigatorOptions(varargin)
 %                  tail: no - they see max). Loops are matched BY
 %                  TRIP-COUNT VALUE: give each runtime-bound parameter a
 %                  distinct max value that no fixed loop in the code
-%                  shares. Not compatible with 'unroll'.
-%                  KNOWN LIMITATION (B27, issue #162): the exit-variable
-%                  union over iterations is currently applied to OUTERMOST
-%                  runtime-bound loops only. An INNER (nested) runtime-bound
-%                  loop whose exit variable's DERIVATIVE location depends on
-%                  the trip count - a gather/scatter indexed by the loop
-%                  counter that is read AFTER the loop, e.g.
-%                  `for a=1:N; w=x(a)^2; end; y=w` - gets the correct VALUE
-%                  but a silently ZEROED derivative when run at n < Nmax.
-%                  Until #162: put the runtime bound on the OUTERMOST loop,
-%                  or avoid reading such a value-specialized inner-loop exit
-%                  variable after the loop. Padding-benign inner exits (sums)
-%                  and iteration-invariant exit derivatives are unaffected.
+%                  shares. Not compatible with 'unroll'. (The exit-variable
+%                  union applies to the first-derivative pass; the Hessian
+%                  (second-derivative) level is not yet exit-unioned - B27/#162
+%                  residual.)
 % DER_OUTPUT: 'matrix' (default) | 'nonzeros' - the derivative output FORM,
 %                  generalized across DerTypes (#84/R25, ADR-0022). 'nonzeros'
 %                  returns the nonzero VECTOR in the fixed pattern order, with

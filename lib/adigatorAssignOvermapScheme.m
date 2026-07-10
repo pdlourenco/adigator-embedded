@@ -103,7 +103,8 @@ if ~UNROLL
     End   = FORDATA(ForCount).END;
     AllVarCounts  = Start:End;
     AllAsgnCounts = AllVarCounts(logical(NAMELOCS(AllVarCounts,1)));
-    
+    FORDATA(ForCount).INNEREXITCOUNTS = [];  % B27 (#162): inner-loop exit set (set in the nested branch)
+
     % -------------------- Outer Loop - Do Assignments -------------------- %
     if ~FORDATA(ForCount).PARENTLOC
       % Is an outer loop - Define all of the overmapping within.
@@ -192,6 +193,18 @@ if ~UNROLL
         end
       end
     else
+      % B27 (#162): record the inner loop's exit variables - assignments within
+      % it whose LAST use is after the loop - so adigatorForIterEnd can union
+      % their exit derivative when the inner loop is runtime-bound. The
+      % outermost branch above builds SAVE.FOR(:,2) for this; inner loops never
+      % had an exit set anywhere, which silently zeroed a counter-indexed exit
+      % derivative at n<Nmax. Stored separately (not in SAVE.FOR) so the
+      % outermost save-slot numbering is untouched. LASTOCC is final here (this
+      % runs after the empty evaluation), unlike in the overmap run.
+      if ~isempty(AllAsgnCounts)
+        FORDATA(ForCount).INNEREXITCOUNTS = ...
+          AllAsgnCounts(LASTOCC(AllAsgnCounts,1) > AllAsgnCounts(end));
+      end
       % ------- Overmap Starting Variables with Ending Variables ---------- %
       % (This is some nested loop, make it such that all variables coming in
       % share an overmap with variables at the end of the loop - will make
