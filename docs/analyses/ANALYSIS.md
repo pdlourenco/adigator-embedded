@@ -534,26 +534,36 @@ self-healed into a hard guard swept over 4 truncation points, plus
 `innerRuntimeBoundUnderFixedOuter` (runtime-bound inner under a fixed outer, so
 the outer union can't mask the inner), `innerExitReadAfterEnclosingLoop` (the
 inner exit is also an outermost save target, exercising the saved-object
-overwrite), and `tripleNestedRuntimeBoundInnerExit` (depth-3). **Re-differentiating
-a loopbound file is a separate scope**, characterized in
-[#173](https://github.com/pdlourenco/adigator-embedded/issues/173): a Hessian (or
-nth derivative) *of* a loopbound derivative is unsupported — the runtime-bound
-`assert(name<=max)` guard is not differentiable, so it **fails loud** with the
-actionable `adigator:loopbound:rediff` (#173 PR A replaced the accidental `Cannot
-process statement`); reverse mode does not apply either (it requires unrolled
-loops, failing earlier with `adigator:fwdtape:controlflow` on the rolled loop).
-It is uniformly fail-loud through every shipped path (no silent-wrong reachable),
-but that parse choke is the *only* thing
-preventing a wrong second derivative — so full `DERNUMBER>=2` loopbound support
-(header/assert re-emission + widening the exit-union gate `adigatorForIterEnd.m`)
-must land together, #173 PR B. The same guard also blocked `slim_embed` on
-loopbound files; PR A whitelists it (keep-always in `adigatorParseTape`/
-`adigatorFieldSlice`) so a loopbound derivative whose slice genuinely fires (a
-vector-output Jacobian) now slims through the full engine instead of fail-safe-
-bailing. Pinned by `ILoopboundTest` (`loopboundHessianReDiffTripwire`, a
-`KnownIssue` tripwire that self-heals into a numeric regression guard when PR B
-lands; `slimKeepsLoopboundGuard` at the slicer layer; `slimEngineSlicesLoopboundJacobian`
-end-to-end through `adigatorSlimDerivFile` + the inline embed pipeline).
+overwrite), and `tripleNestedRuntimeBoundInnerExit` (depth-3). **Re-differentiating a loopbound
+file** was characterized in
+[#173](https://github.com/pdlourenco/adigator-embedded/issues/173) and is now
+**resolved** ([ADR-0028](decisions/ADR-0028-second-order-loopbound.md)): a Hessian
+*of* a loopbound derivative is a first-class output. **PR A** (#176) made the
+interim state fail-loud (`adigator:loopbound:rediff` replaced the accidental
+`Cannot process statement`) and whitelisted the guard for `slim_embed` (keep-always
+in `adigatorParseTape`/`adigatorFieldSlice`, so a loopbound derivative whose slice
+genuinely fires — a vector-output Jacobian — now slims through the full engine
+instead of fail-safe-bailing). **PR B** made the runtime-header + `assert`
+re-emission and the exit-union **derivative-level-agnostic** (dropping the
+`DERNUMBER==1` gates in `adigatorForInitialize` outer+inner blocks and
+`adigatorForIterEnd` when the loopbound value matches) and drops-and-regenerates
+the gradient file's source `assert` in `adigatorPrintTempFiles` (the loop
+machinery re-synthesizes it — single source of truth). One subtlety the spike
+surfaced: the inner-loop header at `DERNUMBER==2` had been emitting a malformed
+`for c=1:(1:N)` from the range object, silently mis-running the inner loop; the
+inner-block restructure fixes it, and the B27 `INNEREXITCOUNTS` union then applies
+at second order with no further change. So the `Nmax` Hessian at `n<Nmax` matches
+the `n`-sized program exactly with a zero padded tail — validated vs analytic,
+direct-`n`, CasADi, and FD for single-level, nested inner-exit, triple-nested, and
+coupled off-diagonal Hessians. Re-differentiating a loopbound file *without* the
+option set still fails loud with `adigator:loopbound:rediff` (the guard cannot be
+re-synthesized); reverse mode does not apply (it needs unrolled loops, failing with
+`adigator:fwdtape:controlflow`). Pinned by `ILoopboundTest`
+(`loopboundHessianMatchesNsizedProgram`, `nestedLoopboundHessianInnerExit`,
+`coupledLoopboundHessianOffDiagonal`, `userAssertOfGuardShapeFailsLoud`;
+`slimKeepsLoopboundGuard` + `slimEngineSlicesLoopboundJacobian` for the PR A slim
+path). Nth derivative (`DERNUMBER>=3`) rides the same level-agnostic gates but is
+not yet swept (roadmap R22/#85).
 [#162](https://github.com/pdlourenco/adigator-embedded/issues/162), ROADMAP R28.
 
 ### 1.3f Numeric literal in a rolled-loop concatenation printed as `.f` (B28)
@@ -651,7 +661,7 @@ B28 is a late sibling of the B17/B22 embedded-field-report family; ROADMAP R26.
 | B24 (reverse-mode `/` elementwise adjoint) | **Fixed (unsupported-error guard)** — `case {'./','/'}` now guards `op=='/' && bsz≠[1 1]` → `adigator:revgrad:unsupported` (matching `\`), so a genuine matrix division fails fast instead of silently miscomputing (§1.3d); `'./'`/scalar `'/'` keep the elementwise adjoint. Pinned in `IRevGradTest` (matrix `/` errors; scalar `/` matches FD) ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). The proper matrix adjoint is deferred to ROADMAP R30 / [#128](https://github.com/pdlourenco/adigator-embedded/issues/128). ROADMAP R28. |
 | B25 (N-D base subscript unvalidated) | **Fixed** — `lib/@cada/subsref.m` `NDRefTranslate` now validates the position-2 base like positions ≥3: a logical/non-numeric base → `adigator:ndparam:slice` (the genuine silent-wrong case native evaluation misses), an out-of-range numeric/`cada` base → `adigator:ndparam:subsOutOfRange` (covers `emptyflag`); numeric literal OOB was already caught by native eval (§1.3d). Pinned in `INDParamTest` (`ndp_logbase`) ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
 | B26 (`length()` returns the ndsize fold length) | **Fixed** — `lib/@cada/length.m` now mirrors the `size.m` `ndsize` guard → `adigator:ndparam:length` (was silently returning the 2D-fold length, §1.3d). Pinned in `INDParamTest` (`ndp_length`) ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
-| B27 (loopbound inner-loop exit derivative zeroed) | **Fixed** — the exit-variable union now extends to INNER runtime-bound loops. `lib/adigatorAssignOvermapScheme.m` records each inner loop's exit set (`INNEREXITCOUNTS` — assignments whose last use is after the loop, computed there because `LASTOCC` is final post-empty-eval but only partial in the overmap run), and `lib/adigatorForIterEnd.m` drops the `~PARENTLOC` gate and unions those exits (return-only; the outermost-only saved-object overwrite and `SAVE.FOR` slot numbering are untouched, so outermost generation stays byte-identical). Was: an inner runtime-bound loop's counter-indexed exit derivative was baked to a constant `y.dx = y.dx(Nmax)` gather reading a structurally-zero slot at `n<Nmax`, silently zeroing the gradient (§1.3e). Closes #120 as reading 2. Pinned by `ILoopboundTest` — `nestedRuntimeBoundInnerExitDerivative` (self-healed from the `KnownIssue` tripwire, swept over 4 truncation points) plus three hardening variants: `innerRuntimeBoundUnderFixedOuter`, `innerExitReadAfterEnclosingLoop` (the exit-also-outermost-save-target path), and `tripleNestedRuntimeBoundInnerExit` (depth-3). **Residual:** re-differentiating a loopbound file is unsupported — a Hessian/nth derivative fails loud with `adigator:loopbound:rediff` (the `assert(name<=max)` guard is not differentiable); reverse mode doesn't apply (it needs unrolled loops). Characterized + made actionable + slim-whitelisted in [#173](https://github.com/pdlourenco/adigator-embedded/issues/173) PR A; full `DERNUMBER>=2` support in PR B. [#162](https://github.com/pdlourenco/adigator-embedded/issues/162). ROADMAP R28. |
+| B27 (loopbound inner-loop exit derivative zeroed) | **Fixed** — the exit-variable union now extends to INNER runtime-bound loops. `lib/adigatorAssignOvermapScheme.m` records each inner loop's exit set (`INNEREXITCOUNTS` — assignments whose last use is after the loop, computed there because `LASTOCC` is final post-empty-eval but only partial in the overmap run), and `lib/adigatorForIterEnd.m` drops the `~PARENTLOC` gate and unions those exits (return-only; the outermost-only saved-object overwrite and `SAVE.FOR` slot numbering are untouched, so outermost generation stays byte-identical). Was: an inner runtime-bound loop's counter-indexed exit derivative was baked to a constant `y.dx = y.dx(Nmax)` gather reading a structurally-zero slot at `n<Nmax`, silently zeroing the gradient (§1.3e). Closes #120 as reading 2. Pinned by `ILoopboundTest` — `nestedRuntimeBoundInnerExitDerivative` (self-healed from the `KnownIssue` tripwire, swept over 4 truncation points) plus three hardening variants: `innerRuntimeBoundUnderFixedOuter`, `innerExitReadAfterEnclosingLoop` (the exit-also-outermost-save-target path), and `tripleNestedRuntimeBoundInnerExit` (depth-3). **Second order:** re-differentiating a loopbound file is now supported ([#173](https://github.com/pdlourenco/adigator-embedded/issues/173), [ADR-0028](../decisions/ADR-0028-second-order-loopbound.md)) — PR A (#176) made it fail-loud + slim-whitelisted the guard; PR B made the runtime-header/assert re-emission + exit-union derivative-level-agnostic, so a loopbound Hessian at n<Nmax matches the n-sized program (§1.3e). [#162](https://github.com/pdlourenco/adigator-embedded/issues/162). ROADMAP R28. |
 | B28 (numeric literal in a rolled-loop concat printed `.f`) | **Fixed** — `@cada/vertcat.m`'s loop-print (`ForVertcat`) remapped a `Num2Overloaded` literal (valid name, `id=[]`) through `cadaPrintReMap`, whose `~varID` rescue misfired for `[]` (`~[]` is an empty logical), so `cadafuncname([])` returned the spurious `'.f'` (`NAMES{[]}` is a zero-element CSL); `@cada/horzcat.m`'s `else` (skip the remap for numerics) is why row-concats never surfaced it — a latent upstream asymmetry (§1.3f). Fixed by porting the `else` into vertcat's two loop-print sites, repairing the `cadaPrintReMap` rescue (`isempty(varID) || ~varID`), and a `cadafuncname` chokepoint (`adigator:cadafuncname:emptyVarID`) that fails loud on an empty id (never fires across the 288-test `ci_local`). Pinned by `tests/integration/IConcatLoopLiteralTest.m` (F2 minimal loop + F3 folded constant + horzcat control, generated through embed `'i'`, run, FD-matched) ([#168](https://github.com/pdlourenco/adigator-embedded/issues/168)). A late sibling of the B17/B22 embedded-field-report family; ROADMAP R26. |
 | §1.3 math-doc conventions (D1) | **Fixed** — `adigatorDerivativeConventions.m` (the binding conventions file, CLAUDE.md §3) contradicted contract C-1: Hessian section `f: Rn -> Rm` (→ `R`), the Jacobian/Hessian size captions mislabeled `size(Gradient(f)) = [length(x) length(f)]` (Jacobian read n×m, contradicting C-1's m×n), and the `dfn`/`dfm` row typo. Corrected to match C-1, plus the same defects copied into `adigatorGenJacFile`/`adigatorGenHesFile` — text-only, no behavioural change. The §1.3 "summary block inconsistent" claim was **retracted** (it is a valid generalization of the table). ([#118](https://github.com/pdlourenco/adigator-embedded/issues/118)) ROADMAP R28. |
 

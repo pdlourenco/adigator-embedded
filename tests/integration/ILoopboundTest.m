@@ -476,57 +476,160 @@ classdef ILoopboundTest < matlab.unittest.TestCase
         end
     end
 
-    methods (Test, TestTags = {'KnownIssue'})
-        function loopboundHessianReDiffTripwire(tc)
-            % #173: re-differentiating a loopbound-generated file - a Hessian
-            % here - is not supported yet. The runtime-bound `assert(name <= max)`
-            % guard is not differentiable, so generation fails loud with the
-            % actionable adigator:loopbound:rediff (PR A). This tripwire verifies
-            % that id and assumeFails (documents the limitation, filters). When
-            % DERNUMBER==2 loopbound support lands (#173 PR B) the throw goes away
-            % and the numeric sweep below runs as the regression guard - so if the
-            % parse choke is ever removed WITHOUT the header/union extension, the
-            % sweep goes RED on the silently-Nmax-specialized second derivative.
-            writeFcn('lb_h2', {'function y = lb_h2(x,N)','y = 0;','for a = 1:N', ...
-                '  w = x(a)^2;','end','y = y + w;','end'});   % y = x(N)^2, H(N,N)=2
-            Nmax = 4; threw = false;
-            try
-                gx = adigatorCreateDerivInput([Nmax 1],'x');
-                adigatorGenHesFile('lb_h2',{gx,Nmax}, ...
-                    adigatorOptions('overwrite',1,'echo',0,'loopbound','N', ...
-                    'path',fullfile(pwd,'lb')));
-            catch e
-                threw = true;
-                tc.verifyEqual(e.identifier, 'adigator:loopbound:rediff', ...
-                    'a loopbound Hessian must fail loud with the actionable rediff id');
-            end
-            if threw
-                tc.assumeFail(['Known issue #173: re-differentiating a loopbound ', ...
-                    'file (Hessian) is not supported yet - fail-loud.']);
-            end
-            % --- regression guard (runs only once #173 PR B removes the throw) ---
+    methods (Test)
+        % #173 PR B: second-order loopbound support. A loopbound Hessian
+        % (DERNUMBER==2) now re-emits the runtime header + `assert(name<=max)`
+        % at the second-derivative level (adigatorForInitialize outer + inner
+        % blocks), the exit-union widens past DERNUMBER==1 (adigatorForIterEnd),
+        % and the gradient file's source assert is dropped-and-regenerated
+        % (adigatorPrintTempFiles). So the Nmax Hessian run at n<Nmax matches the
+        % n-sized program exactly with a structurally-zero padded tail.
+        function loopboundHessianMatchesNsizedProgram(tc)
+            % scalar cost y = sum_a p(a) x(a)^3  ->  H = diag(6 p x). The Nmax
+            % Hessian at n<Nmax must equal a Hessian generated directly at n and
+            % the analytic value, with a zero padded tail. (Was the healed
+            % loopboundHessianReDiffTripwire KnownIssue.)
+            writeFcn('lbh_acc', {'function y = lbh_acc(x,p,N)','y = 0;', ...
+                'for a = 1:N','  y = y + p(a)*x(a)^3;','end','end'});
+            Nmax = 6;
+            adigatorGenHesFile('lbh_acc',{adigatorCreateDerivInput([Nmax 1],'x'), ...
+                adigatorCreateAuxInput([Nmax 1]),Nmax}, ...
+                adigatorOptions('overwrite',1,'echo',0,'loopbound','N','path',fullfile(pwd,'lb')));
             rehash;
-            rng(9); xf = randn(Nmax,1);
-            for n = 2:Nmax
-                gxn = adigatorCreateDerivInput([n 1],'x');
-                adigatorGenHesFile('lb_h2',{gxn,n}, ...
+            rng(9); xf = randn(Nmax,1); pf = 0.5 + rand(Nmax,1);
+            for n = [Nmax 4 1]
+                adigatorGenHesFile('lbh_acc',{adigatorCreateDerivInput([n 1],'x'), ...
+                    adigatorCreateAuxInput([n 1]),n}, ...
                     adigatorOptions('overwrite',1,'echo',0,'path',fullfile(pwd,'ex')));
-                Hm = runHesIn(fullfile(pwd,'lb'), xf, n);        % loopbound at Nmax, run at n
-                Hn = runHesIn(fullfile(pwd,'ex'), xf(1:n), n);   % direct at exact n
+                Hm = runHesIn(fullfile(pwd,'lb'),'lbh_acc_Hes',{xf,pf,n});
+                Hn = runHesIn(fullfile(pwd,'ex'),'lbh_acc_Hes',{xf(1:n),pf(1:n),n});
+                Hexp = diag(6*pf(1:n).*xf(1:n));
                 tc.verifyEqual(Hm(1:n,1:n), Hn, 'AbsTol', 1e-10, ...
-                    sprintf('loopbound Hessian must match the n-sized program at n=%d', n));
+                    sprintf('loopbound Hessian must match n-sized program at n=%d', n));
+                tc.verifyEqual(Hm(1:n,1:n), Hexp, 'AbsTol', 1e-10, 'RelTol', 1e-10, ...
+                    sprintf('loopbound Hessian must match analytic at n=%d', n));
                 Hm(1:n,1:n) = 0;
                 tc.verifyEqual(Hm, zeros(Nmax), 'AbsTol', 0, 'padded tail must be zero');
             end
         end
+
+        function nestedLoopboundHessianInnerExit(tc)
+            % the B27 inner-exit shape AT SECOND ORDER: y = K*x(N)^2, so
+            % H(N,N) = 2K and every other entry is zero. Before PR B the inner
+            % runtime-bound loop's second-derivative exit was silently zeroed at
+            % n<Nmax (the inner header emitted a malformed 1:(1:N)); this pins the
+            % fix over truncation points in both bounds.
+            writeFcn('lbh_inr', {'function y = lbh_inr(x,N,K)','y = 0;', ...
+                'for k = 1:K','  w = 0;','  for a = 1:N','    w = x(a)^2;','  end', ...
+                '  y = y + w;','end','end'});
+            Nmax = 5; Kmax = 3;
+            adigatorGenHesFile('lbh_inr',{adigatorCreateDerivInput([Nmax 1],'x'),Nmax,Kmax}, ...
+                adigatorOptions('overwrite',1,'echo',0,'loopbound',{'N','K'},'path',fullfile(pwd,'in')));
+            rehash;
+            rng(7); xf = randn(Nmax,1);
+            for NK = [Nmax Kmax; 3 2; 2 1; 1 3].'
+                N = NK(1); K = NK(2);
+                H = runHesIn(fullfile(pwd,'in'),'lbh_inr_Hes',{xf,N,K});
+                Hexp = zeros(Nmax); Hexp(N,N) = 2*K;
+                tc.verifyEqual(H, Hexp, 'AbsTol', 1e-10, ...
+                    sprintf('inner-exit loopbound Hessian at (N,K)=(%d,%d)', N, K));
+            end
+        end
+
+        function coupledLoopboundHessianOffDiagonal(tc)
+            % a FULL off-diagonal Hessian via a post-loop square of a loop-
+            % accumulated exit variable: y = (sum_a p(a) x(a))^2 -> H = 2 p p'.
+            % Exercises the outer-loop exit-union (s used after the loop) at
+            % second order with genuine cross terms, FD-checked (rules out any
+            % diagonal-only artefact).
+            writeFcn('lbh_cpl', {'function y = lbh_cpl(x,p,N)','s = 0;', ...
+                'for a = 1:N','  s = s + p(a)*x(a);','end','y = s^2;','end'});
+            Nmax = 6;
+            adigatorGenHesFile('lbh_cpl',{adigatorCreateDerivInput([Nmax 1],'x'), ...
+                adigatorCreateAuxInput([Nmax 1]),Nmax}, ...
+                adigatorOptions('overwrite',1,'echo',0,'loopbound','N','path',fullfile(pwd,'c')));
+            rehash;
+            rng(31); xf = randn(Nmax,1); pf = 0.5 + rand(Nmax,1);
+            for n = [Nmax 4 2]
+                H = runHesIn(fullfile(pwd,'c'),'lbh_cpl_Hes',{xf,pf,n});
+                Hexp = 2*pf(1:n)*pf(1:n).';
+                tc.verifyEqual(H(1:n,1:n), Hexp, 'AbsTol', 1e-10, 'RelTol', 1e-10, ...
+                    sprintf('coupled loopbound Hessian off-diagonal at n=%d', n));
+                Hfd = fdHessian(@(xx) sum(pf(1:n).*xx(1:n))^2, xf, n);
+                tc.verifyEqual(H(1:n,1:n), Hfd, 'AbsTol', 1e-5, ...
+                    sprintf('coupled loopbound Hessian must match FD at n=%d', n));
+                Htail = H; Htail(1:n,1:n) = 0;
+                tc.verifyEqual(Htail, zeros(Nmax), 'AbsTol', 0, 'padded tail must be zero');
+            end
+        end
+
+        function tripleNestedLoopboundHessian(tc)
+            % depth-3 at second order: y = K*M*x(N)^2 -> H(N,N) = 2*K*M. The
+            % middle loop is both child and parent; the inner-header restructure
+            % + level-agnostic exit-union must generalize past two levels for the
+            % Hessian, not only the gradient (tripleNestedRuntimeBoundInnerExit).
+            writeFcn('lbh_tri', {'function y = lbh_tri(x,N,M,K)','y = 0;', ...
+                'for k = 1:K','  for m = 1:M','    w = 0;','    for a = 1:N', ...
+                '      w = x(a)^2;','    end','    y = y + w;','  end','end','end'});
+            Nmax = 5; Mmax = 3; Kmax = 2;
+            adigatorGenHesFile('lbh_tri',{adigatorCreateDerivInput([Nmax 1],'x'),Nmax,Mmax,Kmax}, ...
+                adigatorOptions('overwrite',1,'echo',0,'loopbound',{'N','M','K'},'path',fullfile(pwd,'t')));
+            rehash;
+            rng(5); xf = randn(Nmax,1);
+            for NMK = [Nmax Mmax Kmax; 4 2 2; 1 3 1].'
+                N = NMK(1); M = NMK(2); K = NMK(3);
+                H = runHesIn(fullfile(pwd,'t'),'lbh_tri_Hes',{xf,N,M,K});
+                Hexp = zeros(Nmax); Hexp(N,N) = 2*K*M;
+                tc.verifyEqual(H, Hexp, 'AbsTol', 1e-10, ...
+                    sprintf('triple-nested loopbound Hessian at (N,M,K)=(%d,%d,%d)', N, M, K));
+            end
+        end
+
+        function userAssertOfGuardShapeFailsLoud(tc)
+            % #173 PR A behavior preserved under PR B: an `assert(name<=int)` in
+            % the user's OWN source is not differentiable and fails loud with the
+            % actionable adigator:loopbound:rediff, rather than the accidental
+            % generic "Cannot process statement". The printer only DROPS the guard
+            % on a RE-differentiation (DERNUMBER>=2) of a loopbound file; a
+            % first-pass (DERNUMBER==1) guard-shaped assert is the user's own and
+            % must NOT be silently dropped - so it stays fail-loud even when the
+            % loopbound option is set and the name collides with a bound parameter.
+            writeFcn('lb_ua', {'function y = lb_ua(x,k)','assert(k <= 5);', ...
+                'y = sum(x.^2);','end'});
+            gx = @() adigatorCreateDerivInput([3 1],'x');
+            % (a) loopbound NOT set
+            tc.verifyError(@() adigator('lb_ua',{gx(),3},'lb_ua_dx', ...
+                adigatorOptions('overwrite',1,'echo',0)), 'adigator:loopbound:rediff');
+            % (b) loopbound SET on the SAME name k (first pass, DERNUMBER==1):
+            % still fail-loud, NOT a silent drop of the user's guard
+            tc.verifyError(@() adigator('lb_ua',{gx(),3},'lb_ua_dx', ...
+                adigatorOptions('overwrite',1,'echo',0,'loopbound','k')), ...
+                'adigator:loopbound:rediff');
+        end
     end
 end
 
-function H = runHesIn(mdir, xv, n)
-% cd into mdir, run <fn>_Hes(x,N), return the Hessian matrix
+function H = runHesIn(mdir, fn, args)
+% cd into mdir, run the Hessian wrapper <fn>(args{:}) and return the dense
+% Hessian. Clears the wrapper, the _ADiGatorHes file AND its persistent global
+% so a same-named file in a sibling dir cannot serve stale .mat data (the
+% cross-directory staleness that a plain `clear(fn)` misses).
 old = cd(mdir); cu = onCleanup(@() cd(old));
-clear('lb_h2_Hes'); rehash;
-[H, ~] = lb_h2_Hes(xv, n);
+adi = strrep(fn,'_Hes','_ADiGatorHes');
+clear(fn); clear(adi); clear('global',['ADiGator_',adi]); rehash;
+H = full(feval(fn, args{:}));
+end
+
+function H = fdHessian(f, x, n)
+% central second-difference Hessian of scalar f over the first n entries of x
+H = zeros(n); h = 1e-4;
+for i = 1:n
+    for j = 1:n
+        ei = zeros(numel(x),1); ei(i) = h;
+        ej = zeros(numel(x),1); ej(j) = h;
+        H(i,j) = (f(x+ei+ej) - f(x+ei-ej) - f(x-ei+ej) + f(x-ei-ej))/(4*h*h);
+    end
+end
 end
 
 function J = runJacIn(tc, mdir, fn, xf, pf, n, Nmax)
