@@ -155,6 +155,7 @@ and compare. Run on every pull request (slower, still base MATLAB).
 | TS-I-21 | `INDParamTest` — the N-D parameter veneer (R2, #11 Level 2): `adigatorCreateAuxInput([m n K])` folded to 2-D, `B(:,:,k)` slicing as affine column windows, Jacobian vs analytic + FD, 3-D and folded-2-D acceptance. | REQ-T-01 (N-D params) |
 | TS-I-22 | `IStructInputTest` — struct inputs carrying the VOD / aux data (R8, #24 scope A): flat + nested-struct Hessian, vector-function Jacobian, and `c`/`l`/`i` cross-mode equality. | REQ-T-01, REQ-C-04 (struct inputs) |
 | TS-I-23 | `IAllocationTest` — the allocation-over-time headline example (R1): per-(actuator, time) terms vectorized over the `N*K` product fold, assembly wrappers for both reduction directions, one generated file verified across several `(N,K)` pairs. | REQ-T-01, REQ-T-08 (allocation) |
+| TS-I-24 | `IConcatLoopLiteralTest` — regression guard for **B28** (ANALYSIS §1.3f, #168): a numeric literal in a `vertcat` inside a **rolled-loop print context** (an `unroll=0` `for`, or a subfunction printed as a loop) must generate without a spurious `.f` and match FD — a formerly broken-file bug; a horzcat control guards the vertcat-vs-horzcat asymmetry the fix relies on. | REQ-T-01 |
 
 ### 2.3 System / validation tests — `tests/system` (TS-S)
 

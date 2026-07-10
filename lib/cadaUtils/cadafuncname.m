@@ -11,6 +11,18 @@ if nargin == 0
 elseif nargin == 1
   VarID = varargin{1};
 end
+if isempty(VarID)
+  % B28 (#168): an id-less operand reached the name printer. Never silently
+  % derive a name from NAMES{[]} - that yields the spurious '.f' (an empty
+  % comma-separated list plus '.f') and a generated file that fails to run.
+  % Fail loud at generation time instead, so a caller that leaked an empty id
+  % is caught here. Legitimate id-less operands (Num2Overloaded numerics,
+  % cada([],..) Gator-data constants) keep their own name upstream in
+  % @cada/cadaPrintReMap and never reach this line.
+  error('adigator:cadafuncname:emptyVarID', ...
+    ['cadafuncname received an empty variable id - an id-less operand reached ',...
+     'the name printer (ADiGator bug B28/#168), not a user error.']);
+end
 derivflag = 0;
 if ADIGATOR.PRINT.FLAG
 
