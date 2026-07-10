@@ -103,26 +103,30 @@ correctness + the headline relationships, not the exact figures.)
 the way: through **Embedded Coder (ERT)** to a static `lib`, then measures the
 **honest compiled footprint** of the derivative function — ROM (`.text`+`.rdata`),
 static RAM (`.data`+`.bss`) via `size -A`, and max stack via `gcc -fstack-usage`
-(**R17c**) — alongside a MEX for numeric equivalence + runtime, and compile time.
-Skip-clean where Coder (or the standalone `gcc`/`size` toolchain) is absent.
+(**R17c**) — alongside a MEX for numeric equivalence + runtime, compile time, and
+an interpreted **numerical finite-difference** cost (the numerical leg of the
+analytical / numerical / AD "which method?" triad). Skip-clean where Coder (or
+the standalone `gcc`/`size` toolchain) is absent.
 
 ```matlab
 addpath bench
 rc = derivShowcaseC('n',8,'figPath','bench/showcase_scaling.png');
 ```
 
-Snapshot (inline mode, n = 8, MATLAB R2024a + MinGW; ROM/RAM/stack in bytes):
+Snapshot (inline mode, n = 8, MATLAB R2024a + MinGW; ROM/RAM/stack in bytes).
+`FD (ms)` is the interpreted central-finite-difference cost of the same
+derivative — the numerical leg of the analytical / numerical / AD triad:
 
-| function | DerType | impl | unroll | ROM | RAM | stack | MEX≡analytic | MEX (ms)² | MATLAB (ms)² | compile (s)² | C src (B)¹ |
-|---|---|---|---:|---:|---:|---:|---|---:|---:|---:|---:|
-| vcostfun | gradient | AD | 1 | 208 | 0 | 160 | yes | 0.003 | 0.168 | 14.9 | 19505 |
-| vcostfun | gradient-reverse | AD | 1 | 208 | 0 | 160 | yes | 0.002 | 0.006 | 3.2 | 17940 |
-| vcostfun | gradient | analytic | — | 160 | 0 | 160 | yes | 0.002 | 0.001 | 3.7 | 17764 |
-| vcostfun | hessian | AD | 1 | 224 | 0 | 160 | yes | 0.002 | 0.075 | 2.9 | 20576 |
-| vcostfun | hessian | analytic | — | 224 | 0 | 144 | yes | 0.002 | 0.002 | 3.0 | 18633 |
-| vvecfun | jacobian | AD | 1 | 224 | 0 | 304 | yes | 0.002 | 0.051 | 2.7 | 19307 |
-| vfun | jacobian | AD | 0 | 448 | 0 | 288 | yes | 0.003 | 0.248 | 3.5 | 20484 |
-| vvecfun | jacobian | analytic | — | 176 | 0 | 176 | yes | 0.003 | 0.001 | 2.8 | 17948 |
+| function | DerType | impl | unroll | ROM | RAM | stack | MEX≡analytic | MEX (ms)² | MATLAB (ms)² | FD (ms)² | compile (s)² | C src (B)¹ |
+|---|---|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|
+| vcostfun | gradient | AD | 1 | 208 | 0 | 160 | yes | 0.003 | 0.053 | 0.023 | 13.7 | 19505 |
+| vcostfun | gradient-reverse | AD | 1 | 208 | 0 | 160 | yes | 0.002 | 0.004 | 0.004 | 3.4 | 17940 |
+| vcostfun | gradient | analytic | — | 160 | 0 | 160 | yes | 0.002 | 0.001 | 0.005 | 3.3 | 17764 |
+| vcostfun | hessian | AD | 1 | 224 | 0 | 160 | yes | 0.002 | 0.067 | 0.196 | 2.7 | 20576 |
+| vcostfun | hessian | analytic | — | 224 | 0 | 144 | yes | 0.002 | 0.001 | 0.126 | 2.6 | 18633 |
+| vvecfun | jacobian | AD | 1 | 224 | 0 | 304 | yes | 0.002 | 0.041 | 0.012 | 2.5 | 19309 |
+| vfun | jacobian | AD | 0 | 448 | 0 | 288 | yes | 0.003 | 0.163 | 0.023 | 3.2 | 20484 |
+| vvecfun | jacobian | analytic | — | 176 | 0 | 176 | yes | 0.002 | 0.001 | 0.009 | 2.2 | 17948 |
 
 > **ROM/RAM/stack are the compiled footprint of the derivative *function*** —
 > the `<wrapper>.c` (+ `<wrapper>_data.c` static tables) object, excluding the
@@ -145,7 +149,7 @@ survive to the compiled object. The forms that *would* differ (data-heavy index
 tables) are exactly the ones still blocked on the Embedded-Coder codegen gaps in
 [#80](https://github.com/pdlourenco/adigator-embedded/issues/80).
 
-![AD vs analytical compiled ROM and runtime vs n](showcase_scaling.png)
+![Compiled ROM, compiled MEX runtime, and interpreted numerical-FD-vs-AD scaling vs n](showcase_scaling.png)
 
 - **AD vs analytical is a *code-lines* story here, not a footprint one.** The hand
   derivative is 4–5 lines vs the AD wrapper's 18–187 (MATLAB-level table above),
@@ -154,11 +158,24 @@ tables) are exactly the ones still blocked on the Embedded-Coder codegen gaps in
   scale, where the derivative grows large/sparse enough that hand-deriving it
   becomes impractical or silently drops sparsity. The analytical column also
   doubles as the gold correctness oracle (`SDerivShowcaseTest` FD-checks it once).
-- **Runtime is COMPARABLE, not a reverse win** (the figure's right panel,
+- **Runtime is COMPARABLE, not a reverse win** (the figure's middle panel,
   and #73's runtime axis). Across `n` = 256 / 1024 / 4096 the compiled MEX times
   are forward and reverse both O(n) and within noise of each other. The
   forward-vs-reverse choice here is bought with **neither footprint nor speed** —
   it is a code-generation-style preference at this scale.
+- **Numerical finite differences are where AD earns its keep** (the figure's
+  right panel — the analytical / numerical / AD *cost* triad, #73). At the
+  *interpreted* host level (finite differences aren't deployed to target, hence no
+  ROM), the numerical-FD gradient of `vcostfun` costs **3.1 / 19.4 / 164 ms** at
+  `n` = 256 / 1024 / 4096 — `n` perturbations × an O(n) cost each, i.e. **O(n²)
+  work asymptotically** (the sampled window is pre-asymptotic — ~6–8× per 4× `n`
+  — as each eval still carries vectorized-op overhead, but already pulling away) —
+  while reverse AD stays O(n) (**0.02 / 0.05 / 0.19 ms**) and the analytical floor
+  is O(n) too. By `n` = 4096 FD is ~**860×** slower, and the gap widens with `n`.
+  FD is also only *approximate* (truncation + round-off), so it is slower **and**
+  less accurate. This is the durable, machine-independent "why AD over
+  finite-differencing a gradient" — read the **scaling**, not the noisy
+  single-`n` absolutes in the table above.
 - **Compiled ROM is roughly `n`-flat for a vectorized cost** (left panel): `n` is
   a runtime array length, not unrolled code, so neither the generated code nor its
   ≈0 static data grows with the number of variables.
