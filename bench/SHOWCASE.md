@@ -188,3 +188,45 @@ tables) are exactly the ones still blocked on the Embedded-Coder codegen gaps in
   compiled). `SCodegenShowcaseTest` pins build + numeric equivalence **and** the
   measured footprint (ROM/RAM/stack populated, forward/reverse convergence).
 
+
+## Loopbound padding penalty (R17 Tier-1 — feeds the R6 go/no-go)
+
+A `loopbound` derivative is generated once at `N = Nmax` and called with any
+runtime `n <= Nmax` (padded-program semantics). `bench/loopboundPaddingPenalty.m`
+measures what that padding **costs** vs a file regenerated at exact `n`, for the
+subscripted scalar-cost anchor `scostfun_lb` (`J = Σₖ₌₁ᴺ exp(xₖ)+2xₖ`), inline
+`i` / ERT:
+
+```matlab
+addpath bench
+rp = loopboundPaddingPenalty('Nmax',64,'nSweep',[4 8 16 32 64]);
+```
+
+Snapshot (gradient, `Nmax = 64`, MATLAB R2024a + MinGW). Padded(Nmax) footprint
+is **n-independent**: ROM 4624, RAM 0, stack 240 bytes.
+
+| n | exact ROM | exact RAM | exact stack | ROM penalty (padded/exact) |
+|---:|---:|---:|---:|---:|
+| 4 | 640 | 0 | 240 | 7.2x |
+| 8 | 560 | 0 | 160 | 8.3x |
+| 16 | 736 | 0 | 176 | 6.3x |
+| 32 | 1504 | 0 | 192 | 3.1x |
+| 64 | 4592 | 0 | 224 | 1.0x |
+
+- **The penalty is real and it is in ROM.** A *subscripted* (allocation-shaped)
+  derivative carries a per-iteration nonzero-location table that scales with the
+  trip count; the padded file keeps the full `Nmax`-sized `static const` tables
+  regardless of `n`, so at `n = 4` you pay **~7×** the ROM of an exact-`n` file.
+  RAM stays 0 (tables are `.rdata`, not RAM) and stack is comparable.
+- **It converges at `n = Nmax`** (1.0×) — padded and exact are the same file
+  there — and grows with `Nmax/n`, so it is largest exactly where a runtime bound
+  is most useful (a big `Nmax` seldom hit).
+- **This is the R6 evidence.** The padding penalty is precisely the cost that
+  symbolic-`N` (#6 Tier 2) would remove. So the go/no-go has a number: for
+  subscripted forms run at `n ≪ Nmax` the ROM penalty is multiple-× and Tier 2
+  has real value; for vectorized forms (≈0 static data, C level above) or when
+  `n ≈ Nmax`, the penalty is negligible and Tier 2 can defer.
+- **Gradient only.** A loopbound *Hessian* currently errors at generation (the
+  second-derivative pass can't process the loopbound `assert` guard, ANALYSIS
+  §1.3e / [#173](https://github.com/pdlourenco/adigator-embedded/issues/173)), so
+  the penalty is measured for the gradient. Pinned by `SLoopboundPaddingTest`.
