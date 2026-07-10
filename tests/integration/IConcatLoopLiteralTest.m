@@ -85,6 +85,19 @@ classdef IConcatLoopLiteralTest < matlab.unittest.TestCase
                 'end'});
         end
 
+        function midListLiteralRolledLoop(tc)
+            % Literal NOT in first position: `[x; 1; x^2]` puts the `1` mid-list,
+            % so a regression would emit `[x.f;.f;cada1f1]` - a `.f` after a `;`,
+            % which the first-position-only text check would miss. Broadens the
+            % numeric pin and exercises the mid-list regex.
+            checkClean(tc, 'f168_mid', { ...
+                'y = 0;', ...
+                'for k = 1:3', ...
+                '  T = [x; 1; x^2];', ...
+                '  y = y + T.''*T;', ...
+                'end'});
+        end
+
         function horzcatControlStaysClean(tc)
             % Control - the identical rolled loop with a HORIZONTAL concat was
             % always correct (horzcat has the else vertcat lacked). Guard it so
@@ -123,7 +136,9 @@ adigatorGenDerFile_embedded('gradient', name, {ax}, ...
 rehash;
 
 body = fileread([name '_Grd.m']);
-tc.verifyEmpty(regexp(body, '\[\s*\.f', 'once'), ...
+% A spurious literal-`.f` appears after the opening bracket OR after any element
+% separator (`;` / `,`), so catch mid-list literals too - not only `[.f`.
+tc.verifyEmpty(regexp(body, '[\[;,]\s*\.f', 'once'), ...
     sprintf('%s: concat prints a numeric literal as a spurious `.f` (B28)', name));
 
 xv = 0.7;
