@@ -39,6 +39,10 @@ function S = adigatorParseTape(body, InNames, allowBlocks)
 %         .block   - logical, true for a rolled 'for...end' unit
 %         .active/.kind/.info - left empty for a downstream classify/execute
 %                    pass (adigatorGenRevGradFile's execAndClassify)
+%         .keep    - logical, true for an opaque KEEP-ALWAYS statement (the
+%                    loopbound `assert(name <= max)` guard, #173): it writes
+%                    nothing and has no parseable lhs/rhs, so a slicer must keep
+%                    it unconditionally rather than drop it as dead
 %
 % Rolled control flow ('for'/'while'/'if'/'elseif'/'else'/'switch') in the
 % body is rejected with adigator:fwdtape:controlflow UNLESS allowBlocks lets a
@@ -66,7 +70,8 @@ n = numel(items);
 
 texts = reshape({items.text},[],1);
 S = struct('text',texts,'lhs',[],'lhsSubs',[],'rhs',[],'deps',[],...
-  'line',[],'lineEnd',[],'writes',[],'block',[],'active',[],'kind',[],'info',[]);
+  'line',[],'lineEnd',[],'writes',[],'block',[],'active',[],'kind',[],'info',[],...
+  'keep',[]);   % #173: opaque keep-always statements (the loopbound assert guard)
 for k = 1:n
   S(k).line    = items(k).line;
   S(k).lineEnd = items(k).lineEnd;
@@ -80,6 +85,22 @@ reserved = {'S','Gator1Data','UserFunInputs','InNames','vodLoc','VodName',...
 % block, the union of written bases (its deps are resolved in the pass below).
 pendingReads = cell(n,1);
 for k = 1:n
+  S(k).keep = false;
+  % LOOPBOUND runtime-bound guard `assert(name <= max)` (#173): the runtime
+  % protection adigatorForInitialize emits for a runtime-bound loop. Its '<='
+  % would mis-split at the '=' below; treat it as an opaque KEEP-ALWAYS statement
+  % (writes nothing, reads the bound name) so the slicer never drops the
+  % n <= Nmax check from a slimmed loopbound file. (Only TOP-LEVEL guards reach
+  % here; an inner loop's assert is absorbed by analyzeBlock as a phantom write.)
+  if ~isempty(regexp(strtrim(char(S(k).text)), ...
+      '^assert\(\s*[A-Za-z]\w*\s*<=\s*\d+\s*\)\s*;$','once'))
+    % Opaque keep-always: it writes nothing and has no parseable lhs/rhs, so the
+    % slicer keeps it unconditionally (its bound name is a function input, always
+    % in scope) - no deps need recording.
+    S(k).lhs = ''; S(k).lhsSubs = ''; S(k).rhs = '';
+    S(k).writes = {}; S(k).keep = true;
+    continue
+  end
   if S(k).block
     [w, r, lv] = analyzeBlock(body(S(k).line:S(k).lineEnd));
     if any(ismember(w,reserved))

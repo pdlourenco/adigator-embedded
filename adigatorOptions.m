@@ -105,12 +105,14 @@ function options = adigatorOptions(varargin)
 %                  tail: no - they see max). Loops are matched BY
 %                  TRIP-COUNT VALUE: give each runtime-bound parameter a
 %                  distinct max value that no fixed loop in the code
-%                  shares. Not compatible with 'unroll'. (First-derivative
-%                  only: a loopbound HESSIAN currently errors at generation -
-%                  the second-derivative pass cannot process the gradient
-%                  file's `assert(name <= max)` guard - so no derivative is
-%                  emitted at that level; characterization + fix tracked by
-%                  issue #173.)
+%                  shares. Not compatible with 'unroll'. A loopbound-generated
+%                  file cannot be RE-differentiated: a Hessian (or nth
+%                  derivative) of a loopbound derivative fails loud with
+%                  `adigator:loopbound:rediff` - the runtime-bound
+%                  `assert(name <= max)` guard is not differentiable. (Reverse
+%                  mode does not apply either: it requires unrolled loops, which
+%                  loopbound forbids.) Full DERNUMBER>=2 loopbound support is
+%                  tracked by issue #173.
 % DER_OUTPUT: 'matrix' (default) | 'nonzeros' - the derivative output FORM,
 %                  generalized across DerTypes (#84/R25, ADR-0022). 'nonzeros'
 %                  returns the nonzero VECTOR in the fixed pattern order, with

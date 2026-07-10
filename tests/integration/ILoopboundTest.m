@@ -16,6 +16,7 @@ classdef ILoopboundTest < matlab.unittest.TestCase
             tc.applyFixture(PathFixture(fullfile(root,'lib')));
             tc.applyFixture(PathFixture(fullfile(root,'lib','cadaUtils')));
             tc.applyFixture(PathFixture(fullfile(root,'util')));
+            tc.applyFixture(PathFixture(fullfile(root,'embedding')));
         end
     end
 
@@ -389,7 +390,165 @@ classdef ILoopboundTest < matlab.unittest.TestCase
                     'inner exit at (N,M,K)=(%d,%d,%d)'], N, M, K));
             end
         end
+
+        function slimKeepsLoopboundGuard(tc)
+            % #173 PR A: the forward-tape slicer used to THROW
+            % adigator:fwdtape:parse on the runtime-bound `assert(name <= max)`
+            % guard (its '<=' mis-split at the '='), so both slim engines
+            % fail-safe-BAILED and returned the file unslimmed. The guard is now
+            % whitelisted keep-always: the slicer PROCESSES the body, keeps the
+            % guard AND the demanded write, and still slices a genuinely dead
+            % statement. (Unit-level on adigatorFieldSlice so the assertion
+            % distinguishes "sliced" from the old "bailed unchanged" - an
+            % end-to-end file check cannot, since a bail also leaves the guard in
+            % place and the file byte-identical.)
+            body = ["assert(N <= 8);"; "y.f = sum(x.f);"; "y.dead_size = numel(x.f);"];
+            [S, keep] = adigatorFieldSlice(body, {'x','N'}, "y.f");
+            kt = strtrim(string({S.text}));
+            tc.verifyEqual(nnz(keep), 2, ...
+                'exactly the guard + the demanded write survive the slice');
+            tc.verifyTrue(any(startsWith(kt,'assert(N <=')), ...
+                'the loopbound guard must be kept (not dropped)');
+            tc.verifyTrue(any(startsWith(kt,'y.f')), ...
+                'the demanded write must be kept');
+            tc.verifyFalse(any(contains(kt,'dead_size')), ...
+                'a genuinely dead statement must still be sliced out');
+        end
+
+        function slimEngineSlicesLoopboundJacobian(tc)
+            % #173 PR A end-to-end: a REAL loopbound-generated derivative file
+            % (a vector-output Jacobian, whose dead output-index metadata makes
+            % the slice genuinely fire) now slices through the FULL slim engine
+            % (adigatorSlimDerivFile) and stays numerically exact through the
+            % inline embed pipeline. Before PR A the runtime-bound
+            % `assert(name <= max)` guard threw adigator:fwdtape:parse, so the
+            % engine fail-safe-BAILED (sliced=false) and returned the file
+            % unslimmed. The unit-level slimKeepsLoopboundGuard proves the slice
+            % DISTINGUISHES sliced-from-bailed at the adigatorFieldSlice layer;
+            % this proves the same at the file/engine layer on a generated file
+            % AND that the slimmed loopbound file computes correctly.
+            writeFcn('vlb', { ...
+                'function v = vlb(x,p,N)', ...
+                'v = zeros(N,1);', ...
+                'for a = 1:N', ...
+                '  v(a) = p(a)*x(a)^2;', ...
+                'end', ...
+                'end'});
+            Nmax = 6;
+            gx = adigatorCreateDerivInput([Nmax 1],'x');
+            gp = adigatorCreateAuxInput([Nmax 1]);
+
+            % (a) engine level, deterministic (no Coder): classic embed mode runs
+            %     the generator but skips embedding, leaving the raw _ADiGator
+            %     file that carries the assert; feeding it to the full slicer must
+            %     now report sliced=true and KEEP the runtime-bound guard.
+            cDir = fullfile(pwd,'cls');
+            adigatorGenDerFile_embedded('jacobian','vlb',{gx,gp,Nmax}, ...
+                adigatorOptions('embed_mode','c','path',cDir,'echo',0,'loopbound','N'));
+            adi = readlines(fullfile(cDir,'vlb_ADiGatorJac.m'));
+            tc.assertTrue(any(contains(adi,'assert(N <=')), ...
+                'the raw loopbound derivative file must carry the assert guard');
+            [sl, slinfo] = adigatorSlimDerivFile(adi, {'f','dx'});
+            tc.verifyTrue(slinfo.sliced, ['a loopbound derivative file must now ', ...
+                'SLICE (not fail-safe-bail on the assert guard as before PR A)']);
+            tc.verifyTrue(any(contains(string(sl),'assert(N <=')), ...
+                'the slimmed loopbound file must keep its runtime n <= Nmax guard');
+
+            % (b) numeric: inline embed with slim OFF vs ON must agree bit-exactly
+            %     and match the analytic Jacobian at n < Nmax with a zero tail.
+            %     (Runtime touches coder.*; assumption-skip where unavailable.)
+            for sv = [0 1]
+                adigatorGenDerFile_embedded('jacobian','vlb',{gx,gp,Nmax}, ...
+                    adigatorOptions('embed_mode','i','path',fullfile(pwd,sprintf('i%d',sv)), ...
+                    'echo',0,'loopbound','N','slim_embed',sv));
+            end
+            rehash;
+            rng(4); n = 4; xf = randn(Nmax,1); pf = 0.5 + rand(Nmax,1);
+            J0 = runJacIn(tc, fullfile(pwd,'i0'), 'vlb_Jac', xf, pf, n, Nmax);
+            J1 = runJacIn(tc, fullfile(pwd,'i1'), 'vlb_Jac', xf, pf, n, Nmax);
+            tc.verifyEqual(J1, J0, 'AbsTol', 0, ...
+                'slim on/off must give the identical loopbound Jacobian');
+            Jexp = diag(2*pf(1:n).*xf(1:n));
+            tc.verifyEqual(J1(1:n,1:n), Jexp, 'AbsTol', 1e-12, 'RelTol', 1e-12, ...
+                'slimmed loopbound Jacobian must match the analytic n-sized program');
+            J1(1:n,1:n) = 0;
+            tc.verifyEqual(J1, zeros(Nmax), 'AbsTol', 0, 'padded tail must be zero');
+        end
     end
+
+    methods (Test, TestTags = {'KnownIssue'})
+        function loopboundHessianReDiffTripwire(tc)
+            % #173: re-differentiating a loopbound-generated file - a Hessian
+            % here - is not supported yet. The runtime-bound `assert(name <= max)`
+            % guard is not differentiable, so generation fails loud with the
+            % actionable adigator:loopbound:rediff (PR A). This tripwire verifies
+            % that id and assumeFails (documents the limitation, filters). When
+            % DERNUMBER==2 loopbound support lands (#173 PR B) the throw goes away
+            % and the numeric sweep below runs as the regression guard - so if the
+            % parse choke is ever removed WITHOUT the header/union extension, the
+            % sweep goes RED on the silently-Nmax-specialized second derivative.
+            writeFcn('lb_h2', {'function y = lb_h2(x,N)','y = 0;','for a = 1:N', ...
+                '  w = x(a)^2;','end','y = y + w;','end'});   % y = x(N)^2, H(N,N)=2
+            Nmax = 4; threw = false;
+            try
+                gx = adigatorCreateDerivInput([Nmax 1],'x');
+                adigatorGenHesFile('lb_h2',{gx,Nmax}, ...
+                    adigatorOptions('overwrite',1,'echo',0,'loopbound','N', ...
+                    'path',fullfile(pwd,'lb')));
+            catch e
+                threw = true;
+                tc.verifyEqual(e.identifier, 'adigator:loopbound:rediff', ...
+                    'a loopbound Hessian must fail loud with the actionable rediff id');
+            end
+            if threw
+                tc.assumeFail(['Known issue #173: re-differentiating a loopbound ', ...
+                    'file (Hessian) is not supported yet - fail-loud.']);
+            end
+            % --- regression guard (runs only once #173 PR B removes the throw) ---
+            rehash;
+            rng(9); xf = randn(Nmax,1);
+            for n = 2:Nmax
+                gxn = adigatorCreateDerivInput([n 1],'x');
+                adigatorGenHesFile('lb_h2',{gxn,n}, ...
+                    adigatorOptions('overwrite',1,'echo',0,'path',fullfile(pwd,'ex')));
+                Hm = runHesIn(fullfile(pwd,'lb'), xf, n);        % loopbound at Nmax, run at n
+                Hn = runHesIn(fullfile(pwd,'ex'), xf(1:n), n);   % direct at exact n
+                tc.verifyEqual(Hm(1:n,1:n), Hn, 'AbsTol', 1e-10, ...
+                    sprintf('loopbound Hessian must match the n-sized program at n=%d', n));
+                Hm(1:n,1:n) = 0;
+                tc.verifyEqual(Hm, zeros(Nmax), 'AbsTol', 0, 'padded tail must be zero');
+            end
+        end
+    end
+end
+
+function H = runHesIn(mdir, xv, n)
+% cd into mdir, run <fn>_Hes(x,N), return the Hessian matrix
+old = cd(mdir); cu = onCleanup(@() cd(old));
+clear('lb_h2_Hes'); rehash;
+[H, ~] = lb_h2_Hes(xv, n);
+end
+
+function J = runJacIn(tc, mdir, fn, xf, pf, n, Nmax)
+% cd into mdir, run the inline Jacobian wrapper <fn>(x,p,N) (raw user-input
+% signature) and scatter its nonzeros into an Nmax-by-Nmax dense matrix.
+% The inline embedded file touches the coder.* namespace; assumption-skip
+% (not fail) where it is unavailable, as the sibling embed tests do.
+old = cd(mdir); cu = onCleanup(@() cd(old));
+clear(fn); clear('global',['ADiGator_',fn]); rehash;
+try
+    G = feval(fn, xf, pf, n);
+catch e
+    if strcmp(e.identifier,'MATLAB:UndefinedFunction') && contains(e.message,'coder.')
+        tc.assumeFail("coder.* namespace unavailable; skipping runtime check: " + e.message);
+    end
+    rethrow(e);
+end
+if isstruct(G) && isfield(G,'dx_location') && ~isempty(G.dx_location)
+    J = full(sparse(G.dx_location(:,1), G.dx_location(:,2), G.dx, Nmax, Nmax));
+else
+    J = full(G);
+end
 end
 
 function writeFcn(name, lines)

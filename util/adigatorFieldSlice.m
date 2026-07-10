@@ -103,6 +103,10 @@ for k = n:-1:1
       live = any(strcmp(b,wantFull)) || any(startsWith(wantField,[b,'.']));
     end
   end
+  % #173: a keep-always statement (the loopbound `assert(name <= max)` guard,
+  % which writes nothing so the demand analysis would drop it) stays live so the
+  % slimmed loopbound file keeps its runtime n <= Nmax protection.
+  live = live || S(k).keep;
   if live
     keep(k) = true;
     if ~isempty(S(k).deps)
