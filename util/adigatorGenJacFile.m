@@ -198,6 +198,12 @@ adiout = adiout{1};
 % v1.5 - restore the path to its original state
 path(original_path);
 
+% #164: reject a non-numeric (struct/cell) user output with an actionable error
+% BEFORE opening the wrapper file, so no truncated wrapper is left on disk and
+% the failure is not the cryptic downstream "Unrecognized field name 'func'".
+% The path is already restored here, so a plain throw is clean.
+adigatorAssertNumericOutput(adiout, UserFunName, 'genjac');
+
 fid = fopen(ADiGator_GeneratedFiles.Jac,'w+');
 if fid == -1
   error('adigator:genjac:io','could not open ''%s'' for writing',...

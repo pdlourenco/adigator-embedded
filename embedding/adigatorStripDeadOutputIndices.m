@@ -38,7 +38,8 @@ function out = adigatorStripDeadOutputIndices(lines)
 %   REACHABILITY (2026-07-09, issue #164): this residual is currently UNREACHABLE
 %   end-to-end. The only way to inject a user-named *_size / *_location struct
 %   field into the generated output is a struct OUTPUT, which the derivative
-%   generators reject before this strip runs (they require a numeric output; see
+%   generators reject before this strip runs with an actionable, per-generator
+%   error (adigator:<component>:structOutput; they require a numeric output; see
 %   #164). So the residual is latent, gated behind that struct-output limitation.
 %   The validated fix for when it becomes reachable: bring this strip under a
 %   value-equivalence round-trip (run the stripped vs unstripped derivative on the

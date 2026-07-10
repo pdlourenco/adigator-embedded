@@ -133,7 +133,13 @@ FwdFile = fullfile(OutDir,[FwdName,'.m']);
 FwdMat  = fullfile(OutDir,[FwdName,'.mat']);
 cleanupFwd = onCleanup(@() removeFwdIntermediates(FwdFile,FwdMat,FwdName));   % on return/error
 fwdopts = opts; fwdopts.overwrite = 1;
-adigator(UserFun,UserFunInputs,FwdName,fwdopts);
+% #164: capture the (otherwise discarded) forward output solely to guard it -
+% a non-numeric (struct/cell) user output otherwise fails far later and worse
+% (an internal adigator:fwdtape:parse when the two-level `y.field.f = ...`
+% assignments violate the tape lhs dialect). The forward intermediates are
+% removed by cleanupFwd above, so the throw leaves nothing behind.
+fwdout = adigator(UserFun,UserFunInputs,FwdName,fwdopts);
+adigatorAssertNumericOutput(fwdout{1}, UserFun, 'revgrad');
 rehash;
 FwdGator = struct();
 if exist(FwdMat,'file')
