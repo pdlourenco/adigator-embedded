@@ -526,6 +526,48 @@ flip: removing `~PARENTLOC` alone does **not** fix it, so the union is not being
 computed/captured for inner-loop exits) is tracked by
 [#162](https://github.com/pdlourenco/adigator-embedded/issues/162), ROADMAP R28.
 
+### 1.3f Numeric literal in a rolled-loop concatenation printed as `.f` (B28)
+
+**B28 — a numeric literal in a `vertcat` inside a rolled-loop print context
+emitted as a spurious `.f` (medium; fixed).** A vertical concatenation that
+contains a numeric literal, `T = [1; x; x^2]`, emitted while the printer is in a
+**rolled-loop context** — an `unroll=0` `for`, or a subfunction printed as a loop
+because it is called from ≥2 sites (`FunAsLoopFlag`) — printed the literal as a
+bare `.f`: `T.f = [.f; x.f; cada1f1];`. Generation passed but the generated file
+failed to run (`Invalid use of operator`). This is the residual tail of the
+B17/B22 constant-`.f` family — the constant *struct-field* and *cell-element*
+cases are fixed; the adjacent constant *literal* was the remaining leak. It is a
+broken-file bug (loud at compile/run), not a silent wrong derivative.
+
+**Root cause.** `@cada/vertcat.m`'s loop-print path (`ForVertcat`, reached at
+`RUNFLAG==2` when `FORINFO.FLAG=1`) remapped a `Num2Overloaded` literal — which
+carries a valid name (`cadamatprint` → `'1'`) but `id=[]` — through
+`cadaPrintReMap`, whose id-less rescue (`if ~varID; funcstr = x.func.name; end`)
+**misfired for `[]`** (`~[]` is an empty logical, so the `if` is false). The
+literal fell through to `cadafuncname([])`, where `NAMES{[]}` expands to a
+zero-element comma-separated list, returning literally `'.f'`. `@cada/horzcat.m`
+never had the bug: it skips the remap for numerics via an `else` that `vertcat`
+lacked — a latent **upstream** asymmetry (`vertcat.m`, `horzcat.m`,
+`cadaPrintReMap.m`, `cadafuncname.m` are byte-identical to upstream). The gate is
+the rolled-loop context, **not** whether the concat folds — a fully-folded
+constant reproduces identically (fixture `foldedConstRolledLoopVertcat`), which
+is why the seven flat (unrolled) mirrors first tried on #168 all failed.
+
+**Fix (three parts).** (1) **Root:** port horzcat's `else` into `vertcat`'s two
+loop-print remap sites, so a `Num2Overloaded` numeric keeps its own name and is
+not remapped with an empty id. (2) **Rescue:** `@cada/cadaPrintReMap.m` now tests
+`isempty(varID) || ~varID` (mirroring the derivative branch's `if varID`), so an
+id-less operand keeps its own name instead of asking `cadafuncname` for one. (3)
+**Chokepoint (principle 1):** `cadafuncname` now errors
+(`adigator:cadafuncname:emptyVarID`) on an empty id rather than silently deriving
+`'.f'` from `NAMES{[]}` — a future id-less leak fails loud at generation time
+instead of producing a broken file. The chokepoint never fires across the full
+`ci_local` suite (288 tests), confirming no legitimate flow relied on the old
+behavior. Pinned by `tests/integration/IConcatLoopLiteralTest.m` (F2 minimal
+rolled loop, F3 folded constant, and a horzcat control guarding the asymmetry),
+each generated through embed `'i'`, run, and matched to finite differences.
+B28 is a late sibling of the B17/B22 embedded-field-report family; ROADMAP R26.
+
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
 - `cadaunarymath.m` derivative-rule corrections (`asec`, `acsc`, `asecd`,
@@ -580,6 +622,7 @@ computed/captured for inner-loop exits) is tracked by
 | B25 (N-D base subscript unvalidated) | **Fixed** — `lib/@cada/subsref.m` `NDRefTranslate` now validates the position-2 base like positions ≥3: a logical/non-numeric base → `adigator:ndparam:slice` (the genuine silent-wrong case native evaluation misses), an out-of-range numeric/`cada` base → `adigator:ndparam:subsOutOfRange` (covers `emptyflag`); numeric literal OOB was already caught by native eval (§1.3d). Pinned in `INDParamTest` (`ndp_logbase`) ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
 | B26 (`length()` returns the ndsize fold length) | **Fixed** — `lib/@cada/length.m` now mirrors the `size.m` `ndsize` guard → `adigator:ndparam:length` (was silently returning the 2D-fold length, §1.3d). Pinned in `INDParamTest` (`ndp_length`) ([#117](https://github.com/pdlourenco/adigator-embedded/issues/117)). ROADMAP R28. |
 | B27 (loopbound inner-loop exit derivative zeroed) | **Open — documented + tracked** (no interim guard; pre-release, narrow pattern). An inner runtime-bound loop's exit-variable derivative is silently zeroed at `n<Nmax` because the exit-variable union is outermost-only (`lib/adigatorForIterEnd.m:477`); settles #120 as reading 2 (§1.3e). Pinned by the `KnownIssue` tripwire `nestedRuntimeBoundInnerExitDerivative` in `ILoopboundTest`; the `adigatorOptions` loopbound doc notes the limitation. Fix (extend the union to nested runtime-bound loops) tracked by [#162](https://github.com/pdlourenco/adigator-embedded/issues/162). ROADMAP R28. |
+| B28 (numeric literal in a rolled-loop concat printed `.f`) | **Fixed** — `@cada/vertcat.m`'s loop-print (`ForVertcat`) remapped a `Num2Overloaded` literal (valid name, `id=[]`) through `cadaPrintReMap`, whose `~varID` rescue misfired for `[]` (`~[]` is an empty logical), so `cadafuncname([])` returned the spurious `'.f'` (`NAMES{[]}` is a zero-element CSL); `@cada/horzcat.m`'s `else` (skip the remap for numerics) is why row-concats never surfaced it — a latent upstream asymmetry (§1.3f). Fixed by porting the `else` into vertcat's two loop-print sites, repairing the `cadaPrintReMap` rescue (`isempty(varID) || ~varID`), and a `cadafuncname` chokepoint (`adigator:cadafuncname:emptyVarID`) that fails loud on an empty id (never fires across the 288-test `ci_local`). Pinned by `tests/integration/IConcatLoopLiteralTest.m` (F2 minimal loop + F3 folded constant + horzcat control, generated through embed `'i'`, run, FD-matched) ([#168](https://github.com/pdlourenco/adigator-embedded/issues/168)). A late sibling of the B17/B22 embedded-field-report family; ROADMAP R26. |
 | §1.3 math-doc conventions (D1) | **Fixed** — `adigatorDerivativeConventions.m` (the binding conventions file, CLAUDE.md §3) contradicted contract C-1: Hessian section `f: Rn -> Rm` (→ `R`), the Jacobian/Hessian size captions mislabeled `size(Gradient(f)) = [length(x) length(f)]` (Jacobian read n×m, contradicting C-1's m×n), and the `dfn`/`dfm` row typo. Corrected to match C-1, plus the same defects copied into `adigatorGenJacFile`/`adigatorGenHesFile` — text-only, no behavioural change. The §1.3 "summary block inconsistent" claim was **retracted** (it is a valid generalization of the table). ([#118](https://github.com/pdlourenco/adigator-embedded/issues/118)) ROADMAP R28. |
 
 ---

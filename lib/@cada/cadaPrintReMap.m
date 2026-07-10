@@ -22,9 +22,23 @@ NewVar.id   = varID;
 NewVar.func = OverVar.func;
 
 
-[funcstr,DPflag] = cadafuncname(varID);
-if ~varID
+if isempty(varID) || ~varID
+  % Id-less operand (a Num2Overloaded numeric, or a cada([],..) Gator-data
+  % constant): keep its own name, don't ask cadafuncname for one. B28 (#168):
+  % the original `if ~varID` alone misfired for varID=[] (`~[]` is an empty
+  % logical => the if is false), letting cadafuncname([]) return the spurious
+  % '.f'; the isempty arm mirrors the derivative branch's `if varID` guard
+  % below. Such an operand is derivative-free, so there is no derivative line to
+  % print (DPflag=0) - assert the invariant so a future id-less-WITH-derivative
+  % operand fails loud here rather than silently dropping its derivative (a
+  % principle-1 tripwire; never trips across the ci_local suite).
+  assert(all(cellfun(@isempty,{x.deriv.nzlocs})), ...
+    'adigator:cadaPrintReMap:idlessWithDeriv', ...
+    'an id-less operand carries derivatives (B28 invariant violated)');
   funcstr = x.func.name;
+  DPflag  = 0;
+else
+  [funcstr,DPflag] = cadafuncname(varID);
 end
 NewVar.func.name = funcstr;
 

@@ -287,9 +287,13 @@ if isempty(ADIGATORFORDATA(INNERLOC).VERTCAT(VEcount).SIZES)
     if isnumeric(Inputs{Icount})
       TVcount = TVcount+1;
       Inputs{Icount} = Num2Overloaded(Inputs{Icount});
+    else
+      % Check to make sure input and Overmapped inputs match. B28 (#168):
+      % skip the remap for Num2Overloaded numerics - they carry a valid name
+      % (cadamatprint) but id=[], and remapping an id-less operand yields a
+      % spurious '.f' name (horzcat has always had this else; vertcat lacked it).
+      Inputs{Icount} = cadaPrintReMap(Inputs{Icount},iOver,Inputs{Icount}.id);
     end
-    % Check to make sure input and Overmapped inputs match
-    Inputs{Icount} = cadaPrintReMap(Inputs{Icount},iOver,Inputs{Icount}.id);
   end
   OutFlag = 0; y = []; return
 else
@@ -311,9 +315,12 @@ for Icount = 1:NUMinputs
   if isnumeric(Inputs{Icount})
     TVcount = TVcount+1;
     Inputs{Icount} = Num2Overloaded(Inputs{Icount});
+  else
+    % Check to make sure input and Overmapped inputs match. B28 (#168): skip
+    % the remap for Num2Overloaded numerics (valid name, id=[]) - mirrors
+    % horzcat's else; remapping an id-less operand yields a spurious '.f'.
+    Inputs{Icount} = cadaPrintReMap(Inputs{Icount},iOver,Inputs{Icount}.id);
   end
-  % Check to make sure input and Overmapped inputs match
-  Inputs{Icount} = cadaPrintReMap(Inputs{Icount},iOver,Inputs{Icount}.id);
 end
 
 y                 = yOver;
