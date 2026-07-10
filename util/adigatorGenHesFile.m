@@ -206,6 +206,17 @@ catch ME
     rethrow(ME);
 end
 adiout = adiout{1};
+% #164: reject a non-numeric (struct/cell) user output here - BEFORE the second
+% (Hessian) transformation and the wrapper fopen - so we don't pay for a wasted
+% transform or leave truncated Grd/Hes wrappers, and the failure is actionable
+% rather than the cryptic downstream "Unrecognized field name 'func'". The path
+% is still modified at this point, so restore it if the guard throws.
+try
+    adigatorAssertNumericOutput(adiout, UserFunName, 'genhes');
+catch ME
+    path(original_path);
+    rethrow(ME);
+end
 % Change derivative input for the second (Hessian) pass: wrap the
 % derivative variable as a {.f,.d<vod>} struct so adigator differentiates
 % its .f field. x is the located derivative object; when it sits inside a

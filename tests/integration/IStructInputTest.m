@@ -157,29 +157,51 @@ classdef IStructInputTest < matlab.unittest.TestCase
         end
 
         function structOutputIsRejected(tc)
-            % Tripwire for the struct-OUTPUT limitation (issue #164) and the
-            % coupled LATENT R20 metadata-strip residual. Struct INPUTS are
-            % supported (above); struct OUTPUTS are not: the derivative-file
-            % generators require a single numeric output, so a struct-returning
-            % function must ERROR rather than generate. (The core adigator()
-            % itself handles struct outputs; the matrix-output wrappers cannot.)
-            % If struct-output support is ever added this test flips red -- that
-            % is the reminder to first close the *_size/*_location residual in
-            % embedding/adigatorStripDeadOutputIndices.m (add the value-equivalence
+            % Guard for the struct-OUTPUT limitation (issue #164) and the coupled
+            % LATENT R20 metadata-strip residual. Struct INPUTS are supported
+            % (above); struct/cell OUTPUTS are not: the derivative-file generators
+            % require a single NUMERIC output and now reject a struct/cell output
+            % with an actionable, per-generator error
+            % (adigator:<component>:structOutput) BEFORE the wrapper is opened -
+            % no cryptic downstream "Unrecognized field name 'func'" and no
+            % truncated wrapper on disk. (The core adigator() itself handles
+            % struct outputs; the matrix-output wrappers cannot.) If struct-output
+            % support is ever added this test flips red -- the reminder to first
+            % close the *_size/*_location residual in
+            % embedding/adigatorStripDeadOutputIndices.m (the value-equivalence
             % round-trip guard) before it goes live.
             fid = fopen('so_fun.m','w');
             fprintf(fid, '%s\n', 'function y = so_fun(x)', ...
                 'y.cost = sum(x.^2);', 'y.aux = x(1)*x(2);', 'end');
+            fclose(fid);
+            fid = fopen('co_fun.m','w');   % cell output
+            fprintf(fid, '%s\n', 'function y = co_fun(x)', ...
+                'y{1} = sum(x.^2);', 'y{2} = x(1)*x(2);', 'end');
             fclose(fid); rehash;
-            gx = adigatorCreateDerivInput([3 1],'x');
-            tc.verifyError(@() adigatorGenJacFile('so_fun',{gx},struct('echo',0)), ...
-                ?MException, ...
-                'a struct-returning function must be rejected by adigatorGenJacFile (#164)');
-            gx2 = adigatorCreateDerivInput([3 1],'x');
-            tc.verifyError(@() adigatorGenDerFile_embedded('jacobian','so_fun',{gx2}, ...
+            gi = @() adigatorCreateDerivInput([3 1],'x');
+
+            % each generator rejects a struct output with its own actionable id
+            tc.verifyError(@() adigatorGenJacFile('so_fun',{gi()},struct('overwrite',1,'echo',0)), ...
+                'adigator:genjac:structOutput');
+            tc.verifyEmpty(dir('so_fun_Jac.m'), ...
+                'adigatorGenJacFile must not leave a truncated wrapper (#164)');
+            tc.verifyError(@() adigatorGenHesFile('so_fun',{gi()},struct('overwrite',1,'echo',0)), ...
+                'adigator:genhes:structOutput');
+            tc.verifyEmpty(dir('so_fun_Grd.m'), ...
+                'adigatorGenHesFile must not leave a truncated Grd wrapper (#164)');
+            tc.verifyEmpty(dir('so_fun_Hes.m'), ...
+                'adigatorGenHesFile must not leave a truncated Hes wrapper (#164)');
+            tc.verifyError(@() adigatorGenRevGradFile('so_fun',{gi()},struct('overwrite',1,'echo',0)), ...
+                'adigator:revgrad:structOutput');
+            tc.verifyEmpty(dir('so_fun_RGrd.m'), ...
+                'adigatorGenRevGradFile must not leave a truncated wrapper (#164)');
+            % a cell output is rejected the same way
+            tc.verifyError(@() adigatorGenJacFile('co_fun',{gi()},struct('overwrite',1,'echo',0)), ...
+                'adigator:genjac:structOutput');
+            % the embedded driver inherits the inner generator's error
+            tc.verifyError(@() adigatorGenDerFile_embedded('jacobian','so_fun',{gi()}, ...
                 adigatorOptions('overwrite',1,'echo',0,'embed_mode','i')), ...
-                ?MException, ...
-                'a struct-returning function must be rejected by adigatorGenDerFile_embedded (#164)');
+                'adigator:genjac:structOutput');
         end
     end
 end
