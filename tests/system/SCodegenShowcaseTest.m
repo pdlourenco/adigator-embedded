@@ -46,6 +46,11 @@ classdef SCodegenShowcaseTest < matlab.unittest.TestCase
                     tc.verifyTrue(r.ok, sprintf('%s/%s: %s', r.fn, r.DerType, r.note));
                     tc.verifyGreaterThan(r.cBytes, 0, ...
                         sprintf('%s/%s: no generated C measured', r.fn, r.DerType));
+                    % R17c+: the numerical-FD baseline is codegen-independent, so
+                    % it must measure for the showcase anchors; -1 means localFD
+                    % silently broke (nothing else here would catch it).
+                    tc.verifyGreaterThanOrEqual(r.fdMs, 0, ...
+                        sprintf('%s/%s: numerical-FD cost not measured (localFD broke?)', r.fn, r.DerType));
                     % R17c: the honest compiled footprint, when the gcc/size
                     % toolchain is present (fields stay -1 on a Coder-only box).
                     if r.romBytes >= 0
