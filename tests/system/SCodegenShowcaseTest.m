@@ -1,14 +1,19 @@
 classdef SCodegenShowcaseTest < matlab.unittest.TestCase
-    % SCodegenShowcaseTest  Guards the R17b C-level derivative showcase
-    % (issue #73 item B): compiles the embeddable derivative cells through MATLAB
-    % Coder and asserts they build and the compiled MEX matches MATLAB. A
-    % source-byte size ordering is deliberately NOT asserted - the `cBytes`
-    % column is a boilerplate-dominated proxy; the honest compiled
-    % ROM/RAM/stack comparison is R17c.
+    % SCodegenShowcaseTest  Guards the R17b/R17c C-level derivative showcase
+    % (issue #73 item B): compiles the embeddable derivative cells through
+    % Embedded Coder and asserts they build, the compiled MEX matches MATLAB, and
+    % the honest compiled footprint (ROM/RAM/stack) is measured and behaves as
+    % R17c found - the vectorized forward/reverse gradient ROM CONVERGES and
+    % static RAM is 0 (embeddable forms carry ~0 static data). A source-byte size
+    % ordering is deliberately NOT asserted - the `cBytes` column is a
+    % boilerplate-dominated proxy, kept only as a labelled secondary (ADR-0027).
     %
     % Heavyweight (each cell is a Coder build) and Coder-gated: on a runner
     % without MATLAB Coder the whole test skips cleanly via assumption, exactly
-    % like SCodegenTest. Runs in the extended/codegen CI suite, not the PR gate.
+    % like SCodegenTest. The compiled-footprint assertions additionally require
+    % the standalone gcc/size toolchain; where it is absent the footprint fields
+    % stay -1 and those checks skip (the build/equivalence checks still run).
+    % Runs in the extended/codegen CI suite, not the PR gate.
 
     methods (TestClassSetup)
         function addPaths(tc)
@@ -41,15 +46,34 @@ classdef SCodegenShowcaseTest < matlab.unittest.TestCase
                     tc.verifyTrue(r.ok, sprintf('%s/%s: %s', r.fn, r.DerType, r.note));
                     tc.verifyGreaterThan(r.cBytes, 0, ...
                         sprintf('%s/%s: no generated C measured', r.fn, r.DerType));
+                    % R17c+: the numerical-FD baseline is codegen-independent, so
+                    % it must measure for the showcase anchors; -1 means localFD
+                    % silently broke (nothing else here would catch it).
+                    tc.verifyGreaterThanOrEqual(r.fdMs, 0, ...
+                        sprintf('%s/%s: numerical-FD cost not measured (localFD broke?)', r.fn, r.DerType));
+                    % R17c: the honest compiled footprint, when the gcc/size
+                    % toolchain is present (fields stay -1 on a Coder-only box).
+                    if r.romBytes >= 0
+                        tc.verifyGreaterThan(r.romBytes, 0, ...
+                            sprintf('%s/%s: ROM not measured', r.fn, r.DerType));
+                        % every derivative function here has a real (>0) frame,
+                        % so stack==0 means a missing .su, not a leaf function -
+                        % assert >0 so it is caught rather than silently reported.
+                        tc.verifyGreaterThan(r.stackBytes, 0, ...
+                            sprintf('%s/%s: stack not measured (missing .su?)', r.fn, r.DerType));
+                        % RAM can legitimately be 0 (embeddable forms carry ~0
+                        % static data), so a presence check is all we can assert.
+                        tc.verifyGreaterThanOrEqual(r.ramBytes, 0, ...
+                            sprintf('%s/%s: RAM not measured', r.fn, r.DerType));
+                    end
                 end
             end
 
             % the forward / reverse / analytical gradient cells all build and
             % match. NB: we deliberately do NOT assert a source-byte size
-            % ordering here - the `cBytes` column is a sum of generated source
-            % bytes (boilerplate-dominated), a poor ROM proxy; the real compiled
-            % ROM/RAM/stack comparison (Embedded Coder + size/-fstack-usage) is
-            % R17c, pinned there.
+            % ordering - the `cBytes` column is a sum of generated source bytes
+            % (boilerplate-dominated), a poor ROM proxy (ADR-0027). The honest
+            % compiled comparison is on ROM below.
             gr = report.rows(strcmp({report.rows.DerType},'gradient'));
             fwd = gr(strcmp({gr.impl},'AD'));
             ana = gr(strcmp({gr.impl},'analytic'));
@@ -60,6 +84,21 @@ classdef SCodegenShowcaseTest < matlab.unittest.TestCase
             tc.assertNotEmpty(ana, 'analytical gradient reference missing');
             tc.verifyTrue(fwd.ok && rev.ok && ana.ok, ...
                 'forward / reverse / analytical gradient must all build + match');
+
+            % R17c headline: for the vectorized cost the forward and reverse
+            % gradient compiled ROM CONVERGE (embeddable forms carry ~0 static
+            % data) and static RAM is 0. Assert only when the footprint toolchain
+            % measured both; allow a small cross-compiler tolerance rather than
+            % byte-exact equality.
+            if fwd.romBytes >= 0 && rev.romBytes >= 0
+                tc.verifyLessThanOrEqual(abs(rev.romBytes - fwd.romBytes), ...
+                    max(16, 0.10*fwd.romBytes), ...
+                    'forward/reverse gradient compiled ROM should converge');
+                tc.verifyEqual(fwd.ramBytes, 0, ...
+                    'vectorized forward gradient should carry 0 static RAM');
+                tc.verifyEqual(rev.ramBytes, 0, ...
+                    'vectorized reverse gradient should carry 0 static RAM');
+            end
         end
     end
 end
