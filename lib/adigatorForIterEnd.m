@@ -475,8 +475,7 @@ elseif ADIGATOR.RUNFLAG == 1
   end
   % ------- Runtime-bound loop exit unions (loopbound, issue #6 T1) ------ %
   if ~whileflag && ForIter == ForLength && ~ADIGATOR.EMPTYFLAG && ...
-      ~ADIGATORFORDATA(ForCount).PARENTLOC && ADIGATOR.DERNUMBER == 1 && ...
-      ADIGATOR.FILE.FUNID == 1 && ...
+      ADIGATOR.DERNUMBER == 1 && ADIGATOR.FILE.FUNID == 1 && ...
       ~isempty(adigatorLoopboundMatch(ADIGATOR.OPTIONS.LOOPBOUND,ForLength))
     % This loop prints with a runtime trip count: its exits may occur
     % after ANY iteration, so the saved exit variables must take the loop
@@ -484,20 +483,36 @@ elseif ADIGATOR.RUNFLAG == 1
     % analogue of the break exit unions) instead of the final-iteration
     % objects; post-loop code is then analyzed and printed against shapes
     % valid for any runtime trip count, with exact structural zeros in
-    % the skipped tail
+    % the skipped tail. B27 (#162): this now fires for INNER runtime-bound
+    % loops too (the `~PARENTLOC` gate previously restricted it to outermost,
+    % silently zeroing an inner loop's counter-indexed exit derivative at
+    % n<Nmax); the exit set + saved-object handling below differ per depth.
     if isempty(outEvalStr)
       nPrevEval = 0;
     else
       nPrevEval = length(outEvalStr);
     end
     LoopCounts = ADIGATORFORDATA(ForCount).START:ADIGATORFORDATA(ForCount).END;
-    SaveCounts = LoopCounts(logical(ADIGATOR.VARINFO.SAVE.FOR(LoopCounts,2)));
-    nSave      = length(SaveCounts);
-    lbEvalStr  = cell(nSave,1);
-    lbEvalVar  = cell(nSave,1);
+    if ADIGATORFORDATA(ForCount).PARENTLOC
+      % B27 (#162): an INNER runtime-bound loop has no SAVE.FOR(:,2) slots for
+      % exits used only within the enclosing loop (those slots are built for the
+      % outermost span), so use the exit set precomputed in
+      % adigatorAssignOvermapScheme (where LASTOCC is final - it is only
+      % partially populated here in the overmap run). The overmap-run return
+      % (effect 2 below) is always needed; the saved-object overwrite (effect 1)
+      % additionally fires for any of these exits that is ALSO an outermost save
+      % target (SaveLoc ~= 0, i.e. read after the ENCLOSING loop), so DoRemapping
+      % reads the union rather than the final-iteration object.
+      ExitCounts = ADIGATORFORDATA(ForCount).INNEREXITCOUNTS;
+    else
+      ExitCounts = LoopCounts(logical(ADIGATOR.VARINFO.SAVE.FOR(LoopCounts,2)));
+    end
+    nExit      = length(ExitCounts);
+    lbEvalStr  = cell(nExit,1);
+    lbEvalVar  = cell(nExit,1);
     nLbEval    = 0;
-    for LBcount = 1:nSave
-      Scount  = SaveCounts(LBcount);
+    for LBcount = 1:nExit
+      Scount  = ExitCounts(LBcount);
       OverLoc = ADIGATOR.VARINFO.OVERMAP.FOR(Scount,1);
       if ~OverLoc
         continue
@@ -507,11 +522,17 @@ elseif ADIGATOR.RUNFLAG == 1
         continue
       end
       SaveLoc = ADIGATOR.VARINFO.SAVE.FOR(Scount,2);
-      ADIGATORVARIABLESTORAGE.SAVE{SaveLoc} = OverVar;
+      if SaveLoc
+        % effect (1): the saved exit object becomes the union - fires for any
+        % exit that is also an outermost save target (read after the enclosing
+        % loop), so DoRemapping reads the union not the final-iteration object.
+        ADIGATORVARIABLESTORAGE.SAVE{SaveLoc} = OverVar;
+      end
       NameLoc = ADIGATOR.VARINFO.NAMELOCS(Scount,1);
       VarStr  = ADIGATOR.VARINFO.NAMES{NameLoc};
       nLbEval = nLbEval+1;
       lbEvalVar{nLbEval} = OverVar;
+      % effect (2): return the union into the overmap-run workspace
       lbEvalStr{nLbEval} = sprintf([VarStr,' = adigatorForEvalVar{%1.0d};'],...
         nPrevEval+nLbEval);
     end
