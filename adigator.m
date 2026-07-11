@@ -631,7 +631,7 @@ ADIGATOR.PRINT.INDENT   = [];
 % Print the derivative function header
 fprintf(Dfid,['%% This code was generated using ADiGator version ',version,'\n']);
 fprintf(Dfid,['%% ',char(169),'2010-2014 Matthew J. Weinstein and Anil V. Rao\n']);
-fprintf(Dfid,['%% ',char(169),'2025 Pedro Lourenço @ GMV\n']);
+fprintf(Dfid,['%% ',char(169),'2025-2026 Pedro Lourenço and GMV\n']);
 fprintf(Dfid,'%% This version of ADiGator may be obtained at https://github.com/pdlourenco/adigator-embedded \n');
 fprintf(Dfid,'%% Contact: mweinstein@ufl.edu\n');
 fprintf(Dfid,'%% Bugs/suggestions may be reported to the github issues.\n');

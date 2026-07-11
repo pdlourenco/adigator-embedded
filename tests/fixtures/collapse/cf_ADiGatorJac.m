@@ -31,7 +31,7 @@
 % round-trip cross-check passes. Driven through the real driver by
 % tests/integration/IPeepholeDriverTest.m (TS-I-08).
 %
-% Copyright GMV. Distributed under the GNU General Public License version 3.0.
+% Copyright Pedro Lourenço and GMV. Distributed under the GNU General Public License version 3.0.
 function y = cf_ADiGatorJac(x)
 global ADiGator_cf_ADiGatorJac
 if isempty(ADiGator_cf_ADiGatorJac); ADiGator_LoadData(); end
