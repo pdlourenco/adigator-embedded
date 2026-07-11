@@ -39,12 +39,12 @@ mirrors the user function's argument order. For classic (non-embedded) use,
 | mode | constant data | globals | runtime load | `.mat` | codegen |
 |------|---------------|---------|--------------|--------|---------|
 | `'c'` classic | `.mat` via `global` + runtime `load` | yes | yes | yes | no |
-| `'l'` coderload *(deprecated)* | `.mat` via `coder.load` + `coder.const` | no (persistent) | compile-time only | yes | no (ERT) |
+| `'l'` coderload *(deprecated in v2.0)* | `.mat` via `coder.load` + `coder.const` | no (persistent) | compile-time only | yes | no (ERT) |
 | `'i'` inline *(embedded-generator default)* | emitted as source in a data function | no | no | no | yes |
 
-`'l'` (coderload) is **deprecated**: it does not codegen under Embedded Coder and
+`'l'` (coderload) is **deprecated in v2.0**: it does not codegen under Embedded Coder and
 its compiled footprint converges with `'i'`, so prefer inline `'i'`. All three
-modes return numerically identical results (DESIGN §Contracts C-4). For a
+modes return numerically identical results. For a
 side-by-side "which mode (and forward vs reverse) should I pick?" comparison —
 code size, static-data ROM, compiled-C size and runtime across every axis — see
 [`bench/SHOWCASE.md`](../bench/SHOWCASE.md) (regenerate with `bench/derivShowcase`
@@ -141,7 +141,7 @@ Output forms
 Reverse mode
 - `adigatorGenRevGradFile`: a reverse-mode gradient generator for scalar costs
   with reductions. Emits `[Grd, Fun]` (C-6 order); a fully-vectorized adjoint
-  carries no static data (zero-ROM, ANALYSIS §3.5).
+  carries no static data (zero-ROM).
 - Embeddable via `adigatorGenDerFile_embedded('gradient-reverse', …)`:
   the self-contained reverse file goes through the same `c`/`l`/`i` pipeline as
   the forward generators.
