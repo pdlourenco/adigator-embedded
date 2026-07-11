@@ -69,6 +69,17 @@ A bundled review covers both. Narrow with "review in verification mode" /
    their pinning test.
 7. **GPLv3 hygiene.** The project is GPLv3 (root `LICENSE`). A new
    dependency's licence must be compatible and declared.
+8. **Docs are state-based and release-relative.** User-facing docs — the user
+   guide, `README`, `bench/SHOWCASE.md`, and the ADR-0025 emitted fragments —
+   describe *current* behavior; a behavior change is referenced release-relative
+   ("new in v2.0", "deprecated in v2.0"), never by in-fork dev tracking
+   (`ADR-xxxx` / `PR #x` / `#issue` / roadmap `Rnn` / rev-date / `Bnn`). That
+   tracking belongs in the dev docs (ADR / ANALYSIS / ROADMAP / CI\_PLAN) and in
+   **code comments** — which keep the full audit trail (diff-annotations +
+   `Bxx`/`Rnn`/`#issue`/`ADR`/`ANALYSIS` refs); the only rule there is that a
+   change's version *tag* names the release it ships in. Release-to-release
+   change history lives in the user-facing `CHANGELOG.md`. See
+   [ADR-0029](decisions/ADR-0029-v2-release-versioning-doc-cleanliness.md).
 
 ## Terminology (enforce consistency)
 
@@ -104,6 +115,10 @@ A bundled review covers both. Narrow with "review in verification mode" /
   (B1, B11).
 - **A bug fix without its regression test**, or a `KnownIssue` tag left on a
   test that now passes.
+- **Dev-tracking in user-facing docs** (principle 8) — an `ADR-xxxx` / `PR #x` /
+  `#issue` / roadmap `Rnn` / rev-date / `Bnn` reference woven into the user
+  guide, `README`, `SHOWCASE.md`, or an emitted fragment; or a code-comment
+  version tag that names a release other than the one the change ships in.
 
 ## What to be lenient about
 
