@@ -1,4 +1,4 @@
-# ADiGator — embedded fork (v1.5)
+# ADiGator — embedded fork (v2.0)
 
 ADiGator is a **source-transformation** automatic-differentiation tool for
 MATLAB: it runs a user function once with overloaded inputs that *record* each
@@ -42,13 +42,9 @@ mirrors the user function's argument order. For classic (non-embedded) use,
 | `'l'` coderload *(deprecated)* | `.mat` via `coder.load` + `coder.const` | no (persistent) | compile-time only | yes | no (ERT) |
 | `'i'` inline *(embedded-generator default)* | emitted as source in a data function | no | no | no | yes |
 
-`'l'` (coderload) is **deprecated** ([ADR-0021](decisions/ADR-0021-deprecate-coderload-split-inline-data.md)):
-it does not codegen under Embedded Coder and its compiled footprint converges
-with `'i'`; while present it will emit a one-time deprecation warning (planned,
-R24). For large
-constant data, inline's forthcoming `split_data` two-file form (roadmap R24)
-keeps the source small without a `.mat`. All three modes return numerically
-identical results (DESIGN §Contracts C-4). For a
+`'l'` (coderload) is **deprecated**: it does not codegen under Embedded Coder and
+its compiled footprint converges with `'i'`, so prefer inline `'i'`. All three
+modes return numerically identical results (DESIGN §Contracts C-4). For a
 side-by-side "which mode (and forward vs reverse) should I pick?" comparison —
 code size, static-data ROM, compiled-C size and runtime across every axis — see
 [`bench/SHOWCASE.md`](../bench/SHOWCASE.md) (regenerate with `bench/derivShowcase`
@@ -67,7 +63,7 @@ implies you want embeddable, optimized output); the classic generators default t
 | `der_output` | `'matrix'` | canonical output form; `'nonzeros'` returns the **top-order** derivative's nonzero vector + a once-exported `*Locs` pattern (`JacobianLocs`/`HessianLocs`), no per-call projection; on a Hessian flips only `Hes` (the `Grd` companion stays dense) |
 | `jac_output` | `'matrix'` | level-1-only alias of `der_output` (Jacobian/gradient only; never flips a Hessian) |
 | `der_levels` | `[]` (all) | subset of `{0,1,2}` selecting which levels the wrapper returns (top level always included) |
-| `slim_embed` | `[]`† | slice unread `_location`/`_size` chains from embedded code so their index tables drop (R7b) |
+| `slim_embed` | `[]`† | slice unread `_location`/`_size` chains from embedded code so their index tables drop |
 
 † `embed_mode`/`slim_embed` default to `[]` (unset), resolved per entry point:
 `adigatorGenDerFile_embedded` → `'i'` + slim on; classic generators → `'c'` / off.
@@ -80,11 +76,11 @@ Full reference: [`adigatorOptions.m`](../adigatorOptions.m).
 |----------|---------|
 | [`userguide/`](userguide/) | the user's guide ([PDF](userguide/ADiGatorUserGuide.pdf)) and its LaTeX source |
 | [`DESIGN.md`](DESIGN.md) | architecture rationale + the binding output contracts |
-| [`ANALYSIS.md`](analyses/ANALYSIS.md) | bug catalogue (B1–B26) + optimisation / reverse-mode analysis |
-| [`ROADMAP.md`](ROADMAP.md) | development roadmap (R1–R30) |
+| [`ANALYSIS.md`](analyses/ANALYSIS.md) | bug catalogue + optimisation / reverse-mode analysis |
+| [`ROADMAP.md`](ROADMAP.md) | development roadmap |
 | [`CI_PLAN.md`](CI_PLAN.md) | CI strategy + requirement/test traceability |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | contributor mechanics, pre-push review, ADR policy |
-| [`decisions/`](decisions/) | architecture decision records (ADR-0001 …) |
+| [`decisions/`](decisions/) | architecture decision records |
 | [`papers/`](papers/) | the original ADiGator papers (TOMS, CALGO) + the AIAA-GNC GPOPS-II paper |
 | [`thesis/`](thesis/) | M. J. Weinstein's PhD dissertation |
 
@@ -113,12 +109,14 @@ Please cite the most recent ACM-TOMS CALGO article. BibTex is here:
 }
 ```
 
-## What's new in the embedded fork
+## What's new in v2.0
 
-v1.5 — embedded (GMV / Pedro Lourenço, 2025–2026; unreleased). Embeddable
-(C-code-generation-ready) derivative generation plus correctness, performance
-and capability improvements over Weinstein & Rao v1.5. Full development log in
-[`ROADMAP.md`](ROADMAP.md) and [`ANALYSIS.md`](analyses/ANALYSIS.md); highlights:
+The embedded fork (GMV / Pedro Lourenço, 2025–2026) adds embeddable
+(C-code-generation-ready) derivative generation plus correctness, performance and
+capability improvements over the Weinstein & Rao v1.5 base. See
+[`CHANGELOG.md`](../CHANGELOG.md) for the release notes; the full development log
+is in [`ROADMAP.md`](ROADMAP.md) and [`ANALYSIS.md`](analyses/ANALYSIS.md).
+Highlights:
 
 Embeddable generation
 - `adigatorGenDerFile_embedded` produces self-contained derivative files for
@@ -130,7 +128,7 @@ Embeddable generation
   indices are precomputed at generation time.
 - Option to set the output path for all generated files.
 
-Output forms (issue #21 / roadmap R5, R25)
+Output forms
 - `der_output='nonzeros'` (canonical; `jac_output` is a level-1-only alias): the
   wrapper returns the **top-order** derivative's nonzero vector with the constant
   sparsity pattern exported once (`output.JacobianLocs` for the Jacobian,
@@ -138,44 +136,44 @@ Output forms (issue #21 / roadmap R5, R25)
   Hessian file it flips only the Hessian output (the `Grd` companion stays dense).
 - `adigatorGenJtVFile`: computes J'*v in a single forward+adjoint sweep.
 - `adigatorGenDerFile_embedded('gradient-reverse', …)`: an embeddable reverse-mode
-  adjoint gradient through the classic/coderload/inline pipeline (R16).
+  adjoint gradient through the classic/coderload/inline pipeline.
 
-Reverse mode (roadmap R4 / R16)
+Reverse mode
 - `adigatorGenRevGradFile`: a reverse-mode gradient generator for scalar costs
   with reductions. Emits `[Grd, Fun]` (C-6 order); a fully-vectorized adjoint
   carries no static data (zero-ROM, ANALYSIS §3.5).
-- Embeddable via `adigatorGenDerFile_embedded('gradient-reverse', …)` (R16):
+- Embeddable via `adigatorGenDerFile_embedded('gradient-reverse', …)`:
   the self-contained reverse file goes through the same `c`/`l`/`i` pipeline as
   the forward generators.
 
 Runtime-free growth dimensions
-- `loopbound` option (roadmap R3, issue #6): generate at (Nmax, Kmax) with
+- `loopbound` option: generate at (Nmax, Kmax) with
   runtime trip counts, so one file serves any size up to the bound.
-- N-D auxiliary inputs (roadmap R2, issue #11): `adigatorCreateAuxInput([m n
+- N-D auxiliary inputs: `adigatorCreateAuxInput([m n
   ...])` declares N-D parameters, folded internally to 2D with affine
   trailing-subscript slice references (e.g. `B(:,:,a,k)`).
 
 Operators and inputs
-- Struct inputs (issue #24): the variable of differentiation and auxiliary
+- Struct inputs: the variable of differentiation and auxiliary
   inputs may be carried as fields of a (scalar) struct, nested struct/cell
   fields supported; the generated wrappers accept the same struct shape.
 - Struct/cell **outputs** are **not** supported by the derivative-file
   generators (`adigatorGenJacFile` / `adigatorGenHesFile` /
   `adigatorGenDerFile_embedded`): they require the differentiated function to
   return a **single numeric array** and currently error on a struct-returning
-  function (issue #164) — a Jacobian/Hessian of a struct-valued output is not a
+  function — a Jacobian/Hessian of a struct-valued output is not a
   single matrix. (Struct *inputs*, above, are fully supported; the lower-level
   `adigator` command can itself differentiate a struct-returning function, but
   the matrix-output wrappers cannot assemble their result from it.)
-- `norm` (issue #28): vector p-norms (2, 1, Inf, -Inf, general p) and the
+- `norm`: vector p-norms (2, 1, Inf, -Inf, general p) and the
   Frobenius norm are differentiable; the induced/spectral matrix norms
   (which would require an SVD) raise a clear error instead of
   mis-differentiating.
-- `isnan`/`isinf`/`isfinite` (issue #28): derivative-free predicates,
+- `isnan`/`isinf`/`isfinite`: derivative-free predicates,
   evaluated on the value at run time, usable in conditionals and masks.
 - Numerous correctness fixes to the derivative-output conventions, the
   Jacobian/Hessian dimension handling, the unary derivative rules, option
-  parsing and file-handle hygiene (catalogued as B1–B26 in
+  parsing and file-handle hygiene (catalogued in
   docs/analyses/ANALYSIS.md).
 
 Testing / CI
