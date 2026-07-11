@@ -12,7 +12,7 @@ function tf = casadiAvailable()
 %   * set the environment variable CASADI_DIR to that folder - this function
 %     addpath's it on demand (handy for CI, where the job exports CASADI_DIR).
 %
-%   Copyright 2026 Pedro Lourenço @ GMV. Distributed under the GNU General
+%   Copyright 2026 Pedro Lourenço and GMV. Distributed under the GNU General
 %   Public License version 3.0.
 
     tf = exist('casadi.SX', 'class') == 8;

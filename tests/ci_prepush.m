@@ -19,7 +19,7 @@ function results = ci_prepush()
 % Wired by .githooks/pre-push; see CONTRIBUTING.md §"Local development &
 % pre-push CI".
 %
-%   Copyright 2026 Pedro Lourenço @ GMV. Distributed under the GNU General
+%   Copyright 2026 Pedro Lourenço and GMV. Distributed under the GNU General
 %   Public License version 3.0.
 
 thisDir = fileparts(mfilename('fullpath'));
