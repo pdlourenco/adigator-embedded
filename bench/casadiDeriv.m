@@ -25,7 +25,7 @@ function D = casadiDeriv(fn, DerType, xv)
 %
 %   See ADR-0018 and issue #87.
 %
-%   Copyright 2026 Pedro Lourenço @ GMV. Distributed under the GNU General
+%   Copyright 2026 Pedro Lourenço and GMV. Distributed under the GNU General
 %   Public License version 3.0.
 
     import casadi.*

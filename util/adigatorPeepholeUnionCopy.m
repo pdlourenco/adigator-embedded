@@ -35,7 +35,7 @@ function [newLines, info] = adigatorPeepholeUnionCopy(mLines, gatorData)
 % non-resolvable / non-identity index, a self-referential RHS, a non-
 % consecutive scatter).
 %
-% Copyright GMV.
+% Copyright Pedro Lourenço and GMV.
 %   2026-06  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %            R7c union-copy peephole (issue #21).
 % Distributed under the GNU General Public License version 3.0

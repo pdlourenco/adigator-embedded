@@ -21,7 +21,7 @@ function adigatorAssertNumericOutput(adiout, UserFunName, component)
 % The caller is responsible for restoring the path first if it is still
 % modified at the call site (GenHes) - this helper only validates and throws.
 %
-% Copyright GMV.
+% Copyright Pedro Lourenço and GMV.
 % Changelog:
 %   2026-07    Created (#164): shared numeric-output guard for the derivative
 %              generators, replacing the cryptic downstream failures.

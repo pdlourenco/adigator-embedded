@@ -20,7 +20,7 @@ classdef AdigatorTestCase < matlab.unittest.TestCase
     % See issue #82 (the pre-push hook + this guard) and CONTRIBUTING.md
     % §"Local development & pre-push CI".
     %
-    %   Copyright 2026 Pedro Lourenço @ GMV. Distributed under the GNU General
+    %   Copyright 2026 Pedro Lourenço and GMV. Distributed under the GNU General
     %   Public License version 3.0.
 
     methods (TestClassSetup)

@@ -52,7 +52,7 @@ function [S, keep, Sall] = adigatorFieldSlice(body, InNames, demanded)
 % inside a loop, but a wholly dead loop still drops). Top-level 'while'/'if'/
 % 'switch' are still rejected with adigator:fwdtape:controlflow.
 %
-% Copyright GMV.
+% Copyright Pedro Lourenço and GMV.
 %   2026-06  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %            R7b field-granular slice (issue #21).
 % Distributed under the GNU General Public License version 3.0

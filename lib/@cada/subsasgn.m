@@ -5,7 +5,7 @@ function y = subsasgn(x,s,b)
 % Copyright 2011-2014 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
 %
-% Modifications as described below are Copyright GMV.
+% Modifications as described below are Copyright Pedro Lourenço and GMV.
 % Changelog:
 %   2026-06    Reject subscripted assignment with 3+ subscripts into an
 %              N-D declared parameter, which is a read-only slice view

@@ -11,7 +11,7 @@ function cadaErrorSymbolicIndex()
 %   cryptic message with one that names the construct and points to the
 %   logical-weight-sum rewrite. B20 (docs/ANALYSIS.md Sec 1.3c), ADR-0024.
 %
-% Copyright GMV. Distributed under the GNU General Public License v3.0.
+% Copyright Pedro Lourenço and GMV. Distributed under the GNU General Public License v3.0.
 
 msg = [ ...
     'ADiGator cannot differentiate an index that is computed at runtime ', ...

@@ -10,7 +10,7 @@ function c = mcGenParamDelivery(i)
 % identical Jacobian -- the tolerance-free invariant that would have caught the
 % B17/B22 silent-broken-codegen class (issue #103, ROADMAP R27).
 %
-% Copyright GMV. Distributed under the GNU General Public License v3.0.
+% Copyright Pedro Lourenço and GMV. Distributed under the GNU General Public License v3.0.
 
 n = randi([2, 5]);
 M = randn(n);

@@ -6,6 +6,6 @@ function y = structvecfun(in)
 %   in.b : offset              (auxiliary, m x 1)
 % y = A*x + b, so the Jacobian of y w.r.t. x is exactly A.
 %
-% Copyright GMV. Distributed under the GNU General Public License v3.0.
+% Copyright Pedro Lourenço and GMV. Distributed under the GNU General Public License v3.0.
 y = in.A*in.x + in.b;
 end

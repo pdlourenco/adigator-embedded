@@ -21,7 +21,7 @@ function results = runAllExamples()
 %   * Returns a struct array of per-example {id,status,message} and ERRORS at
 %     the end if any example genuinely failed, so it is usable as a gate.
 %
-% Copyright GMV. Distributed under the GNU General Public License version 3.0.
+% Copyright Pedro Lourenço and GMV. Distributed under the GNU General Public License version 3.0.
 
 exDir = fileparts(mfilename('fullpath'));   % examples/
 root  = fileparts(exDir);

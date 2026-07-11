@@ -48,7 +48,7 @@ function out = adigatorStripDeadOutputIndices(lines)
 %   one embedded transform not yet under the slim's round-trip guard
 %   (adigatorGenDerFile_embedded slim.checked). Tracked by #164.
 %
-%   Copyright 2026 Pedro Lourenço @ GMV. Distributed under the GNU General
+%   Copyright 2026 Pedro Lourenço and GMV. Distributed under the GNU General
 %   Public License version 3.0.
 
 out = string(lines(:));

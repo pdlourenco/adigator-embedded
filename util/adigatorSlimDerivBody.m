@@ -30,7 +30,7 @@ function [newLines, info] = adigatorSlimDerivBody(mLines, fieldNames)
 % field is still produced, the slimmed file computes the demanded outputs
 % identically (a dropped statement only ever removed a value nothing kept reads).
 %
-% Copyright GMV.
+% Copyright Pedro Lourenço and GMV.
 %   2026-06  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %            R7b slice engine (issue #21).
 % Distributed under the GNU General Public License version 3.0

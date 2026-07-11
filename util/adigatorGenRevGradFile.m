@@ -52,7 +52,7 @@ function output = adigatorGenRevGradFile(UserFun,UserFunInputs,varargin)
 % Anything unsupported on the active path errors at generation time,
 % naming the offending generated statement.
 %
-% Copyright GMV.
+% Copyright Pedro Lourenço and GMV.
 % Changelog:
 %   2026-06    Created (roadmap R4, docs/ANALYSIS.md 3.4).
 %   2026-06    Add the filename option and the seed-input mode (a vector

@@ -53,7 +53,7 @@ function [Outputs,varargout] = adigator(UserFunName,UserFunInputs,DerFileName,va
 %     along with ADiGator in the repository-root LICENSE file.
 %     If not, see <http://www.gnu.org/licenses/>.
 %
-%   Modifications as described below are Copyright GMV.
+%   Modifications as described below are Copyright Pedro Lourenço and GMV.
 %   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %
 %   Changelog:
@@ -631,7 +631,7 @@ ADIGATOR.PRINT.INDENT   = [];
 % Print the derivative function header
 fprintf(Dfid,['%% This code was generated using ADiGator version ',version,'\n']);
 fprintf(Dfid,['%% ',char(169),'2010-2014 Matthew J. Weinstein and Anil V. Rao\n']);
-fprintf(Dfid,['%% ',char(169),'2025 Pedro Lourenço @ GMV\n']);
+fprintf(Dfid,['%% ',char(169),'2025-2026 Pedro Lourenço and GMV\n']);
 fprintf(Dfid,'%% This version of ADiGator may be obtained at https://github.com/pdlourenco/adigator-embedded \n');
 fprintf(Dfid,'%% Contact: mweinstein@ufl.edu\n');
 fprintf(Dfid,'%% Bugs/suggestions may be reported to the github issues.\n');

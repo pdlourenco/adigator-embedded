@@ -61,8 +61,8 @@ function info = adigatorGenDerFile_embedded(DerType,UserFunName,UserFunInputs,va
 %	Dependencies:
 %		adigatorGenJacFile, adigatorGenHesFile, structure_to_embed_mfile, adigator_patch_derivative, prune_adigator_mat
 %
-%   Copyright GMV, S.A.
-%   Property of GMV, S.A.; all rights reserved
+%   Copyright Pedro Lourenço and GMV.
+%   Distributed under the GNU General Public License v3.0
 %   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %
 %   Changelog:

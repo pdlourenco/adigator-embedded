@@ -8,7 +8,7 @@
 % wrapper to read the demanded result fields from, and to let the driver's
 % numeric round-trip cross-check evaluate the (un)slimmed derivative.
 %
-% Copyright GMV. Distributed under the GNU General Public License version 3.0.
+% Copyright Pedro Lourenço and GMV. Distributed under the GNU General Public License version 3.0.
 function [Jac,Fun] = cf_Jac(x)
 gator_x.f = x;
 gator_x.dx = ones(3,1);

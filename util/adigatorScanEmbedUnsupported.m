@@ -23,7 +23,7 @@ function adigatorScanEmbedUnsupported(filepath)
 %   do not false-trigger. A file that mtree cannot parse is skipped here and
 %   left for the core's own error reporting.
 %
-% Copyright GMV. Distributed under the GNU General Public License v3.0.
+% Copyright Pedro Lourenço and GMV. Distributed under the GNU General Public License v3.0.
 
 try
     t = mtree(filepath, '-file');

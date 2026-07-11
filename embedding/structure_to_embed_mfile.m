@@ -19,7 +19,8 @@ function filepath = structure_to_embed_mfile(funcName, dataStruct, outPath)
 %	Dependencies:
 %		none
 %
-%   Copyright 2025 Pedro Lourenço
+%   Copyright 2026 Pedro Lourenço and GMV. Distributed under the GNU General
+%   Public License version 3.0.
 %
 %   Changelog:
 %       2026-06    Fix the format-string defect in the generated data

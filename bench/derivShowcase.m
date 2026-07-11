@@ -41,7 +41,7 @@ function report = derivShowcase(varargin)
 % Each cell generates into its own temp folder (isolated, clean tree - the #67/#69
 % discipline). Non-gating; this is a benchmark/teaching harness, not a PR gate.
 %
-% Copyright GMV.
+% Copyright Pedro Lourenço and GMV.
 %   2026-06  PEDRO LOURENÇO (PADL) - palourenco@gmv.com  (roadmap R17, issue #73)
 %   2026-07  + interpreted runtime + FD method + guide fragment (issue #73)
 % Distributed under the GNU General Public License version 3.0
