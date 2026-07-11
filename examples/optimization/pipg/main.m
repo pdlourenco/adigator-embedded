@@ -4,7 +4,7 @@ par.g = ones(2,1);
 z = adigatorCreateDerivInput([2 1],'z');
 w = adigatorCreateAuxInput([2 1]);
 
-opts.embed_mode = 'l';
+opts.embed_mode = 'i';
 
 adigatorGenDerFile_embedded('hessian','gapfun',{w,z},opts);
 
