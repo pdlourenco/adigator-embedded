@@ -99,6 +99,25 @@ classdef SCodegenShowcaseTest < matlab.unittest.TestCase
                 tc.verifyEqual(rev.ramBytes, 0, ...
                     'vectorized reverse gradient should carry 0 static RAM');
             end
+
+            % issue #73: the FINITE-DIFFERENCE method is now a first-class
+            % compiled cell (not just an interpreted-cost column). It builds and
+            % matches at the loose FD tolerance, and - because it evaluates the
+            % cost n times - its compiled ROM is HEAVIER than the hand-coded
+            % analytical derivative's (the "cheap to write, but O(n) evals in
+            % flash, and inexact" story that motivates AD).
+            fdrows = report.rows(strcmp({report.rows.impl},'FD'));
+            tc.assertNotEmpty(fdrows, 'FD method cells missing from the C showcase');
+            for f = fdrows
+                tc.verifyTrue(f.ok, ...
+                    sprintf('FD %s/%s must build + match at FD tolerance: %s', f.fn, f.DerType, f.note));
+                a = report.rows(strcmp({report.rows.impl},'analytic') & ...
+                    strcmp({report.rows.fn},f.fn) & strcmp({report.rows.DerType},f.DerType));
+                if ~isempty(a) && f.romBytes >= 0 && a.romBytes >= 0
+                    tc.verifyGreaterThan(f.romBytes, a.romBytes, ...
+                        sprintf('FD %s/%s ROM should exceed the analytical derivative''s', f.fn, f.DerType));
+                end
+            end
         end
     end
 end
