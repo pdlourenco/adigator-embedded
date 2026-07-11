@@ -71,7 +71,7 @@ function output = adigatorGenHesFile(UserFunName,UserFunInputs,varargin)
 % see also adigator, adigatorCreateDerivInput, adigatorCreateAuxInput,
 % adigatorOptions, adigatorGenJacFile
 %
-%   Modifications as described below are Copyright GMV.
+%   Modifications as described below are Copyright Pedro Lourenço and GMV.
 %   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %
 %   Changelog:

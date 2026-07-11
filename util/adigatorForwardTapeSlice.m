@@ -28,7 +28,7 @@ function S = adigatorForwardTapeSlice(body, InNames, OutName, VodName)
 % body is rejected with adigator:fwdtape:controlflow - the dialect this
 % slices is fully unrolled (generate with adigatorOptions('unroll',1)).
 %
-% Copyright GMV.
+% Copyright Pedro Lourenço and GMV.
 %   2026-06  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %            Extracted from adigatorGenRevGradFile for reuse (roadmap R7a
 %            follow-up; foundation for the R7b field-slice, issue #21).

@@ -53,7 +53,7 @@ function [Outputs,varargout] = adigator(UserFunName,UserFunInputs,DerFileName,va
 %     along with ADiGator in the repository-root LICENSE file.
 %     If not, see <http://www.gnu.org/licenses/>.
 %
-%   Modifications as described below are Copyright GMV.
+%   Modifications as described below are Copyright Pedro Lourenço and GMV.
 %   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %
 %   Changelog:

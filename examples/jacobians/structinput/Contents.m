@@ -1,6 +1,6 @@
 % ADiGator struct-input example
 %
-% Copyright GMV. Distributed under the GNU General Public License version 3.0
+% Copyright Pedro Lourenço and GMV. Distributed under the GNU General Public License version 3.0
 %
 % ----------------------------------------------------------------------- %
 % FILES:

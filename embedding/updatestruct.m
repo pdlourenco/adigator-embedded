@@ -15,7 +15,7 @@ function out=updatestruct(default,in,addfields)
 %	Dependencies:
 %		none
 %
-%   Copyright GMV.
+%   Copyright Pedro Lourenço and GMV.
 %   2022-09  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %
 %   Changelog:

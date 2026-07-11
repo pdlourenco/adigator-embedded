@@ -38,8 +38,8 @@ function ref = adigatorReferencedIndex(lines, funcNames)
 % function runs in both MATLAB and GNU Octave and can be exercised license-free
 % (tests/offline/prune_shrink_offline_checks.m).
 %
-%   Copyright GMV, S.A.
-%   Property of GMV, S.A.; all rights reserved
+%   Copyright Pedro Lourenço and GMV.
+%   Distributed under the GNU General Public License v3.0
 %
 %   Changelog:
 %       2026-06    Created for the slice-before-prune data half (issue #21).

@@ -11,6 +11,6 @@ function y = const(x)
 % It is added to the path ONLY when coder.const is otherwise unavailable
 % (see gap_interproc_equiv), so it never shadows MATLAB's real coder.const.
 %
-% Copyright GMV. Distributed under the GNU General Public License version 3.0.
+% Copyright Pedro Lourenço and GMV. Distributed under the GNU General Public License version 3.0.
 y = x;
 end

@@ -25,7 +25,7 @@ function output = adigatorGenJtVFile(UserFun,UserFunInputs,varargin)
 %
 % options: overwrite, path, echo, unroll are forwarded.
 %
-% Copyright GMV.
+% Copyright Pedro Lourenço and GMV.
 % Changelog:
 %   2026-06    Created (roadmap R5, ANALYSIS.md 2.3, on the R4 reverse
 %              engine).

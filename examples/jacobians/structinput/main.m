@@ -12,7 +12,7 @@
 %                                  embedded (inline) pipeline; round-trips
 %                                  and matches the classic/analytic result
 %
-% Copyright GMV. Distributed under the GNU General Public License v3.0.
+% Copyright Pedro Lourenço and GMV. Distributed under the GNU General Public License v3.0.
 clc; clear;
 fprintf('AdiGator example: %s\n', mfilename('fullpath'));
 

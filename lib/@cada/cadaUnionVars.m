@@ -4,7 +4,7 @@ function z = cadaUnionVars(x,y)
 % Copyright 2011-2014 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
 %
-% Modifications as described below are Copyright GMV.
+% Modifications as described below are Copyright Pedro Lourenço and GMV.
 % Changelog:
 %   2026-06    Preserve the declared shape (func.ndsize) of an N-D
 %              declared parameter through self-unions (roadmap R2,

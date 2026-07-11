@@ -37,7 +37,7 @@ function x = adigatorCreateAuxInput(xsize,value)
 % Copyright 2011-2014 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
 %
-% Modifications as described below are Copyright GMV.
+% Modifications as described below are Copyright Pedro Lourenço and GMV.
 % Changelog:
 %   2026-06    Accept N-D size declarations (more than two dimensions):
 %              the input is folded to its 2D column-major form internally

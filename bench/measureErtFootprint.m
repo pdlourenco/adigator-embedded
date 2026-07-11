@@ -23,7 +23,7 @@ function fp = measureErtFootprint(clibDir, wrapper)
 %   / skip) when the standalone gcc/size toolchain is absent, and a gcc/size
 %   failure warns + returns unmeasured rather than a silent 0.
 %
-%   Copyright GMV.  2026-07  (extracted from derivShowcaseC's coreFootprint,
+%   Copyright Pedro Lourenço and GMV.  2026-07  (extracted from derivShowcaseC's coreFootprint,
 %   R17c / ADR-0027, so the R17 padding-penalty measurement shares one copy).
 %   Distributed under the GNU General Public License version 3.0
 

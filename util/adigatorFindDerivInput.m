@@ -27,7 +27,7 @@ function [derflag, pathStr, pathSubs, derx] = adigatorFindDerivInput(UserFunInpu
 % as before), so a derivative variable carried inside a struct array is not
 % found and surfaces as the usual "derivative input ... not found" error.
 %
-% Copyright GMV. 2026-06 Pedro Lourenço. Distributed under the GNU General
+% Copyright Pedro Lourenço and GMV. 2026-06. Distributed under the GNU General
 % Public License version 3.0.
 %
 % See also adigatorGenJacFile adigatorGenHesFile adigator

@@ -32,8 +32,8 @@ function structout = prune_adigator_mat(structin,funnames,referenced)
 %   Output:
 %       structout   pruned struct containing only the runtime-needed fields
 %
-%   Copyright GMV, S.A.
-%   Property of GMV, S.A.; all rights reserved
+%   Copyright Pedro Lourenço and GMV.
+%   Distributed under the GNU General Public License v3.0
 %
 %   Changelog:
 %       2026-06    Extracted from adigatorGenDerFile_embedded for testability.

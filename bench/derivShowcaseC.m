@@ -39,7 +39,7 @@ function report = derivShowcaseC(varargin)
 % (each cell is a Coder build, seconds to a minute). On a machine without Coder /
 % Embedded Coder this returns immediately with .available = false.
 %
-% Copyright GMV.  2026-06  PEDRO LOURENÇO (PADL) (roadmap R17b, issue #73)
+% Copyright Pedro Lourenço and GMV.  2026-06  PEDRO LOURENÇO (PADL) (roadmap R17b, issue #73)
 % Distributed under the GNU General Public License version 3.0
 %
 % see also derivShowcase, SCodegenTest, IRevEmbedTest

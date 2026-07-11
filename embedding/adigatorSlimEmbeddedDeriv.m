@@ -37,7 +37,7 @@ function info = adigatorSlimEmbeddedDeriv(genfile, UserFunInputs)
 % error restores the original file - the single authoritative write of the
 % rewritten file is the one writelines below, reached only when accepted.
 %
-% Copyright GMV.
+% Copyright Pedro Lourenço and GMV.
 %   2026-06  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %            R7b interprocedural slice driver, R7c union-copy peephole (#21).
 % Distributed under the GNU General Public License version 3.0

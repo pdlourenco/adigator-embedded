@@ -15,7 +15,7 @@ function txt = adigator_patch_derivative(deriv_filepath, deriv_filename, subfun_
 %           -> GatorXData = coder.const(ADiGator_<myfun>.GatorXData);
 %     * Remove the ADiGator_LoadData() subfunction entirely.
 %
-%   Copyright GMV.
+%   Copyright Pedro Lourenço and GMV.
 %   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %
 %   Changelog:

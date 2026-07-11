@@ -27,7 +27,7 @@ function E = discoverExamples()
 %                       'coder' - the coder.* namespace (inline/coderload eval)
 %                       'ipopt' - the IPOPT MEX (+ its Fortran)
 %
-% Copyright GMV. Distributed under the GNU General Public License version 3.0.
+% Copyright Pedro Lourenço and GMV. Distributed under the GNU General Public License version 3.0.
 
 helpersDir = fileparts(mfilename('fullpath'));     % tests/helpers
 root       = fileparts(fileparts(helpersDir));     % repo root

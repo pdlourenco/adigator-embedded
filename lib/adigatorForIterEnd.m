@@ -16,7 +16,7 @@ function [outEvalStr, outEvalVar] = adigatorForIterEnd(ForCount,ForIter)
 % Copyright 2011-214 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
 %
-% Modifications as described below are Copyright GMV.
+% Modifications as described below are Copyright Pedro Lourenço and GMV.
 % Changelog:
 %   2026-06    For runtime-bound loops (the 'loopbound' option), the
 %              saved exit variables take the loop overmap - the union

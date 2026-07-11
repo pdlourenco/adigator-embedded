@@ -23,7 +23,7 @@ function levels = adigatorResolveDerLevels(der_levels, maxlevel, caller)
 %   Output:
 %     levels      a sorted row vector of the requested levels.
 %
-% Copyright GMV.
+% Copyright Pedro Lourenço and GMV.
 %   2026-06  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 % Distributed under the GNU General Public License version 3.0
 %

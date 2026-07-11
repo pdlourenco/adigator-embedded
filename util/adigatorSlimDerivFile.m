@@ -57,7 +57,7 @@ function [newLines, info] = adigatorSlimDerivFile(mLines, fieldNames)
 % function; the driver's whole-file numeric round-trip is the combined
 % cross-check (ADR-0006/0009).
 %
-% Copyright GMV.
+% Copyright Pedro Lourenço and GMV.
 %   2026-06  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %            R7b interprocedural field-slice (issue #44 item 1, ADR-0009).
 % Distributed under the GNU General Public License version 3.0

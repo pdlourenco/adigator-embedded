@@ -178,7 +178,7 @@ function options = adigatorOptions(varargin)
 %
 % See also adigator, adigatorGenFiles4gpops2
 %
-%   Modifications as described below are Copyright GMV.
+%   Modifications as described below are Copyright Pedro Lourenço and GMV.
 %   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %
 %   Changelog:

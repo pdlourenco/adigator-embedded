@@ -6,7 +6,7 @@ function varargout = size(x,varargin)
 %
 % Written by Matthew J. Weinstein
 %
-% Modifications as described below are Copyright GMV.
+% Modifications as described below are Copyright Pedro Lourenço and GMV.
 % Changelog:
 %   2026-06    Reject size queries past dimension 1 on N-D declared
 %              parameters: the declared shape and the internal 2D fold

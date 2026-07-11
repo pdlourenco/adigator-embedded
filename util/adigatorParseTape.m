@@ -49,7 +49,7 @@ function S = adigatorParseTape(body, InNames, allowBlocks)
 % 'for...end' through as a unit. Unparseable statements raise
 % adigator:fwdtape:parse.
 %
-% Copyright GMV.
+% Copyright Pedro Lourenço and GMV.
 %   2026-06  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %            Split out of adigatorForwardTapeSlice so the value-tape and
 %            field-granular slicers share one parser (roadmap R7b, issue #21).

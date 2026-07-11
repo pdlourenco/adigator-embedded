@@ -10,7 +10,7 @@ function mode = adigatorNormalizeEmbedMode(mode)
 % 'classic' made those comparisons error inside && conditions. Normalizing
 % once at option-parse time makes every downstream comparison safe.
 %
-% Copyright GMV.
+% Copyright Pedro Lourenço and GMV.
 % Changelog:
 %   2026-06    Created (B11, PR #8); explicit alias mapping instead of
 %              first-letter truncation, which conflated 'coderload' with

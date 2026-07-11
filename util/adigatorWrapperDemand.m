@@ -28,7 +28,7 @@ function [resvar, fields] = adigatorWrapperDemand(wrapperLines, dername)
 % located unambiguously, OR if the result struct is used WHOLE anywhere (a
 % bare 'X' token), since the per-field demand would then be incomplete.
 %
-% Copyright GMV.
+% Copyright Pedro Lourenço and GMV.
 %   2026-06  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %            R7b interprocedural demand extraction (issue #21).
 % Distributed under the GNU General Public License version 3.0

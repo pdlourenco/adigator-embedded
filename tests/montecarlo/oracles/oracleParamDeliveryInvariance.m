@@ -15,7 +15,7 @@ function r = oracleParamDeliveryInvariance(c)
 % here; embed modes emit cells/`load`/`global` verbatim and only warn about
 % reduced embeddability (ADR-0023 rev 2026-07-04), so they would also generate.
 %
-% Copyright GMV. Distributed under the GNU General Public License v3.0.
+% Copyright Pedro Lourenço and GMV. Distributed under the GNU General Public License v3.0.
 
 r = struct('name', 'paramDelivery', 'pass', true, 'skipped', false, 'message', '');
 if ~isfield(c, 'tags') || ~isfield(c.tags, 'gen') || ~strcmp(c.tags.gen, 'paramDelivery')
