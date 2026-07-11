@@ -24,7 +24,7 @@ function [D, F] = fdDeriv(fn, x, kind, h)
 %     D     - the derivative in the C-1 shape for `kind`
 %     F     - fn(x), the function value (so callers get [D, F] like the refs)
 %
-% Copyright GMV.  2026-07  (roadmap R17, issue #73 - FD method)
+% Copyright Pedro Lourenço and GMV.  2026-07  (roadmap R17, issue #73 - FD method)
 % Distributed under the GNU General Public License version 3.0
 n = numel(x);
 F = fn(x);
