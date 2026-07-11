@@ -606,6 +606,39 @@ classdef ILoopboundTest < matlab.unittest.TestCase
                 adigatorOptions('overwrite',1,'echo',0,'loopbound','k')), ...
                 'adigator:loopbound:rediff');
         end
+
+        function vectorOutputLoopboundHessianFailsLoud(tc)
+            % #173 PR B / ADR-0028 interim principle-1 guard (issue #181):
+            % second-order loopbound support is validated for SCALAR-cost
+            % Hessians only. A VECTOR/matrix-output loopbound Hessian exercises
+            % the un-swept second-order exit-union and is otherwise SILENTLY
+            % reachable, so it must fail loud (adigator:loopbound:vectorhessian)
+            % rather than emit a possibly-wrong second derivative - mirroring the
+            % scalar case's fail-loud-then-validate path (PR A -> PR B).
+            % DISTINCT anchor names for the fail case vs the control: the fail
+            % case's FIRST pass generates a loopbound gradient (carrying the
+            % assert) BEFORE the guard fires, so a shared generated-function name
+            % (<fn>_ADiGatorGrd) would let the control's second pass resolve to
+            % that stale assert-carrying file and mis-fire with rediff. Distinct
+            % names keep the two independent in the shared working folder.
+            Nmax = 4;
+            writeFcn('lbhv_fail', {'function y = lbhv_fail(x,N)','y = zeros(2,1);', ...
+                'for a = 1:N','  y = y + [x(a)^2; x(a)^3];','end','end'});
+            tc.verifyError(@() adigatorGenHesFile('lbhv_fail', ...
+                {adigatorCreateDerivInput([Nmax 1],'x'),Nmax}, ...
+                adigatorOptions('overwrite',1,'echo',0,'loopbound','N')), ...
+                'adigator:loopbound:vectorhessian');
+            % control: the guard is loopbound-specific - the SAME vector-output
+            % Hessian WITHOUT loopbound still generates (so the guard does not
+            % over-reach into a general vector-output rejection).
+            writeFcn('lbhv_ok', {'function y = lbhv_ok(x,N)','y = zeros(2,1);', ...
+                'for a = 1:N','  y = y + [x(a)^2; x(a)^3];','end','end'});
+            out = adigatorGenHesFile('lbhv_ok', ...
+                {adigatorCreateDerivInput([Nmax 1],'x'),Nmax}, ...
+                adigatorOptions('overwrite',1,'echo',0));
+            tc.verifyNotEmpty(out, ...
+                'a vector-output Hessian without loopbound must still generate');
+        end
     end
 end
 

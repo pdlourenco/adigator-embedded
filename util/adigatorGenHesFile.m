@@ -217,6 +217,25 @@ catch ME
     path(original_path);
     rethrow(ME);
 end
+% #173 PR B (ADR-0028) interim principle-1 guard: second-order loopbound support
+% is validated for SCALAR-cost Hessians only (single-level / nested / off-diagonal
+% / triple-nested, all matched vs analytic+CasADi+FD at n<Nmax). A vector/matrix-
+% output loopbound Hessian exercises the second-order exit-union on a shape the
+% sweep has NOT yet validated, and it is otherwise SILENTLY reachable (a user who
+% finds scalar loopbound Hessians work could get an unvalidated second derivative
+% with no warning). Rather than risk a silent-wrong Hessian (REVIEW_CONTEXT
+% principle 1), fail loud until the vector-output sweep lands (issue #181) -
+% mirroring how the scalar case shipped fail-loud (PR A) then validated (PR B).
+% adiout is the first-pass output; a scalar cost has prod(size)==1.
+if ~isempty(opts.loopbound) && prod(adiout.func.size) > 1
+    path(original_path);
+    error('adigator:loopbound:vectorhessian', '%s', ...
+        ['A ''loopbound'' Hessian of a VECTOR/MATRIX-output function is not ', ...
+         'supported yet: second-order loopbound support is validated for ', ...
+         'scalar-cost Hessians only, and the vector-output second-derivative ', ...
+         'exit-union has not been validated (issue #181). Use a scalar cost, ', ...
+         'or drop the ''loopbound'' option and regenerate at the exact size.']);
+end
 % Change derivative input for the second (Hessian) pass: wrap the
 % derivative variable as a {.f,.d<vod>} struct so adigator differentiates
 % its .f field. x is the located derivative object; when it sits inside a

@@ -83,13 +83,20 @@ triple-nested, and coupled off-diagonal Hessians; pinned by `ILoopboundTest`.
   emission shape in `adigatorForInitialize` changes: the printer's drop-regex and
   the emitter must move in lockstep (a shared shape constant would remove that
   coupling; noted on #173, deferred).
-- **Not yet swept:** the pinned Hessian tests cover **scalar-output** loopbound
-  functions (the ADR-scoped headline `J = Σ φ(x_k)` and its curvature) across
-  single-level, nested inner-exit, triple-nested, and coupled off-diagonal
-  shapes. A **vector/matrix-output** loopbound Hessian at `n<Nmax` is not yet in
-  the battery — the exit-union mechanics are output-shape-agnostic, but the
-  second-order union is the danger zone, so a vector-output sweep is a warranted
-  follow-up before advertising that shape.
+- **Vector/matrix-output — interim fail-loud (principle 1).** The pinned Hessian
+  tests cover **scalar-output** loopbound functions (the ADR-scoped headline
+  `J = Σ φ(x_k)` and its curvature) across single-level, nested inner-exit,
+  triple-nested, and coupled off-diagonal shapes. A **vector/matrix-output**
+  loopbound Hessian exercises the second-order exit-union on a shape the sweep
+  has not yet validated — and was **silently reachable** (a user who found scalar
+  loopbound Hessians work could generate an unvalidated second derivative with no
+  warning). Rather than leave that silent-wrong-second-derivative path open,
+  `adigatorGenHesFile` **fails loud** on it (`adigator:loopbound:vectorhessian`,
+  gated on `prod(output size) > 1` with `loopbound` set), pinned by
+  `ILoopboundTest/vectorOutputLoopboundHessianFailsLoud` — mirroring how the
+  scalar case shipped fail-loud (PR A) then validated (PR B). Lifting the guard
+  (validate the vector-output union + confirm guard emission) is tracked by
+  [#181](https://github.com/pdlourenco/adigator-embedded/issues/181).
 
 ## Alternatives considered
 
