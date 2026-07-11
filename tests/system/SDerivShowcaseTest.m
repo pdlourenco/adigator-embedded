@@ -18,6 +18,7 @@ classdef SDerivShowcaseTest < matlab.unittest.TestCase
             tc.applyFixture(PathFixture(fullfile(root,'bench')));
             tc.applyFixture(PathFixture(fullfile(root,'bench','showcase')));
             tc.applyFixture(PathFixture(fullfile(root,'bench','showcase','analytic')));
+            tc.applyFixture(PathFixture(fullfile(root,'bench','showcase','fd')));
         end
     end
 
@@ -52,8 +53,25 @@ classdef SDerivShowcaseTest < matlab.unittest.TestCase
             tc.verifyEqual([rev.matBytes], zeros(1,numel(rev)), ...
                 'vectorized reverse gradient must write no .mat (§3.5)');
 
-            % the markdown table is produced
-            tc.verifyTrue(contains(report.table,'| function | DerType |'), ...
+            % (c) the FINITE-DIFFERENCE method (issue #73): it evaluated and is
+            % within its loose FD tolerance (so counts as ok), but its truncation
+            % error is genuinely NONZERO - proving it is finite differences, not
+            % an exact re-derivation.
+            fd = report.rows(strcmp({report.rows.method},'FD'));
+            tc.assertNotEmpty(fd, 'expected an FD cell in the subset');
+            tc.verifyTrue(all([fd.ok]), 'FD cell must be within its finite-difference tolerance');
+            tc.verifyGreaterThan([fd.errAna], 0, 'FD error must be nonzero (it is finite differences)');
+            tc.verifyLessThan([fd.errAna], 1e-4, 'FD error must be within the FD tolerance');
+
+            % (d) interpreted runtime is measured for every cell that evaluated
+            % (skip(coder) cells legitimately have none). This is the un-gated
+            % R17a runtime column (#73) - a -1 means the timing silently broke.
+            evald = report.rows(~strcmp({report.rows.note},'skip(coder)'));
+            tc.verifyTrue(all([evald.runtimeMs] > 0), ...
+                'interpreted runtime must be measured for every evaluable cell');
+
+            % the markdown table is produced (now with the method column)
+            tc.verifyTrue(contains(report.table,'| function | DerType | method |'), ...
                 'markdown table header missing');
         end
 
@@ -102,8 +120,9 @@ end
 
 % ---- local helper --------------------------------------------------------- %
 function cells = subset()
-mk = @(fn,dt,m,sl,ur,dl) struct('fn',fn,'DerType',dt,'mode',m,'slim',sl,'unroll',ur,'derLevels',dl,'analytic','');
-mka = @(fn,dt,ana) struct('fn',fn,'DerType',dt,'mode','ana','slim',-1,'unroll',-1,'derLevels',[],'analytic',ana);
+mk  = @(fn,dt,m,sl,ur,dl) struct('fn',fn,'DerType',dt,'method','AD','mode',m,'slim',sl,'unroll',ur,'derLevels',dl,'refFile','');
+mka = @(fn,dt,ref) struct('fn',fn,'DerType',dt,'method','analytic','mode','ana','slim',-1,'unroll',-1,'derLevels',[],'refFile',ref);
+mkfd= @(fn,dt,ref) struct('fn',fn,'DerType',dt,'method','FD','mode','fd','slim',-1,'unroll',-1,'derLevels',[],'refFile',ref);
 cells = mk('scostfun','gradient','c',0,0,[]);
 cells(end+1) = mk('scostfun','gradient','i',1,0,[]);
 cells(end+1) = mk('scostfun','hessian','i',1,0,2);              % der_levels
@@ -112,4 +131,5 @@ cells(end+1) = mk('vfun','jacobian','i',1,0,[]);
 cells(end+1) = mk('vcostfun','gradient','l',0,1,[]);            % forward: carries data
 cells(end+1) = mk('vcostfun','gradient-reverse','l',0,1,[]);    % reverse: zero data
 cells(end+1) = mka('vcostfun','gradient','vcostfun_grad_analytic'); % analytical ref
+cells(end+1) = mkfd('vcostfun','gradient','vcostfun_grad_fd');      % FD method
 end
