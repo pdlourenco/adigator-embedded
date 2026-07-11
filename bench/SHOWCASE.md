@@ -1,11 +1,10 @@
 # Derivative showcase — which mode should I pick?
 
-Roadmap **R17** (issue #73 item B), MATLAB level. One derivative of a curated
-anchor function generated through every relevant axis, with its generated-code
-complexity measured and its value checked against the analytic derivative. This
-is the "which mode should I pick?" artifact.
+One derivative of a curated anchor function generated through every relevant
+axis, with its generated-code complexity measured and its value checked against
+the analytic derivative. This is the "which mode should I pick?" reference.
 
-The comparison spans **four methods** (#73): AD **forward**, AD **reverse**, a
+The comparison spans **four methods**: AD **forward**, AD **reverse**, a
 hand-coded **analytical** derivative (the "do I even need this tool?" baseline and
 the gold correctness oracle), and central **finite differences** (FD, the method
 one reaches for by default — trivial to write, but O(n)/O(n²) evaluations and the
@@ -16,7 +15,7 @@ written Coder-compatibly (`showcase/fd/*`, via the `fdDeriv` kernel) so it flows
 through **both** environments — interpreted here and compiled-C below — like every
 other method.
 
-Regenerate this table with:
+Regenerate the interpreted (MATLAB-level) table with:
 
 ```matlab
 addpath bench
@@ -25,9 +24,8 @@ r = derivShowcase('n',6,'timeReps',3, ...
     'texPath','docs/userguide/bench_interp.tex');   % committed guide fragment
 ```
 
-The **C level** (compiled-C size + `timeit` MATLAB-vs-MEX runtime over an
-`n`-sweep, via MATLAB Coder / `matlabtest.coder.TestCase`) is **R17b** and adds
-the runtime columns + a figure.
+The **C level** (compiled-C footprint + `timeit` MATLAB-vs-MEX runtime over an
+`n`-sweep, via MATLAB Coder) is below and adds the runtime columns + a figure.
 
 ## Anchors
 
@@ -41,7 +39,8 @@ the runtime columns + a figure.
 - `vvecfun(x)` — a vectorized vector output (`sin(x)+x.^2`), the unrolled
   Jacobian anchor at C level.
 - `showcase/analytic/*.m` — hand-coded analytical grd/jac/hes of the anchors,
-  the AD-vs-analytical reference (each FD-checked once by `SDerivShowcaseTest`).
+  the AD-vs-analytical reference (each finite-difference-checked once by
+  `SDerivShowcaseTest`).
 
 ## Snapshot (n = 6)
 
@@ -80,18 +79,18 @@ error for **FD**, the only inexact method. **Note on `code lines`:** the AD and
 analytical figures are the full implementation, but the **FD** figure counts only
 the per-anchor wrapper (it reuses the shared `showcase/fdDeriv` kernel, ~44 lines,
 not counted here) — read it as the *marginal per-function* authoring cost ("no
-derivation, reuse the kernel"), not the total. (Numbers are a snapshot; regenerate as
-above. `SDerivShowcaseTest` guards correctness + the headline relationships — incl.
-that FD is accurate-but-nonzero-error and every cell's runtime is measured — not
-the exact figures.)
+derivation, reuse the kernel"), not the total. (Numbers are a snapshot; regenerate
+as above. `SDerivShowcaseTest` guards correctness + the headline relationships —
+incl. that FD is accurate-but-nonzero-error and every cell's runtime is measured —
+not the exact figures.)
 
 ## How to read it
 
 - **`embed_mode`** is a *where-does-the-constant-data-live* knob, not a numeric
-  one (all three are bit-identical, DESIGN §Contracts C-4): `c`/`l` keep the
-  index tables in a `.mat` (small code, non-zero `.mat bytes`); `i` inlines them
-  as source (no `.mat`, more `code lines`). Pick `i` for a fully self-contained
-  artifact, `l` when the constants are large and you'd rather not inline them.
+  one (all three are bit-identical): `c`/`l` keep the index tables in a `.mat`
+  (small code, non-zero `.mat bytes`); `i` inlines them as source (no `.mat`, more
+  `code lines`). Pick `i` for a fully self-contained artifact, `l` when the
+  constants are large and you'd rather not inline them.
 - **`slim`** trims unread `_location`/`_size` chains, so the unreferenced index
   tables drop in the prune — visible as fewer `.mat bytes` / `idx elems` (e.g.
   `scostfun` gradient `c`→`l`+slim: 478→310 bytes).
@@ -105,9 +104,9 @@ the exact figures.)
   (`vcostfun` reverse: 0 bytes / 0 tables, vs forward `l`: 249 bytes / 1 table —
   the `1:n` nonzero-location map). With subscripting (`scostfun`) the reverse
   still carries its subscript maps, but the gradient ROM never grows with the
-  number of variables the way a forward *dense* Jacobian/Hessian does (ANALYSIS
-  §3.5). Use reverse (`gradient-reverse`) for objective gradients / first-order
-  embedded solvers; forward for Jacobians and where `m ≈ n`.
+  number of variables the way a forward *dense* Jacobian/Hessian does. Use reverse
+  (`gradient-reverse`) for objective gradients / first-order embedded solvers;
+  forward for Jacobians and where `m ≈ n`.
 - **AD vs analytical vs FD** is the user-facing story ("which method?"). A hand
   **analytical** derivative is tiny here — `4`–`5` code lines vs the AD wrapper's
   `18` (vectorized reverse) to `187` (rolled reverse) — and carries no data,
@@ -120,26 +119,25 @@ the exact figures.)
   its evaluation cost grows O(n)/O(n²) with the variable count (`interp (ms)`: FD
   Hessian is the slowest reference here), the reason to prefer AD as the problem
   grows. The crossover — not a win/lose — is the story (the compiled-footprint side
-  lands in R17c). The analytical derivatives double as the **gold correctness
-  oracle** (FD-checked once, then the equivalence reference).
+  is below). The analytical derivatives double as the **gold correctness oracle**
+  (finite-difference-checked once, then the equivalence reference).
 
-## C level (R17b + R17c)
+## C level
 
 `bench/derivShowcaseC.m` carries the embeddable (`i`/inline) cells the rest of
 the way: through **Embedded Coder (ERT)** to a static `lib`, then measures the
 **honest compiled footprint** of the derivative function — ROM (`.text`+`.rdata`),
 static RAM (`.data`+`.bss`) via `size -A`, and max stack via `gcc -fstack-usage`
-(**R17c**) — alongside a MEX for numeric equivalence + runtime and compile time.
-All four methods are **compiled cells** here (#73): AD forward/reverse, the
-**analytical** reference, and **finite differences** — the FD wrappers
-(`showcase/fd/*`) code-generate through ERT like any other, so FD gets a real
-on-target footprint, not just an interpreted-cost column. Because FD evaluates the
-cost n times, its compiled ROM is a **multiple** of the hand-derivative's (below:
-`4.8×` gradient, `9.0×` Hessian, `2.45×` Jacobian at n=8) — the "cheap to write,
-but O(n) evaluations in flash, and inexact" trade the table makes concrete. (An
-interpreted FD-cost column, `FD (ms)`, is also kept per row for the O(n²) host
-scaling.) Skip-clean where Coder (or the standalone `gcc`/`size` toolchain) is
-absent.
+— alongside a MEX for numeric equivalence + runtime and compile time. All four
+methods are **compiled cells** here: AD forward/reverse, the **analytical**
+reference, and **finite differences** — the FD wrappers (`showcase/fd/*`)
+code-generate through ERT like any other, so FD gets a real on-target footprint,
+not just an interpreted-cost column. Because FD evaluates the cost n times, its
+compiled ROM is a **multiple** of the hand-derivative's (below: `4.8×` gradient,
+`9.0×` Hessian, `2.45×` Jacobian at n=8) — the "cheap to write, but O(n)
+evaluations in flash, and inexact" trade the table makes concrete. (An interpreted
+FD-cost column, `FD (ms)`, is also kept per row for the O(n²) host scaling.)
+Skip-clean where Coder (or the standalone `gcc`/`size` toolchain) is absent.
 
 ```matlab
 addpath bench
@@ -171,21 +169,20 @@ derivative — the numerical leg of the analytical / numerical / AD triad:
 > lifecycle stubs, the `examples/` main and the `interface/` MEX gateway (none
 > deploy to the target). Measured from the ERT object with `size` /
 > `-fstack-usage`, not the codegen report (whose static-code-metrics tables
-> silently do not populate for generated AD code — [ADR-0027](../docs/decisions/ADR-0027-compiled-memory-metrics.md)).
-> ¹ `C src (B)` is the old sum of generated `.c`/`.h` *source* bytes — kept only
-> as a boilerplate-dominated proxy; **do not read it as ROM** (its small
-> forward-vs-reverse spread is comments, not footprint). ² runtime + compile
-> columns are single-sample and machine-dependent — read as order-of-magnitude.
+> silently do not populate for generated AD code).
+> ¹ `C src (B)` is the sum of generated `.c`/`.h` *source* bytes — a
+> boilerplate-dominated proxy kept only as a secondary column; **do not read it as
+> ROM** (its small forward-vs-reverse spread is comments, not footprint).
+> ² runtime + compile columns are single-sample and machine-dependent — read as
+> order-of-magnitude.
 
 **The honest finding: for these vectorized costs the footprints CONVERGE.**
 Forward and reverse gradient are byte-identical (ROM 208 / 208), the analytical
 floor is only ~50 B under, and **static RAM is 0 across the board** — the
 embeddable (`i`) forms carry ≈0 static data, so there is no ROM/RAM story to tell
-them apart. This retires the earlier "reverse compiled C is ~8% leaner" reading,
-which was computed from *source* bytes (boilerplate-dominated) and does **not**
-survive to the compiled object. The forms that *would* differ (data-heavy index
-tables) are exactly the ones still blocked on the Embedded-Coder codegen gaps in
-[#80](https://github.com/pdlourenco/adigator-embedded/issues/80).
+them apart. The forms that *would* differ (data-heavy index tables) are the
+data-heavy vectorized-Hessian / subscripted-scalar shapes; the ROM comparison here
+is on the ≈0-static-data vectorized costs.
 
 ![Compiled ROM, compiled MEX runtime, and interpreted numerical-FD-vs-AD scaling vs n](showcase_scaling.png)
 
@@ -195,16 +192,17 @@ tables) are exactly the ones still blocked on the Embedded-Coder codegen gaps in
   hand-coding is cheapest, as expected — the value of AD is the **crossover** at
   scale, where the derivative grows large/sparse enough that hand-deriving it
   becomes impractical or silently drops sparsity. The analytical column also
-  doubles as the gold correctness oracle (`SDerivShowcaseTest` FD-checks it once).
-- **Runtime is COMPARABLE, not a reverse win** (the figure's middle panel,
-  and #73's runtime axis). Across `n` = 256 / 1024 / 4096 the compiled MEX times
-  are forward and reverse both O(n) and within noise of each other. The
-  forward-vs-reverse choice here is bought with **neither footprint nor speed** —
-  it is a code-generation-style preference at this scale.
+  doubles as the gold correctness oracle (`SDerivShowcaseTest` finite-difference-
+  checks it once).
+- **Runtime is COMPARABLE, not a reverse win** (the figure's middle panel).
+  Across `n` = 256 / 1024 / 4096 the compiled MEX times are forward and reverse
+  both O(n) and within noise of each other. The forward-vs-reverse choice here is
+  bought with **neither footprint nor speed** — it is a code-generation-style
+  preference at this scale.
 - **Numerical finite differences are where AD earns its keep** (the figure's
-  right panel — the analytical / numerical / AD *cost* triad, #73). At the
-  *interpreted* host level (finite differences aren't deployed to target, hence no
-  ROM), the numerical-FD gradient of `vcostfun` costs **3.1 / 19.4 / 164 ms** at
+  right panel — the analytical / numerical / AD *cost* triad). At the *interpreted*
+  host level (finite differences aren't deployed to target, hence no ROM), the
+  numerical-FD gradient of `vcostfun` costs **3.1 / 19.4 / 164 ms** at
   `n` = 256 / 1024 / 4096 — `n` perturbations × an O(n) cost each, i.e. **O(n²)
   work asymptotically** (the sampled window is pre-asymptotic — ~6–8× per 4× `n`
   — as each eval still carries vectorized-op overhead, but already pulling away) —
@@ -219,15 +217,15 @@ tables) are exactly the ones still blocked on the Embedded-Coder codegen gaps in
   ≈0 static data grows with the number of variables.
 - **rolled vs unrolled, to C:** `vvecfun` (unrolled, ROM 224) vs `vfun` (rolled,
   ROM 448) Jacobian both compile and match — the rolled loop pays a modest ROM +
-  stack premium here. Note **rolled *scalar-cost* gradient/Hessian do not codegen**
-  (a separate concern, ANALYSIS §2.3(7) / roadmap R19), so the rolled axis reaches
-  C here only for the Jacobian; the MATLAB-level table above covers the rest.
-- **MEX ≡ analytic exactly** on every cell (the embed-mode C-4 guarantee
-  compiled). `SCodegenShowcaseTest` pins build + numeric equivalence **and** the
-  measured footprint (ROM/RAM/stack populated, forward/reverse convergence).
+  stack premium here. The rolled axis reaches C here for the Jacobian; the
+  MATLAB-level table above covers the rolled scalar-cost gradient/Hessian.
+- **MEX ≡ analytic exactly** on every cell (the embed modes return identical
+  numbers, compiled). `SCodegenShowcaseTest` pins build + numeric equivalence
+  **and** the measured footprint (ROM/RAM/stack populated, forward/reverse
+  convergence).
 
 
-## Loopbound padding penalty (R17 Tier-1 — feeds the R6 go/no-go)
+## Loopbound padding penalty
 
 A `loopbound` derivative is generated once at `N = Nmax` and called with any
 runtime `n <= Nmax` (padded-program semantics). `bench/loopboundPaddingPenalty.m`
@@ -259,12 +257,16 @@ is **n-independent**: ROM 4624, RAM 0, stack 240 bytes.
 - **It converges at `n = Nmax`** (1.0×) — padded and exact are the same file
   there — and grows with `Nmax/n`, so it is largest exactly where a runtime bound
   is most useful (a big `Nmax` seldom hit).
-- **This is the R6 evidence.** The padding penalty is precisely the cost that
-  symbolic-`N` (#6 Tier 2) would remove. So the go/no-go has a number: for
-  subscripted forms run at `n ≪ Nmax` the ROM penalty is multiple-× and Tier 2
-  has real value; for vectorized forms (≈0 static data, C level above) or when
-  `n ≈ Nmax`, the penalty is negligible and Tier 2 can defer.
-- **Gradient only.** A loopbound *Hessian* currently errors at generation (the
-  second-derivative pass can't process the loopbound `assert` guard, ANALYSIS
-  §1.3e / [#173](https://github.com/pdlourenco/adigator-embedded/issues/173)), so
-  the penalty is measured for the gradient. Pinned by `SLoopboundPaddingTest`.
+- **It quantifies the cost of the runtime bound.** The padding penalty is exactly
+  what a symbolic-`N` bound (sizing the tables to the runtime `n` instead of
+  `Nmax`) would remove: for subscripted forms run at `n ≪ Nmax` the ROM penalty is
+  multiple-×; for vectorized forms (≈0 static data, C level above) or when
+  `n ≈ Nmax`, it is negligible.
+- **Gradient measured; the Hessian rides the same padding.** A loopbound Hessian
+  of a scalar cost is supported, so extending this measurement to the
+  second-derivative padding is a natural add. Pinned by `SLoopboundPaddingTest`.
+
+---
+
+*Development context (roadmap, design rationale) lives in `docs/ROADMAP.md` and
+`docs/DESIGN.md`.*
