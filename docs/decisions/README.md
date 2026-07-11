@@ -165,6 +165,13 @@ Contracts section (binding conventions), or for purely mechanical choices
   `gcc -fstack-usage` — over the core derivative object; the misleading C-source-byte
   sum is demoted to a labelled secondary (the codegen report's static-metrics tables
   don't populate for generated AD code). R17c; issue #73/#80.
+- [ADR-0028](ADR-0028-second-order-loopbound.md) — **Accepted**: second-order
+  (`DERNUMBER>=2`) `loopbound` support — a Hessian (or nth derivative) *of* a
+  loopbound gradient. The runtime-header/`assert` re-emission and the B27
+  inner-loop exit-union become **derivative-level-agnostic** (drop the
+  `DERNUMBER==1` gate, value-gated on `adigatorLoopboundMatch` so a non-loopbound
+  Hessian is provably unaffected), and the gradient file's source `assert` is a
+  regeneration marker re-synthesized on re-diff. R28 WS4; issues #173/#162.
 - [ADR-0029](ADR-0029-v2-release-versioning-doc-cleanliness.md) — **Accepted**:
   release the fork as **v2.0** (major, supersedes the dormant upstream 1.x lineage;
   extends ADR-0013) with the version defined once in `adigator.m` and stamped into
@@ -173,4 +180,4 @@ Contracts section (binding conventions), or for purely mechanical choices
   a `CHANGELOG.md`, no dev-tracking refs), while dev docs and **code comments keep the
   full audit trail** (only the version *tag* = ship-release, so a one-time `v1.5`→`v2.0`
   sweep). Upstream copyright preserved + fork attribution added (notice wording
-  maintainer-signed-off). Issue #179. *(ADR-0028 reserved by in-flight #177.)*
+  maintainer-signed-off). Issue #179.
