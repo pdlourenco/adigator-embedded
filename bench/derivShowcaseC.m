@@ -370,6 +370,10 @@ function emitTexFragment(rows, n, timeReps, texPath)
 % columns are AD-vs-hand-coded ratios (runtime averaged over timeReps timeit
 % passes, so a machine-dependent but noise-reduced figure). Stamped with the
 % environment (incl. processor). No timestamps (ADR-0025 constraint 4).
+% USER-FACING OBLIGATION (ADR-0025 §Consequences / ADR-0029 / REVIEW_CONTEXT
+% principle 8): this fragment renders into the user guide, so the EMITTED text
+% must stay free of in-fork dev-tracking (ADR/PR/#issue/Rnn/rev-date/Bnn or an
+% inline dev-doc § citation). Keep every emitted line state-based.
 if ~any([rows.romBytes] >= 0)
     % Honest-or-nothing: with no compiled ROM measured (gcc/size toolchain
     % absent) every row would be skipped, yielding a header-only table. Don't
