@@ -490,7 +490,8 @@ while MajorLineCount <= EndLocation(1) && ~isnumeric(FunStrFULL)
           ' variable name. At ',FunStri,' ',errlink]);
       elseif StrLength > 5 && strcmp(FunStri(1:6),'pause(')
         % PAUSE
-      elseif ~isempty(regexp(FunStri,adigatorLoopboundGuardMatch,'once'))
+      elseif StrLength > 6 && strcmp(FunStri(1:7),'assert(') && ...
+          ~isempty(regexp(FunStri,adigatorLoopboundGuardMatch,'once'))
         % LOOPBOUND runtime-bound guard (#173). `assert(name <= max)` is the exact
         % shape adigatorForInitialize emits for a runtime-bound loop (the shared
         % shape lives in util/adigatorLoopboundGuard, #181), so as a
