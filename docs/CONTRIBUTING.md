@@ -97,7 +97,8 @@ Two audiences, two conventions (ADR-0029, REVIEW_CONTEXT principle 8):
   ADR-0025 emitted fragments — describe **current behavior**. Reference a
   behavior change **release-relative** ("new in v2.0", "deprecated in v2.0"),
   never with in-fork dev tracking (`ADR-xxxx` / `PR #x` / `#issue` / roadmap
-  `Rnn` / rev-date / `Bnn`). The release-to-release change history lives in the
+  `Rnn` / rev-date / `Bnn`, or an inline dev-doc `§` citation like `ANALYSIS §` /
+  `DESIGN §Contracts` — not a navigation link). The release-to-release change history lives in the
   user-facing `CHANGELOG.md`; point there instead of inlining change notes. A
   *new* doc has nothing to track — write it clean. Linking to a dev doc as
   navigation ("development plan: see ROADMAP") is fine.

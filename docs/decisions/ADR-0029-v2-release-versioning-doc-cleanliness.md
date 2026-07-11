@@ -50,7 +50,9 @@ no `% Version` line, and `startupadigator.m`'s banner points at sourceforge.
    README, `bench/SHOWCASE.md`, and the ADR-0025 emitted fragments describe
    **current behavior**; a behavior change is referenced **release-relative**
    ("new in v2.0", "deprecated in v2.0"), never by in-fork dev tracking
-   (`ADR-xxxx` / `PR #x` / `#issue` / roadmap `Rnn` / rev-date / `Bnn`). The
+   (`ADR-xxxx` / `PR #x` / `#issue` / roadmap `Rnn` / rev-date / `Bnn`, or an
+   inline dev-doc section citation such as `ANALYSIS §` / `DESIGN §Contracts` —
+   as distinct from a navigation *link* to those docs, which is allowed). The
    release-to-release change history lives in a user-facing **`CHANGELOG.md`**;
    user docs point there instead of carrying inline change notes. User docs may
    still *link* to dev docs as clearly-marked navigation ("development plan: see
