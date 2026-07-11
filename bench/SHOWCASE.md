@@ -87,10 +87,15 @@ not the exact figures.)
 ## How to read it
 
 - **`embed_mode`** is a *where-does-the-constant-data-live* knob, not a numeric
-  one (all three are bit-identical): `c`/`l` keep the index tables in a `.mat`
-  (small code, non-zero `.mat bytes`); `i` inlines them as source (no `.mat`, more
-  `code lines`). Pick `i` for a fully self-contained artifact, `l` when the
-  constants are large and you'd rather not inline them.
+  one (all three are bit-identical): `c` (classic) keeps the index tables in a
+  `.mat` (small code, non-zero `.mat bytes`); `i` (inline) inlines them as source
+  (no `.mat`, more `code lines`). Pick `i` for a self-contained, **embeddable**
+  artifact (the default), `c` for interactive/host use. The third row, `l`
+  (coderload), is a midpoint kept **for completeness only**: it holds the data in
+  a `.mat` read through `coder.load`, but it does **not** code-generate under
+  Embedded Coder and its compiled footprint converges with `i`, so it offers no
+  advantage over `i` — it is slated for removal in a future version, so don't pick
+  it.
 - **`slim`** trims unread `_location`/`_size` chains, so the unreferenced index
   tables drop in the prune — visible as fewer `.mat bytes` / `idx elems` (e.g.
   `scostfun` gradient `c`→`l`+slim: 478→310 bytes).

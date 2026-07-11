@@ -70,7 +70,9 @@ function req = exampleRequires(relDir)
 optim = { ...
   'optimization/fminconEx', 'optimization/fminuncEx', 'optimization/fsolveEx', ...
   'optimization/vectorized/brachistochrone', 'optimization/vectorized/minimumclimb'};
-coder = {'optimization/pipg'};      % evaluates a coderload wrapper (coder.load)
+% evaluate an inline embedded wrapper, which references coder.const (the
+% coder.* namespace) - so they need MATLAB Coder to run interpreted
+coder = {'optimization/pipg', 'hessians/logsumexp'};
 ipopt = {'optimization/ipoptEx'};   % gl2main solves with the IPOPT MEX
 
 req = {};

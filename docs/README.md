@@ -39,12 +39,9 @@ mirrors the user function's argument order. For classic (non-embedded) use,
 | mode | constant data | globals | runtime load | `.mat` | codegen |
 |------|---------------|---------|--------------|--------|---------|
 | `'c'` classic | `.mat` via `global` + runtime `load` | yes | yes | yes | no |
-| `'l'` coderload *(deprecated in v2.0)* | `.mat` via `coder.load` + `coder.const` | no (persistent) | compile-time only | yes | no (ERT) |
 | `'i'` inline *(embedded-generator default)* | emitted as source in a data function | no | no | no | yes |
 
-`'l'` (coderload) is **deprecated in v2.0**: it does not codegen under Embedded Coder and
-its compiled footprint converges with `'i'`, so prefer inline `'i'`. All three
-modes return numerically identical results. For a
+Both modes return numerically identical results. For a
 side-by-side "which mode (and forward vs reverse) should I pick?" comparison —
 code size, static-data ROM, compiled-C size and runtime across every axis — see
 [`bench/SHOWCASE.md`](../bench/SHOWCASE.md) (regenerate with `bench/derivShowcase`
@@ -56,7 +53,7 @@ implies you want embeddable, optimized output); the classic generators default t
 
 | option | default | what it does |
 |--------|---------|--------------|
-| `embed_mode` | `[]`† | classic / coderload / inline (above) |
+| `embed_mode` | `[]`† | classic / inline (above) |
 | `path` | calling dir | output directory for all generated files |
 | `unroll` | `0` | keep loops & subfunctions rolled (`1` = unroll) |
 | `loopbound` | `{}` | name input(s) as runtime loop bounds — generate at max, run at any `n ≤ max` |
@@ -120,10 +117,10 @@ Highlights:
 
 Embeddable generation
 - `adigatorGenDerFile_embedded` produces self-contained derivative files for
-  Jacobians, gradients and Hessians in three modes: 'c' (classic), 'l'
-  (coderload - static data loaded via coder.load) and 'i' (inline - static
-  data emitted as a function: no .mat, no globals, no runtime load). The
-  three modes are numerically identical and MATLAB Coder compatible. Static
+  Jacobians, gradients and Hessians in two modes: 'c' (classic) and 'i'
+  (inline - static data emitted as a function: no .mat, no globals, no
+  runtime load). Both modes are numerically identical and MATLAB Coder
+  compatible. Static
   index data is pruned, deduplicated and range-compressed, and scatter
   indices are precomputed at generation time.
 - Option to set the output path for all generated files.
@@ -136,7 +133,7 @@ Output forms
   Hessian file it flips only the Hessian output (the `Grd` companion stays dense).
 - `adigatorGenJtVFile`: computes J'*v in a single forward+adjoint sweep.
 - `adigatorGenDerFile_embedded('gradient-reverse', …)`: an embeddable reverse-mode
-  adjoint gradient through the classic/coderload/inline pipeline.
+  adjoint gradient through the classic/inline pipeline.
 
 Reverse mode
 - `adigatorGenRevGradFile`: a reverse-mode gradient generator for scalar costs

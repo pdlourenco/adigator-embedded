@@ -11,7 +11,7 @@ opts = adigatorOptions();
 
 opts.path = 'generated';
 opts.overwrite = 1;
-opts.embed_mode = 'l';
+opts.embed_mode = 'i';
 
 x_x = adigatorCreateDerivInput([n 1],'x');
 % output = adigatorGenHesFile('logsumexp',{x_x},opts);
