@@ -226,7 +226,21 @@ end
 % with no warning). Rather than risk a silent-wrong Hessian (REVIEW_CONTEXT
 % principle 1), fail loud until the vector-output sweep lands (issue #181) -
 % mirroring how the scalar case shipped fail-loud (PR A) then validated (PR B).
-% adiout is the first-pass output; a scalar cost has prod(size)==1.
+% adiout is the first-pass output, so `adiout.func.size` is the true pre-remap
+% output shape (B23-immune - the remapcase mutation of `ysize` happens hundreds
+% of lines below; a guard keyed on the mutated shape would miss matrix-of-scalar).
+% A scalar cost has prod(size)==1.
+%
+% SCOPE (honest interim boundary, #181): this is a GenHesFile-level guard - it
+% covers the direct adigatorGenHesFile call AND adigatorGenDerFile_embedded(
+% 'hessian',...) (verbatim delegation). It does NOT cover (a) a MANUAL
+% double-adigator() re-differentiation, which never enters GenHesFile - an
+% airtight guard would need core placement, but the derivative arity is only
+% known after the first pass; or (b) the adigatorGenFiles4* solver wrappers'
+% second-order (vector) constraint derivatives, which call adigator twice
+% directly (ADR-0026 already quarantines those wrappers as not-at-parity). It
+% also fires whenever loopbound is set and the output is non-scalar, even if no
+% loop actually matched the bound value - acceptable for a fail-loud interim.
 if ~isempty(opts.loopbound) && prod(adiout.func.size) > 1
     path(original_path);
     error('adigator:loopbound:vectorhessian', '%s', ...

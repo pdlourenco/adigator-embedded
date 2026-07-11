@@ -81,8 +81,14 @@ triple-nested, and coupled off-diagonal Hessians; pinned by `ILoopboundTest`.
   gates are already level-agnostic, but the guard-drop discriminator and the
   padded-tail validation must be re-swept at order ≥3. Also revisit if the guard
   emission shape in `adigatorForInitialize` changes: the printer's drop-regex and
-  the emitter must move in lockstep (a shared shape constant would remove that
-  coupling; noted on #173, deferred).
+  the emitter must move in lockstep. The `assert(name <= max)` shape now has
+  **five** machine copies (two emitter sites, the printer match + name-extraction,
+  the slim whitelist) and they have **already drifted textually** — the printer
+  match allows an optional `;` (`\)\s*;?\s*$`) while the slim whitelist demands
+  it (`\)\s*;$`); both still match the emitter's output, so it is latent, not a
+  live bug. A shared shape constant (one function returning template + match,
+  with a lockstep self-test, unified on a mandatory `;`) removes the coupling;
+  designed on [#181](https://github.com/pdlourenco/adigator-embedded/issues/181) §4, deferred.
 - **Vector/matrix-output — interim fail-loud (principle 1).** The pinned Hessian
   tests cover **scalar-output** loopbound functions (the ADR-scoped headline
   `J = Σ φ(x_k)` and its curvature) across single-level, nested inner-exit,
@@ -92,10 +98,20 @@ triple-nested, and coupled off-diagonal Hessians; pinned by `ILoopboundTest`.
   loopbound Hessians work could generate an unvalidated second derivative with no
   warning). Rather than leave that silent-wrong-second-derivative path open,
   `adigatorGenHesFile` **fails loud** on it (`adigator:loopbound:vectorhessian`,
-  gated on `prod(output size) > 1` with `loopbound` set), pinned by
+  gated on `prod(output size) > 1` with `loopbound` set, on the pre-remap
+  first-pass shape so it is B23-immune), pinned by
   `ILoopboundTest/vectorOutputLoopboundHessianFailsLoud` — mirroring how the
-  scalar case shipped fail-loud (PR A) then validated (PR B). Lifting the guard
-  (validate the vector-output union + confirm guard emission) is tracked by
+  scalar case shipped fail-loud (PR A) then validated (PR B). **Scope** (honest
+  interim boundary): it covers the direct `adigatorGenHesFile` call and
+  `adigatorGenDerFile_embedded('hessian',…)`; it does **not** cover a manual
+  double-`adigator()` re-differentiation (never enters `GenHesFile`; an airtight
+  guard needs core placement, but arity is only known post-pass) or the
+  `adigatorGenFiles4*` solver wrappers' second-order vector constraint
+  derivatives (which call `adigator` twice directly — [ADR-0026](ADR-0026-inherited-solver-wrappers-not-at-parity.md)
+  already quarantines those as not-at-parity). Lifting the guard (validate the
+  vector-output union — crucially comparing `HessianStructure` against
+  direct-at-`n` generation, since the second-order union re-derives the sparsity
+  pattern for `m>1` — + confirm guard emission) is tracked by
   [#181](https://github.com/pdlourenco/adigator-embedded/issues/181).
 
 ## Alternatives considered
