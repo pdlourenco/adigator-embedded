@@ -74,7 +74,7 @@ if isstruct(val)
     fprintf(fid, '%s%s = struct();\n', pad, lhs);
     flds = fieldnames(val);
     nF = numel(flds);
-    % v1.5 (ANALYSIS.md §2.1): deduplicate identical sibling arrays. ADiGator
+    % v2.0 (ANALYSIS.md §2.1): deduplicate identical sibling arrays. ADiGator
     % frequently stores the same index vector under several Index* names;
     % emitting one copy and aliasing the rest shrinks the generated source and
     % lets the compiler pool the constant.
@@ -202,7 +202,7 @@ if isscalar(A)
     return
 end
 
-% v1.5 (ANALYSIS.md §2.1): compress arithmetic progressions and constant
+% v2.0 (ANALYSIS.md §2.1): compress arithmetic progressions and constant
 % vectors. Index data is dominated by contiguous gathers (1:n) which cost
 % ~20 source bytes per element as literals; a:s:b reproduces integer-valued
 % sequences exactly (all values within the double-exact integer range).

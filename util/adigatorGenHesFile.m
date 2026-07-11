@@ -75,7 +75,7 @@ function output = adigatorGenHesFile(UserFunName,UserFunInputs,varargin)
 %   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %
 %   Changelog:
-%   2025-10 Pedro Lourenço  v1.5    Store the generated derivative file and
+%   2025-10 Pedro Lourenço  v2.0    Store the generated derivative file and
 %                                   and the mat file with the static
 %                                   derivative data in the user provided
 %                                   folder and not necessarily in the 
@@ -118,7 +118,7 @@ if nargin == 2
 else
     optfields = fieldnames(varargin{1});
     for Fcount = 1:length(optfields)
-        % v1.5 (B12 fix): lower-case only the destination field; the user's
+        % v2.0 (B12 fix): lower-case only the destination field; the user's
         % struct must be read with the field name they actually used
         opts.(lower(optfields{Fcount})) = varargin{1}.(optfields{Fcount});
     end
@@ -126,7 +126,7 @@ else
         opts.overwrite = 1;
     end
 end
-opts.embed_mode = adigatorNormalizeEmbedMode(opts.embed_mode); % v1.5 (B11 fix)
+opts.embed_mode = adigatorNormalizeEmbedMode(opts.embed_mode); % v2.0 (B11 fix)
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ INPUTS PARSING ~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 if ~ischar(UserFunName)
@@ -152,7 +152,7 @@ end
 [derflag, derpathStr, derpathSubs, x] = adigatorFindDerivInput(UserFunInputs,'adigatorGenHesFile');
 
 % File checks
-if isempty(opts.path) % v1.5 - allow user to specify the path
+if isempty(opts.path) % v2.0 - allow user to specify the path
     CallingDir = cd;
 else
     CallingDir = opts.path;
@@ -160,7 +160,7 @@ else
         mkdir(CallingDir);
     end
 end
-% v1.5 - add chosen directory to the path to allow storage
+% v2.0 - add chosen directory to the path to allow storage
 % in userdefined directories
 original_path = path();
 addpath(CallingDir);
@@ -171,7 +171,7 @@ if nargout(UserFun) ~= 1
   error_restore_path(original_path,'User function must contain single output');
 end
 
-% Store the path to the generated files (v1.5)
+% Store the path to the generated files (v2.0)
 ADiGator_GeneratedFiles.Grd = fullfile(CallingDir, [GrdFileName, '.m']);
 ADiGator_GeneratedFiles.Hes = fullfile(CallingDir, [HesFileName, '.m']);
 
@@ -199,8 +199,8 @@ if exist(ADiGator_GeneratedFiles.Hes,'file')
 end
 
 % Call adigator twice
-try % v1.5 - add try-catch to avoid leaving unnecessary changes to path active
-    [adiout,FunctionInfo,ADi_DerivFiles,ADi_DerivFuns] = adigator(UserFunName,UserFunInputs,AdiGrdFileName,opts); % v1.5 - add new output with list of files/functions
+try % v2.0 - add try-catch to avoid leaving unnecessary changes to path active
+    [adiout,FunctionInfo,ADi_DerivFiles,ADi_DerivFuns] = adigator(UserFunName,UserFunInputs,AdiGrdFileName,opts); % v2.0 - add new output with list of files/functions
 catch ME
     path(original_path);
     rethrow(ME);
@@ -265,15 +265,15 @@ else
   UserFunInputs{derflag} = subsasgn(UserFunInputs{derflag},derpathSubs,wrapped);
 end
 
-try % v1.5 - add try-catch to avoid leaving unnecessary changes to path active
-[adiout2,~,ADi_DerivFiles2,ADi_DerivFuns2] = adigator(AdiGrdFileName,UserFunInputs,AdiHesFileName,opts); % v1.5 - add new output with list of files/functions (FunctionInfo2 unused -> ~)
+try % v2.0 - add try-catch to avoid leaving unnecessary changes to path active
+[adiout2,~,ADi_DerivFiles2,ADi_DerivFuns2] = adigator(AdiGrdFileName,UserFunInputs,AdiHesFileName,opts); % v2.0 - add new output with list of files/functions (FunctionInfo2 unused -> ~)
 catch ME
     path(original_path);
     rethrow(ME);
 end
 adiout2 = adiout2{1};
 
-% v1.5 - restore the path to its original state
+% v2.0 - restore the path to its original state
 path(original_path);
 
 Gfid = fopen(ADiGator_GeneratedFiles.Grd,'w+');
@@ -369,7 +369,7 @@ fprintf(Hfid,[ystr,' = ',AdiHesFileName,'(',InputStr2,');\n']);
 
 ysize = adiout.func.size;
 
-% v1.5
+% v2.0
 % following the conventions on https://en.wikipedia.org/wiki/Matrix_calculus
 
 %%% SCALAR FUNCTION OF VECTOR VARIABLE (GRADIENT)
@@ -418,7 +418,7 @@ ysize = adiout.func.size;
 % n>1	m>1	n x m	r x n*m	c x n*m	r*c x n*m
 
 % Check to see how many non-zeros in Hessian
-dydxdxlocs = adiout2.(['d',vodname]).deriv.nzlocs; % v1.5 - hoisted, also used for HessianStructure
+dydxdxlocs = adiout2.(['d',vodname]).deriv.nzlocs; % v2.0 - hoisted, also used for HessianStructure
 dydxlocs   = adiout.deriv.nzlocs;
 dydxdxnnz  = size(dydxdxlocs,1);
 n = prod(xsize);
@@ -433,7 +433,7 @@ if strcmp(opts.der_output,'nonzeros')
 % form (do NOT "fix" this into `der_output || jac_output`).
 fprintf(Hfid,['Hes = ',dydxdx,'(:);\n']);
 else
-% v1.5 (ANALYSIS.md §2.1): in embed modes, compute the Hessian scatter
+% v2.0 (ANALYSIS.md §2.1): in embed modes, compute the Hessian scatter
 % indices at generation time and emit a literal vector instead of the
 % runtime _location arithmetic. dydxdxlocs(:,1) indexes the first-derivative
 % nonzeros (rows of dydxlocs); dydxdxlocs(:,2) is the linear index of the
@@ -461,11 +461,11 @@ elseif n == 1
   % derivative wrt a scalar..
   if m == 1 % function is a scalar
     fprintf(Hfid,['Hes = ',dydxdx,';\n']);
-  elseif any(ysize == 1) % v1.5 (B8 fix): vector function of scalar variable
+  elseif any(ysize == 1) % v2.0 (B8 fix): vector function of scalar variable
     % _location has one column (linear index into y)
     fprintf(Hfid,'Hes = zeros(%1.0f,%1.0f);\n',ysize);
     fprintf(Hfid,['Hes(',dydxdx,'_location) = ',dydxdx,';\n']);
-  else % v1.5 (B8 fix): matrix function of scalar variable
+  else % v2.0 (B8 fix): matrix function of scalar variable
     % _location has two columns [row col]; the previous code branched on
     % the always-true any(n == 1) and assigned with the subscript matrix
     % as if it were linear indices. Convert to linear indices explicitly.
@@ -479,7 +479,7 @@ else
   if m == 1
     % y scalar
     count = 0;
-  % elseif any(ysize) == 1 % v1.5 probably an error, as ysize is always positive
+  % elseif any(ysize) == 1 % v2.0 probably an error, as ysize is always positive
   elseif any(ysize == 1)
     yind = 'yind';
     fprintf(Hfid,[yind,' = ',dydxdx,'_location(:,1);\n']);
@@ -491,7 +491,7 @@ else
     fprintf(Hfid,[yind,' = (',colind,'-1)*%1.0f + ',rowind,';\n'],ysize(1));
     count = 2;
   end
-  % if any(xsize) == 1 % v1.5 probably an error, as xsize is always positive
+  % if any(xsize) == 1 % v2.0 probably an error, as xsize is always positive
   if any(xsize == 1)
     count = count+1;
     xind1 = 'xind1';
@@ -517,13 +517,13 @@ else
     rowind = xind1;
   else
     rowind = 'xyind1';
-    % v1.5 (B7 fix): row of the [m*n x n] Hessian is (x1-1)*m + y, matching
+    % v2.0 (B7 fix): row of the [m*n x n] Hessian is (x1-1)*m + y, matching
     % the documented layout and output.HessianStructure below. The previous
     % multiplier n made rows exceed m*n for n>m (runtime error) and collide
     % for n<m (silently wrong Hessian); only m==n worked.
     fprintf(Hfid,[rowind,' = (',xind1,'-1)*%1.0f + ',yind,';\n'],m);
   end
-  if m*n*n >= 250 && dydxdxnnz/(m*n*n) <= 3/4 && opts.embed_mode == 'c' % v1.5 - only allow sparse matrices if in classic mode (no embed)
+  if m*n*n >= 250 && dydxdxnnz/(m*n*n) <= 3/4 && opts.embed_mode == 'c' % v2.0 - only allow sparse matrices if in classic mode (no embed)
     fprintf(Hfid,['Hes = sparse(',rowind,',',xind2,',',dydxdx,',%1.0f,%1.0f);\n'],m*n,n);
   else
     fprintf(Hfid,'Hes = zeros(%1.0f,%1.0f);\n',m*n,n);
@@ -537,7 +537,7 @@ end  % #84/R25: close the der_output nonzeros/matrix branch for the Hessian outp
 % matrix, otherwise project into full matrix.
 dydxsize = [prod(ysize), prod(xsize)];
 dydxnumel  = dydxsize(1)*dydxsize(2);
-% v1.5 (B23): preserve the TRUE output shape before the remapcase block below
+% v2.0 (B23): preserve the TRUE output shape before the remapcase block below
 % mutates ysize for the gradient scatter. The Hessian-metadata block (the n==1
 % branch that builds output.HessianStructure/HessianLocs) must allocate the
 % pattern in the real y shape; using the mutated ysize corrupts it for a matrix
@@ -545,7 +545,7 @@ dydxnumel  = dydxsize(1)*dydxsize(2);
 % the r-row column, silently producing a wrong HessianLocs. remapcase 0 leaves
 % ysize untouched, so HesOutSize == ysize there (no behavior change).
 HesOutSize = ysize;
-remapcase = 0; % v1.5: remember the shape remap (see adigatorGenJacFile B10 fix)
+remapcase = 0; % v2.0: remember the shape remap (see adigatorGenJacFile B10 fix)
 if dydxsize(1) == 1 && all(xsize>1) % scalar function of matrix variable
   remapcase = 1;
   dydxsize = xsize;
@@ -561,7 +561,7 @@ dydxnnz  = size(adiout.deriv.nzlocs,1);
 % If dydx has => 250 elements and has <= 75% nonzeros, project into sparse
 % matrix, otherwise project into full matrix.
 dydx = [ystr,'.d',vodname];
-% v1.5 (ANALYSIS.md §2.1): literal scatter indices in embed modes, mirroring
+% v2.0 (ANALYSIS.md §2.1): literal scatter indices in embed modes, mirroring
 % adigatorGenJacFile (see comment there)
 embedscatter = opts.embed_mode ~= 'c';
 if embedscatter
@@ -576,7 +576,7 @@ if embedscatter
 else
   scatteridx = [dydx,'_location']; % single-column cases only (see below)
 end
-%v1.5:	process this to output Jacobians correctly, i.e., in [m n] form ( m = numel(y), n = numel(x))
+%v2.0:	process this to output Jacobians correctly, i.e., in [m n] form ( m = numel(y), n = numel(x))
 % roadmap R7a (issue #21): the gradient wrapper (Gfid) always returns
 % [Grd,Fun]; the Hessian wrapper (Hfid) receives Grd / Fun only when
 % DER_LEVELS requests level 1 / level 0. The terminating 'end' goes to both.
@@ -633,9 +633,9 @@ for fid = gradfids
         colstr = [dyloc,'(:,2)'];
       end
     end
-    if dydxnumel >= 250 && dydxnnz/dydxnumel <= 3/4 && opts.embed_mode == 'c' % v1.5 - only allow sparse matrices if in classic mode (no embed)
+    if dydxnumel >= 250 && dydxnnz/dydxnumel <= 3/4 && opts.embed_mode == 'c' % v2.0 - only allow sparse matrices if in classic mode (no embed)
       % Project Sparse
-      % v1.5 (B9 fix): no transpose -- this branch only fires for
+      % v2.0 (B9 fix): no transpose -- this branch only fires for
       % non-scalar outputs, where the Jacobian convention (m x n) applies;
       % the transpose made the sparse branch disagree with the full branch
       % below and with adigatorGenJacFile.
@@ -653,7 +653,7 @@ end
 for fid = [Gfid,Hfid]
   fprintf(fid,'end');
 end
-% v1.5 (B13 fix): close both wrapper files, not just the loop's last fid;
+% v2.0 (B13 fix): close both wrapper files, not just the loop's last fid;
 % the embedded pipeline reads these files back immediately. Clearing the
 % cleanup objects flushes+closes both here; the guards above also close on an
 % emission throw.
@@ -661,12 +661,12 @@ clear GfidCloser HfidCloser
 rehash
 %% --------------------- OUTPUT PROCESSING ------------------------------%%
 output.FunctionFile = UserFunName;
-% first derivative - Gradient (v1.5)
+% first derivative - Gradient (v2.0)
 output.GenFiles(1) = ADi_DerivFiles;
 output.GenFiles(1).main = ADiGator_GeneratedFiles.Grd;
 output.GenFiles(1).name = GrdFileName;
 output.GenFiles(1).func = ADi_DerivFuns;
-% second derivative - Hessian (v1.5)
+% second derivative - Hessian (v2.0)
 output.GenFiles(2) = updatestruct(output.GenFiles(1),ADi_DerivFiles2);
 output.GenFiles(2).main = ADiGator_GeneratedFiles.Hes;
 output.GenFiles(2).name = HesFileName;
@@ -675,10 +675,10 @@ output.GenFiles(2).func = ADi_DerivFuns2;
 output.FunctionFile = UserFunName;
 output.GradientFile = GrdFileName;
 output.HessianFile  = HesFileName;
-% (dydxdxlocs/dydxlocs hoisted above the Hessian print section, v1.5)
+% (dydxdxlocs/dydxlocs hoisted above the Hessian print section, v2.0)
 HesLocs1 = dydxlocs(dydxdxlocs(:,1),:);
 if n == 1
-  HesPat = zeros(HesOutSize);   % v1.5 (B23): true y shape, not the mutated ysize
+  HesPat = zeros(HesOutSize);   % v2.0 (B23): true y shape, not the mutated ysize
   HesPat(HesLocs1(:,1)) = 1;
   output.HessianStructure = sparse(HesPat);
   % #84/R25 (ADR-0022): HessianLocs is the [row col] pattern in dydxdx nonzero

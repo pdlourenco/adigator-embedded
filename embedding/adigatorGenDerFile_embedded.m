@@ -86,7 +86,7 @@ userSetOverwrite = false;
 if nargin>3
     optfields = fieldnames(varargin{1});
     for Fcount = 1:length(optfields)
-        % v1.5 (B12 fix): lower-case only the destination field; the user's
+        % v2.0 (B12 fix): lower-case only the destination field; the user's
         % struct must be read with the field name they actually used
         opts.(lower(optfields{Fcount})) = varargin{1}.(optfields{Fcount});
     end
@@ -106,7 +106,7 @@ if isempty(opts.slim_embed); opts.slim_embed = true; end
 % would otherwise suppress that. Restore the documented default here unless the
 % caller set overwrite explicitly, so regenerating over stale files still works.
 if ~userSetOverwrite; opts.overwrite = 1; end
-opts.embed_mode = adigatorNormalizeEmbedMode(opts.embed_mode); % v1.5 (B11 fix)
+opts.embed_mode = adigatorNormalizeEmbedMode(opts.embed_mode); % v2.0 (B11 fix)
 % Forward the fully-resolved options to the inner generators so the wrapper and
 % the post-processing agree on the mode (previously the caller's raw struct was
 % forwarded, which could disagree with the resolved opts).
@@ -230,7 +230,7 @@ for derf = 1:N_derivs
     tmp_adigator_struct = prune_adigator_mat(tmp_adigator_struct,AdigatorGeneratedFiles(derf).func,referenced); % remove unnecessary fields
     save(AdigatorGeneratedFiles(derf).mat,'-struct','tmp_adigator_struct'); % replace existing mat file with the relevant fields only
     fprintf('done.\n');
-    % v1.5 (B6): pruning strips the re-differentiation metadata that
+    % v2.0 (B6): pruning strips the re-differentiation metadata that
     % adigator stores for higher-order passes; make that explicit
     fprintf(['\t\t NOTE: the pruned %s keeps runtime data only and can no ',...
         'longer be used as input to another adigator differentiation.\n'],...

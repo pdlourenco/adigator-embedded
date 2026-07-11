@@ -182,7 +182,7 @@ function options = adigatorOptions(varargin)
 %   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %
 %   Changelog:
-%   2025-10 Pedro Lourenço  v1.5    Add option to generate streamlined code
+%   2025-10 Pedro Lourenço  v2.0    Add option to generate streamlined code
 %                                   that can be accepted for embedded code
 %                                   use, e.g., without runtime loading of 
 %                                   files/data/options.
@@ -207,8 +207,8 @@ function options = adigatorOptions(varargin)
 %                                   derivative code (roadmap R7b, issue #21).
 
 % Set Defaults
-options.embed_mode   = []; % v1.5 - [] (unset) | 'c(lassic)' | '(coder)l(oad)' | 'i(nline)'; resolved per entry point
-options.path         = []; % v1.5 - user provided path; default: calling dir
+options.embed_mode   = []; % v2.0 - [] (unset) | 'c(lassic)' | '(coder)l(oad)' | 'i(nline)'; resolved per entry point
+options.path         = []; % v2.0 - user provided path; default: calling dir
 options.auxdata      = 0;
 options.echo         = 1;
 options.unroll       = 0;
@@ -236,7 +236,7 @@ for i = 1:nargin/2
         'slim_embed',...
         'optoutput','complex'}
       options.(field) = logical(value);
-      case 'embed_mode' % v1.5 (B11 fix): accept c/classic, l/coderload, i/inline
+      case 'embed_mode' % v2.0 (B11 fix): accept c/classic, l/coderload, i/inline
       options.embed_mode = adigatorNormalizeEmbedMode(value);
       case 'loopbound' % roadmap R3 (issue #6 Tier 1)
       if ischar(value)
@@ -282,7 +282,7 @@ for i = 1:nargin/2
         value = unique(value(:).');
       end
       options.der_levels = value;
-      case {'maxwhileiter','path'} % v1.5
+      case {'maxwhileiter','path'} % v2.0
       options.(field) = value;
     otherwise
       warning(['Invalid option field: ',field])

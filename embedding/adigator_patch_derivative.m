@@ -54,7 +54,7 @@ if ~isempty(idx); txt(idx:end) = []; end
 % ------------------------------------------------------------------------
 patterns = {'if isempty', deriv_filename, 'ADiGator_LoadData();'};
 idx = find_in_file(txt,patterns,1,0,[]);
-% v1.5 (B3 fix): delete all matched lines at once. The previous loop
+% v2.0 (B3 fix): delete all matched lines at once. The previous loop
 % indexed with the whole idx vector on every iteration while shifting an
 % offset, deleting arbitrary lines whenever more than one guard matched.
 txt(idx) = [];
@@ -66,7 +66,7 @@ for fun = 1:length(subfun_list)
     % ------------------------------------------------------------------------
     % 3) Insert %#codegen on the *next* line after all function headers
     % ------------------------------------------------------------------------
-    % v1.5 (B4 fix): anchor on an actual function-definition line for this
+    % v2.0 (B4 fix): anchor on an actual function-definition line for this
     % exact name. The previous substring search matched any line containing
     % both 'function' and the name (e.g. headers of functions whose names
     % contain this one as a substring), and a multi-line match crashed the
@@ -96,7 +96,7 @@ for fun = 1:length(subfun_list)
     % find the global variable declaration
     patterns = {'global', globalName};
     gidx = find_in_file(txt,patterns,fidx,1,[]);
-    % v1.5 (M9): guard the global-declaration search the same way the function
+    % v2.0 (M9): guard the global-declaration search the same way the function
     % header is guarded (B4). find_in_file scans from fidx to EOF, so a missing
     % `global <globalName>` line for this subfunction returns empty -> the
     % `txt(gidx)=[]` / `txt(1:gidx)` below would corrupt the file with a cryptic
@@ -156,7 +156,7 @@ end
 end
 
 % ================= helpers =================
-% v1.5 (B4 fix): find the line defining function <fname> (not calls, not
+% v2.0 (B4 fix): find the line defining function <fname> (not calls, not
 % comments, not names merely containing <fname> as a substring)
 function idx = find_function_header(txt,fname)
 % NOTE: MATLAB regexp has no \b word boundary (\b is backspace); the
