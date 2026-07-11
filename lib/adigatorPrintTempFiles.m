@@ -491,23 +491,39 @@ while MajorLineCount <= EndLocation(1) && ~isnumeric(FunStrFULL)
       elseif StrLength > 5 && strcmp(FunStri(1:6),'pause(')
         % PAUSE
       elseif ~isempty(regexp(FunStri,'^assert\(\s*[A-Za-z]\w*\s*<=\s*\d+\s*\)\s*;?\s*$','once'))
-        % LOOPBOUND re-differentiation guard (#173). `assert(name <= max)` is the
-        % exact shape adigatorForInitialize emits for a runtime-bound loop, so it
-        % appears only when RE-differentiating a 'loopbound'-generated file (a
-        % Hessian or nth derivative of a loopbound derivative). That is not
-        % supported yet - a naive re-diff would silently drop the runtime bound
-        % (specialize to Nmax) and lose the exit-union at the higher order - so
-        % fail loud with an actionable, pinnable id instead of the accidental
-        % generic "Cannot process statement". (Reverse mode never reaches here: it
-        % rejects the rolled loop earlier with adigator:fwdtape:controlflow.)
-        errlink = GenErrorLink(Ffid,MajorLineCount);
-        error('adigator:loopbound:rediff','%s',...
-          ['Cannot differentiate "',strtrim(FunStri),'": a runtime-bound guard ',...
-           'of this shape is not differentiable. This is the guard a ',...
-           '''loopbound''-generated file carries, so a Hessian or nth ',...
-           'derivative OF a loopbound derivative is not supported yet ',...
-           '(issue #173); if this is an assert in your own source, remove it ',...
-           'from the differentiated function. ',errlink])
+        % LOOPBOUND runtime-bound guard (#173). `assert(name <= max)` is the exact
+        % shape adigatorForInitialize emits for a runtime-bound loop, so as a
+        % source statement it appears only when RE-differentiating a
+        % 'loopbound'-generated file (a Hessian or nth derivative of a loopbound
+        % derivative).
+        assertName = regexp(FunStri,'^assert\(\s*([A-Za-z]\w*)','once','tokens');
+        if DerNumber >= 2 && ~isempty(ADIGATOR.OPTIONS.LOOPBOUND) && ...
+            ~isempty(assertName) && ismember(assertName{1},{ADIGATOR.OPTIONS.LOOPBOUND.name})
+          % PR B: this is a RE-differentiation (DERNUMBER>=2) of a loopbound file
+          % and the guard names a loopbound parameter, so it is a machine-emitted
+          % guard re-synthesized by the loop machinery (adigatorForInitialize
+          % re-emits the assert at every derivative level). DROP the source copy
+          % here to avoid a duplicate guard. The DERNUMBER>=2 gate matters: on the
+          % FIRST pass the loopbound guard is synthesized, never read from source,
+          % so a guard-shaped assert at DERNUMBER==1 is the USER's own - it must
+          % NOT be silently dropped even if it happens to name a loopbound
+          % parameter (falls through to the fail-loud branch below).
+        else
+          % PR A: not a loopbound pass (or an assert the user wrote themselves) -
+          % re-differentiation of a loopbound file without the option, or a
+          % genuine user assert. Fail loud with an actionable, pinnable id rather
+          % than the accidental generic "Cannot process statement". (Reverse mode
+          % never reaches here: it rejects the rolled loop earlier with
+          % adigator:fwdtape:controlflow.)
+          errlink = GenErrorLink(Ffid,MajorLineCount);
+          error('adigator:loopbound:rediff','%s',...
+            ['Cannot differentiate "',strtrim(FunStri),'": a runtime-bound guard ',...
+             'of this shape is not differentiable. This is the guard a ',...
+             '''loopbound''-generated file carries, so a Hessian or nth ',...
+             'derivative OF a loopbound derivative needs the ''loopbound'' option ',...
+             'set on the re-differentiation (issue #173); if this is an assert in ',...
+             'your own source, remove it from the differentiated function. ',errlink])
+        end
       else
         % Dont know what this statement is.
         errlink = GenErrorLink(Ffid,MajorLineCount);

@@ -253,7 +253,11 @@ else
       if whileflag
         fprintf(fid,[indent,'while ',UserLoopVar.func.name,';\n']);
       else
-        if ADIGATOR.DERNUMBER == 1 && ADIGATOR.FILE.FUNID == 1
+        % #173 PR B: the loopbound runtime header + assert re-emit at EVERY
+        % derivative level, not only the first, so a Hessian (or nth
+        % derivative) of a loopbound file stays runtime-bound instead of
+        % specializing the loop to a literal Nmax. Was DERNUMBER == 1.
+        if ADIGATOR.FILE.FUNID == 1
           LBname = adigatorLoopboundMatch(ADIGATOR.OPTIONS.LOOPBOUND,...
             ADIGATORFORDATA(ForCount).MAXLENGTH);
         else
@@ -349,32 +353,40 @@ else
     
     % -------------------- Print the Loop ------------------------------- %
     if ~ADIGATOR.EMPTYFLAG
+      % #173 PR B: an inner runtime-bound (loopbound) loop must re-emit its
+      % `assert(name<=max)` + runtime `for c=1:name` header at EVERY derivative
+      % level. Previously only DERNUMBER==1 took the loopbound path, so a Hessian
+      % fell into the generic else below and emitted a malformed `for c=1:(1:N)`
+      % (the loop var is the `1:N` range object), silently mis-running the inner
+      % loop. Resolve the loopbound match first, independent of DERNUMBER; the
+      % size-dependent-on-outer LoopVarStr form stays DERNUMBER==1-only (that
+      % analysis data is populated on the first pass).
+      if ADIGATOR.FILE.FUNID == 1
+        LBname = adigatorLoopboundMatch(ADIGATOR.OPTIONS.LOOPBOUND,...
+          ADIGATORFORDATA(ForCount).MAXLENGTH);
+      else
+        LBname = '';
+      end
       if ADIGATOR.DERNUMBER == 1
         LoopVarStr = ADIGATORFORDATA(ForCount).FOR(1).LENGTHS{1};
-        if ~isempty(LoopVarStr)
-          % Size of loop is dependent upon an outer loop
-          fprintf(fid,[indent,'for ',ADIGATORFORDATA(ForCount).COUNTNAME,...
-            ' = 1:',LoopVarStr,'\n']);
-        else
-          if ADIGATOR.FILE.FUNID == 1
-            LBname = adigatorLoopboundMatch(ADIGATOR.OPTIONS.LOOPBOUND,...
-              ADIGATORFORDATA(ForCount).MAXLENGTH);
-          else
-            LBname = '';
-          end
-          if ~isempty(LBname)
-            % Runtime inner trip count (loopbound option, issue #6 Tier 1,
-            % nested-bounds form): same padded-program semantics per
-            % dimension as the outer runtime bound
-            fprintf(fid,[indent,'assert(',LBname,' <= %1.0d);\n'],...
-              ADIGATORFORDATA(ForCount).MAXLENGTH);
-            fprintf(fid,[indent,'for ',ADIGATORFORDATA(ForCount).COUNTNAME,...
-              ' = 1:',LBname,'\n']);
-          else
-            fprintf(fid,[indent,'for ',ADIGATORFORDATA(ForCount).COUNTNAME,...
-              ' = 1:%1.0d\n'],ADIGATORFORDATA(ForCount).MAXLENGTH);
-          end
-        end
+      else
+        LoopVarStr = '';
+      end
+      if ~isempty(LoopVarStr)
+        % Size of loop is dependent upon an outer loop
+        fprintf(fid,[indent,'for ',ADIGATORFORDATA(ForCount).COUNTNAME,...
+          ' = 1:',LoopVarStr,'\n']);
+      elseif ~isempty(LBname)
+        % Runtime inner trip count (loopbound option, issue #6 Tier 1,
+        % nested-bounds form): same padded-program semantics per dimension as
+        % the outer runtime bound, at any derivative level (#173 PR B)
+        fprintf(fid,[indent,'assert(',LBname,' <= %1.0d);\n'],...
+          ADIGATORFORDATA(ForCount).MAXLENGTH);
+        fprintf(fid,[indent,'for ',ADIGATORFORDATA(ForCount).COUNTNAME,...
+          ' = 1:',LBname,'\n']);
+      elseif ADIGATOR.DERNUMBER == 1
+        fprintf(fid,[indent,'for ',ADIGATORFORDATA(ForCount).COUNTNAME,...
+          ' = 1:%1.0d\n'],ADIGATORFORDATA(ForCount).MAXLENGTH);
       else
         if isa(UserLoopVar,'cada')
           fprintf(fid,[indent,'for ',ADIGATORFORDATA(ForCount).COUNTNAME,...
