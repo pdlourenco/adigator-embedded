@@ -269,8 +269,9 @@ else
           % count; running the first n <= max iterations uses the first n
           % table columns and leaves exact structural zeros in the
           % skipped tail (padded-program semantics, see adigatorOptions)
-          fprintf(fid,[indent,'assert(',LBname,' <= %1.0d);\n'],...
-            ADIGATORFORDATA(ForCount).MAXLENGTH);
+          lbg = adigatorLoopboundGuard();  % shared guard shape (#181)
+          fprintf(fid,'%s%s\n',indent,...
+            sprintf(lbg.template,LBname,ADIGATORFORDATA(ForCount).MAXLENGTH));
           fprintf(fid,[indent,'for ',ADIGATORFORDATA(ForCount).COUNTNAME,...
             ' = 1:',LBname,'\n']);
         else
@@ -380,8 +381,9 @@ else
         % Runtime inner trip count (loopbound option, issue #6 Tier 1,
         % nested-bounds form): same padded-program semantics per dimension as
         % the outer runtime bound, at any derivative level (#173 PR B)
-        fprintf(fid,[indent,'assert(',LBname,' <= %1.0d);\n'],...
-          ADIGATORFORDATA(ForCount).MAXLENGTH);
+        lbg = adigatorLoopboundGuard();  % shared guard shape (#181)
+        fprintf(fid,'%s%s\n',indent,...
+          sprintf(lbg.template,LBname,ADIGATORFORDATA(ForCount).MAXLENGTH));
         fprintf(fid,[indent,'for ',ADIGATORFORDATA(ForCount).COUNTNAME,...
           ' = 1:',LBname,'\n']);
       elseif ADIGATOR.DERNUMBER == 1

@@ -124,6 +124,7 @@ push and pull request.
 | TS-U-16 | `UTestPathHygieneTest` (subclasses `AdigatorTestCase`) — meta-test guard (ADR-0017, issue #82): scans every `tests/{unit,integration}` class and reports by name any that has **neither** a base class **nor** a `TestClassSetup`, i.e. relies on a globally-`genpath`'d (dirty) path. Catches in the suite itself — so CI and the clean-path pre-push hook both flag it — the PR #81 failure mode (a new class calling `embedding/`/`util/` without a `PathFixture` passes on a dirty interactive path, errors on CI's clean path). Checks setup *presence*, not path correctness (the clean-path run catches that). | REQ-C-11 |
 | TS-U-17 | `UNormTest` — the `@cada/norm` overload + `isnan`/`isinf`/`isfinite` predicates (issue #28): vector p-norm gradients (2/1/Inf/`fro`, row + column) vs FD, the induced/matrix norms raise `adigator:norm:matrixNorm` rather than mis-differentiating, and the predicates are derivative-free. | REQ-C-01 |
 | TS-U-18 | `UStripDeadOutputIndicesTest` — the output-index-metadata strip (#80/#81, approach D): the `_size`/`_location` output-field index tables are removed from the embeddable-mode generated data while retained tables/values are unchanged. | REQ-T-04 |
+| TS-U-19 | `ULoopboundGuardTest` — lockstep pin for the shared loopbound guard shape (`util/adigatorLoopboundGuard`, #181): what the emitter template prints, the recognizer regex matches with `{name, bound}` tokens (consumers: `adigatorForInitialize` emit, `adigatorPrintTempFiles` drop/rediff, `adigatorParseTape` slim keep-always); user-assert lookalikes (non-numeric bound, wrong operator, missing semicolon) must NOT match — they take the fail-loud `adigator:loopbound:rediff` path. util/-only path fixture by design. | REQ-T-02 (loopbound) |
 
 ### 2.2 Integration tests — `tests/integration` (TS-I)
 
@@ -175,7 +176,7 @@ merges; license-gated jobs skip cleanly when products are unavailable.
 | Requirement | Verified / validated by |
 |-------------|-------------------------|
 | REQ-T-01 | TS-I-01, TS-S-01, TS-I-13, TS-I-14, TS-I-15; TS-I-04 *(planned)*, TS-I-10 *(planned, R22)* |
-| REQ-T-02 | TS-I-01, TS-I-05, TS-I-12; TS-I-10 *(planned, R22)* |
+| REQ-T-02 | TS-I-01, TS-I-05, TS-I-12, TS-I-20, TS-U-19 (loopbound); TS-I-10 *(planned, R22)* |
 | REQ-T-03 | TS-I-01 |
 | REQ-T-04 | TS-I-02, TS-I-06, TS-I-08, TS-I-09, TS-I-17; TS-I-11 *(planned, R24)* |
 | REQ-T-05 | TS-S-02; cross-validated at scale by the TS-S-04 `oracleCodegenEquivalence` (born-ERT, sampled, hand-rolled `codegen`+compare; ADR-0014). The `matlabtest.coder` supported-API migration is *(planned, R15)* |
