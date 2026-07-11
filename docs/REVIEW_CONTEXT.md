@@ -73,7 +73,9 @@ A bundled review covers both. Narrow with "review in verification mode" /
    guide, `README`, `bench/SHOWCASE.md`, and the ADR-0025 emitted fragments —
    describe *current* behavior; a behavior change is referenced release-relative
    ("new in v2.0", "deprecated in v2.0"), never by in-fork dev tracking
-   (`ADR-xxxx` / `PR #x` / `#issue` / roadmap `Rnn` / rev-date / `Bnn`). That
+   (`ADR-xxxx` / `PR #x` / `#issue` / roadmap `Rnn` / rev-date / `Bnn`, or an
+   inline dev-doc section citation like `ANALYSIS §` / `DESIGN §Contracts` —
+   distinct from a navigation *link* to those docs, which is fine). That
    tracking belongs in the dev docs (ADR / ANALYSIS / ROADMAP / CI\_PLAN) and in
    **code comments** — which keep the full audit trail (diff-annotations +
    `Bxx`/`Rnn`/`#issue`/`ADR`/`ANALYSIS` refs); the only rule there is that a
@@ -116,8 +118,8 @@ A bundled review covers both. Narrow with "review in verification mode" /
 - **A bug fix without its regression test**, or a `KnownIssue` tag left on a
   test that now passes.
 - **Dev-tracking in user-facing docs** (principle 8) — an `ADR-xxxx` / `PR #x` /
-  `#issue` / roadmap `Rnn` / rev-date / `Bnn` reference woven into the user
-  guide, `README`, `SHOWCASE.md`, or an emitted fragment; or a code-comment
+  `#issue` / roadmap `Rnn` / rev-date / `Bnn` / inline `ANALYSIS §` / `DESIGN §`
+  citation woven into the user guide, `README`, `SHOWCASE.md`, or an emitted fragment; or a code-comment
   version tag that names a release other than the one the change ships in.
 
 ## What to be lenient about
