@@ -89,6 +89,26 @@ numbering convention (including the parallel-track rebase rule). Link the ADR
 from the PR description; reference it inline beside the value it explains.
 Contracts and architecture themselves belong in `DESIGN.md`, not an ADR.
 
+## Documentation: state-based and release-relative
+
+Two audiences, two conventions (ADR-0029, REVIEW_CONTEXT principle 8):
+
+- **User-facing docs** — the user guide, `README`, `bench/SHOWCASE.md`, and the
+  ADR-0025 emitted fragments — describe **current behavior**. Reference a
+  behavior change **release-relative** ("new in v2.0", "deprecated in v2.0"),
+  never with in-fork dev tracking (`ADR-xxxx` / `PR #x` / `#issue` / roadmap
+  `Rnn` / rev-date / `Bnn`). The release-to-release change history lives in the
+  user-facing `CHANGELOG.md`; point there instead of inlining change notes. A
+  *new* doc has nothing to track — write it clean. Linking to a dev doc as
+  navigation ("development plan: see ROADMAP") is fine.
+- **Dev docs and code comments** keep the full audit trail. ADRs, `ANALYSIS.md`,
+  `ROADMAP.md`, `CI_PLAN.md`, and `DESIGN.md` rationale track as they do. **Code
+  comments keep everything** — the diff-annotations justifying why upstream code
+  was touched, and the `Bxx` / `Rnn` / `#issue` / `ADR-` / `ANALYSIS` refs — and
+  you keep writing them. The only rule: a change's **version tag names the
+  release it ships in** (current unreleased work → `v2.0`; later work → its own
+  release).
+
 ## Commit & branch conventions
 
 - Feature branches: `claude/<topic>-<short-hash>` for agent work,
