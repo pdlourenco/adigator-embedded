@@ -57,7 +57,7 @@ function [Outputs,varargout] = adigator(UserFunName,UserFunInputs,DerFileName,va
 %   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %
 %   Changelog:
-%   2025-10 Pedro Lourenço  v1.5    Store the list of files and functions 
+%   2025-10 Pedro Lourenço  v2.0    Store the list of files and functions 
 %                                   generated and the corresponding path.
 %                                   Add new option to allow storage of the
 %                                   new files in a user-specified path
@@ -78,7 +78,7 @@ function [Outputs,varargout] = adigator(UserFunName,UserFunInputs,DerFileName,va
 
 global ADIGATOR ADIGATORFORDATA ADIGATORDATA ADIGATORVARIABLESTORAGE
 tstart = tic;
-version = '1.5'; % v1.5
+version = '2.0'; % v2.0
 
 % B16 / REQ-T-07: a transformation acquires three things that must be released
 % on EVERY exit (normal return or error): the four transformation-state globals,
@@ -136,12 +136,12 @@ ADIGATOR.OPTIONS.KEYBOARD     = 0;
 ADIGATOR.OPTIONS.PREALLOCATE  = 0;
 ADIGATOR.OPTIONS.MAXWHILEITER = opts.maxwhileiter;
 ADIGATOR.OPTIONS.COMPLEX      = opts.complex;
-ADIGATOR.OPTIONS.EMBED_MODE   = adigatorNormalizeEmbedMode(opts.embed_mode); % v1.5 (#121-M14: canonicalize the alias so the embed gate's strcmp can't be bypassed by an un-normalized value, e.g. a raw struct('embed_mode','inline'))
-ADIGATOR.OPTIONS.PATH         = opts.path; % v1.5
+ADIGATOR.OPTIONS.EMBED_MODE   = adigatorNormalizeEmbedMode(opts.embed_mode); % v2.0 (#121-M14: canonicalize the alias so the embed gate's strcmp can't be bypassed by an un-normalized value, e.g. a raw struct('embed_mode','inline'))
+ADIGATOR.OPTIONS.PATH         = opts.path; % v2.0
 
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~ FILE KEEPING ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
-if isempty(ADIGATOR.OPTIONS.PATH) % v1.5 - allow user to specify the path
+if isempty(ADIGATOR.OPTIONS.PATH) % v2.0 - allow user to specify the path
     CallingDir = cd;
 else
     CallingDir = ADIGATOR.OPTIONS.PATH;
@@ -150,16 +150,16 @@ else
     end
 end
 
-% Store the path to the generated files (v1.5)
+% Store the path to the generated files (v2.0)
 ADiGator_GeneratedFiles.dername = DerFileName;
 ADiGator_GeneratedFiles.m    = fullfile(CallingDir, [ADiGator_GeneratedFiles.dername, '.m']);
 ADiGator_GeneratedFiles.mat  = fullfile(CallingDir, [ADiGator_GeneratedFiles.dername, '.mat']);
 ADiGator_GeneratedFiles.path = CallingDir;
 
-% v1.5 - store the list of generated functions and subfunctions
+% v2.0 - store the list of generated functions and subfunctions
 ADIGATOR.GENFUNNAMES = cell(1,0);
 
-if exist(ADiGator_GeneratedFiles.m,'file') %v1.5 - cleanup to refer to the file definition above
+if exist(ADiGator_GeneratedFiles.m,'file') %v2.0 - cleanup to refer to the file definition above
     if ADIGATOR.OPTIONS.OVERWRITE
         delete(ADiGator_GeneratedFiles.m);
         rehash
@@ -170,7 +170,7 @@ if exist(ADiGator_GeneratedFiles.m,'file') %v1.5 - cleanup to refer to the file 
             'existing files and any associated .mat file.'],ADiGator_GeneratedFiles.m);
     end
 end
-if exist(ADiGator_GeneratedFiles.mat,'file') %v1.5 - cleanup to refer to the file definition above
+if exist(ADiGator_GeneratedFiles.mat,'file') %v2.0 - cleanup to refer to the file definition above
     if ADIGATOR.OPTIONS.OVERWRITE
         delete(ADiGator_GeneratedFiles.mat);
     else
@@ -842,7 +842,7 @@ fprintf(Dfid,'return\nend');
 % so adigator's own frame never eval-declares a global (defense-in-depth for the
 % B16 hygiene; the transformation globals are cleared via the non-declaring
 % helper). The global persists in the global workspace after the call.
-adigatorLoadRuntimeData(ADIGATOR.PRINT.FILENAME, ADIGATOR.PRINT.FILEPATHS.mat); % v1.5 - files can be in any user path
+adigatorLoadRuntimeData(ADIGATOR.PRINT.FILENAME, ADIGATOR.PRINT.FILEPATHS.mat); % v2.0 - files can be in any user path
 
 if ADIGATOR.OPTIONS.ECHO
   disp(['Successfully transformed user function ''',UserFunName,...
@@ -855,7 +855,7 @@ ADIGATOR.OPTIONS.UNROLL = UserUnrollFlag;
 if nargout > 1
     varargout{1} = FunctionInfo(1);
 end
-% v1.5 - save for future reference the path to the generated files and the
+% v2.0 - save for future reference the path to the generated files and the
 % list of functions
 if nargout > 2
     varargout{2} = ADiGator_GeneratedFiles;

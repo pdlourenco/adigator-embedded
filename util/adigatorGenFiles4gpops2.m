@@ -1,7 +1,7 @@
 function adigatorfilenames = adigatorGenFiles4gpops2(setup,varargin)
 % function adigatorfilenames = adigatorGenFiles4gpops2(setup)
 %
-% *** INHERITED-UPSTREAM WRAPPER -- NOT AT EMBEDDED FEATURE PARITY (v1.5) ***
+% *** INHERITED-UPSTREAM WRAPPER -- NOT AT EMBEDDED FEATURE PARITY (v2.0) ***
 % Carried over from stock ADiGator. Emits a HOST-ONLY derivative file (the
 % classic runtime-load/global mechanism) and does NOT support this fork's
 % embedded features: EMBED_MODE, code generation (MATLAB/Embedded Coder),

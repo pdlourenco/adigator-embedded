@@ -22,7 +22,7 @@ Grd = reshape(f.dz,[2 1]);
 Fun = f.f;
 end
 
-% This code was generated using ADiGator version 1.5
+% This code was generated using ADiGator version 2.0
 % ©2010-2014 Matthew J. Weinstein and Anil V. Rao
 % ©2025 Pedro Lourenço @ GMV
 % This version of ADiGator may be obtained at https://github.com/pdlourenco/adigator-embedded 

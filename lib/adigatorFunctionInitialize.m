@@ -29,7 +29,7 @@ function [flag, FunctionInfo, Outputs, prevDerivData] = ...
 %   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %
 %   Changelog:
-%   2025-10 Pedro Lourenço  v1.5    Store the mat file with the static
+%   2025-10 Pedro Lourenço  v2.0    Store the mat file with the static
 %                                   derivative data in the user provided
 %                                   folder and not necessarily in the 
 %                                   calling directory
@@ -1003,7 +1003,7 @@ for Icount = 1:NUMinputs
   InStr{Icount} = [InNames{Icount},','];
 end
 InStr = cell2mat(InStr);
-GlobalVarName = ['ADiGator_',ADIGATOR.PRINT.FILENAME]; % v1.5 - change name for clarity (it's not the matfile name)
+GlobalVarName = ['ADiGator_',ADIGATOR.PRINT.FILENAME]; % v2.0 - change name for clarity (it's not the matfile name)
 if FunID == 1
   % Main Function
   FileName    = ADIGATOR.PRINT.FILENAME;

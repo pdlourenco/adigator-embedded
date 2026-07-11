@@ -1,5 +1,6 @@
 % startupadigator: will add adigator directories to the Matlab path.
 % Copyright 2011-2014 Matthew J. Weinstein and Anil V. Rao
+% Copyright 2025-2026 GMV / Pedro Lourenço (embedded fork additions)
 % Distributed under the GNU General Public License version 3.0
 currpath = pwd;
 addpath(currpath);
@@ -30,8 +31,8 @@ fprintf([...
 '     along with ADiGator at ',COPYINGlink,'.\n',...  
 '     If not, see ',COPYINGurl,'.\n\n']);
 
-adigatorurl = '<a href="http://sourceforge.net/projects/adigator/">http://sourceforge.net/projects/adigator/</a>';
+adigatorurl = '<a href="https://github.com/pdlourenco/adigator-embedded">https://github.com/pdlourenco/adigator-embedded</a>';
 
 fprintf([...
-'     For updated versions of the code please visit the sourceforge page\n',...
-'     at ',adigatorurl,'.\n     Please report any bugs to the sourceforge forums.\n']);
+'     For updated versions of the code please visit the fork repository\n',...
+'     at ',adigatorurl,'.\n     Please report any issues to the GitHub issue tracker.\n']);

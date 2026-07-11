@@ -69,7 +69,7 @@ function output = adigatorGenJacFile(UserFunName,UserFunInputs,varargin)
 %   2025-10  PEDRO LOURENÇO (PADL) - palourenco@gmv.com
 %
 %   Changelog:
-%   2025-10 Pedro Lourenço  v1.5    Store the generated derivative file and
+%   2025-10 Pedro Lourenço  v2.0    Store the generated derivative file and
 %                                   and the mat file with the static
 %                                   derivative data in the user provided
 %                                   folder and not necessarily in the 
@@ -113,7 +113,7 @@ else
     % parse options
     optfields = fieldnames(varargin{1});
     for Fcount = 1:length(optfields)
-        % v1.5 (B12 fix): lower-case only the destination field; the user's
+        % v2.0 (B12 fix): lower-case only the destination field; the user's
         % struct must be read with the field name they actually used
         opts.(lower(optfields{Fcount})) = varargin{1}.(optfields{Fcount});
     end
@@ -125,7 +125,7 @@ else
         NameAppendix = varargin{2};
     end
 end
-opts.embed_mode = adigatorNormalizeEmbedMode(opts.embed_mode); % v1.5 (B11 fix)
+opts.embed_mode = adigatorNormalizeEmbedMode(opts.embed_mode); % v2.0 (B11 fix)
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ INPUTS PARSING ~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 if ~ischar(UserFunName)
@@ -149,7 +149,7 @@ end
 [derflag, derpathStr, ~, x] = adigatorFindDerivInput(UserFunInputs,'adigatorGenJacFile');
 
 % File checks
-if isempty(opts.path) % v1.5 - allow user to specify the path
+if isempty(opts.path) % v2.0 - allow user to specify the path
     CallingDir = cd;
 else
     CallingDir = opts.path;
@@ -157,7 +157,7 @@ else
         mkdir(CallingDir);
     end
 end
-% v1.5 - add chosen directory to the path to allow storage
+% v2.0 - add chosen directory to the path to allow storage
 % in userdefined directories
 original_path = path();
 addpath(CallingDir);
@@ -170,7 +170,7 @@ end
 
 
 
-% Store the path to the generated files (v1.5)
+% Store the path to the generated files (v2.0)
 ADiGator_GeneratedFiles.Jac = fullfile(CallingDir, [JacFileName, '.m']);
 
 if exist(ADiGator_GeneratedFiles.Jac,'file')
@@ -186,8 +186,8 @@ if exist(ADiGator_GeneratedFiles.Jac,'file')
 end
 
 % Call adigator
-try % v1.5 - add try-catch to avoid leaving unnecessary changes to path active
-[adiout,FunctionInfo,ADi_DerivFiles(1),ADi_DerivFuns] = adigator(UserFunName,UserFunInputs,AdiJacFileName,opts); % v1.5 - add new output with list of files/functions
+try % v2.0 - add try-catch to avoid leaving unnecessary changes to path active
+[adiout,FunctionInfo,ADi_DerivFiles(1),ADi_DerivFuns] = adigator(UserFunName,UserFunInputs,AdiJacFileName,opts); % v2.0 - add new output with list of files/functions
 catch ME
     path(original_path);
     rethrow(ME);
@@ -195,7 +195,7 @@ end
 
 adiout = adiout{1};
 
-% v1.5 - restore the path to its original state
+% v2.0 - restore the path to its original state
 path(original_path);
 
 % #164: reject a non-numeric (struct/cell) user output with an actionable error
@@ -276,7 +276,7 @@ ystr = FunctionInfo.Output.Names{1};
 % Call the ADiGatorJac file
 fprintf(fid,[ystr,' = ',AdiJacFileName,'(',InputStr2,');\n']);
 
-% v1.5
+% v2.0
 % following the conventions on https://en.wikipedia.org/wiki/Matrix_calculus
 
 %%% SCALAR FUNCTION OF VECTOR VARIABLE (GRADIENT)
@@ -318,7 +318,7 @@ xsize = x.func.size;
 ysize = adiout.func.size;
 dydxsize = [prod(ysize), prod(xsize)];
 dydxnumel  = dydxsize(1)*dydxsize(2);
-remapcase = 0; % v1.5 (B10 fix): remember the shape remap for JacobianStructure
+remapcase = 0; % v2.0 (B10 fix): remember the shape remap for JacobianStructure
 if dydxsize(1) == 1 && all(xsize>1) % scalar function of matrix variable
   remapcase = 1;
   dydxsize = xsize;
@@ -334,7 +334,7 @@ dydxnnz  = size(adiout.deriv.nzlocs,1);
 % If dydx has => 250 elements and has <= 75% nonzeros, project into sparse
 % matrix, otherwise project into full matrix.
 dy = [ystr,'.d',vodname];
-% v1.5 (ANALYSIS.md §2.1): in embed modes, precompute the scatter indices
+% v2.0 (ANALYSIS.md §2.1): in embed modes, precompute the scatter indices
 % at generation time and emit them as a literal vector. This removes the
 % per-call _location index arithmetic from the wrapper, and the indices
 % become compile-time constants in the generated C code. nzlocs columns are
@@ -354,7 +354,7 @@ if embedscatter
 else
   scatteridx = [dy,'_location']; % single-column cases only (see below)
 end
-%v1.5:	process this to output Jacobians and Gradients correctly, as shown above
+%v2.0:	process this to output Jacobians and Gradients correctly, as shown above
 % #84/R25: der_output is the canonical GLOBAL form; jac_output is a level-1
 % (Jacobian/gradient) alias. adigatorOptions does NOT cross-sync them, so honor
 % either here - an explicit 'nonzeros' in der_output OR jac_output selects the
@@ -415,7 +415,7 @@ else % Jacobian is a matrix -> Jacobian convention (classic runtime indexing)
       colstr = [dyloc,'(:,2)'];
     end
   end
-  if dydxnumel >= 250 && dydxnnz/dydxnumel <= 3/4 && opts.embed_mode == 'c' % v1.5 - only allow sparse matrices if in classic mode (no embed)
+  if dydxnumel >= 250 && dydxnnz/dydxnumel <= 3/4 && opts.embed_mode == 'c' % v2.0 - only allow sparse matrices if in classic mode (no embed)
     % Project Sparse
     fprintf(fid,[NameAppendix,' = sparse(',rowstr,',',colstr,',',dy,',%1.0f,%1.0f);\n'],dydxsize);
   else
@@ -435,13 +435,13 @@ rehash
 output.FunctionFile = UserFunName;
 output.JacobianFile = JacFileName;
 
-% first derivative - Jacobian (v1.5)
+% first derivative - Jacobian (v2.0)
 output.GenFiles(1) = ADi_DerivFiles(1);
 output.GenFiles(1).main = ADiGator_GeneratedFiles.Jac;
 output.GenFiles(1).name = JacFileName;
 output.GenFiles(1).func = ADi_DerivFuns;
 
-% v1.5 (B10 fix): nzlocs index the unrolled [prod(ysize) x prod(xsize)]
+% v2.0 (B10 fix): nzlocs index the unrolled [prod(ysize) x prod(xsize)]
 % Jacobian. When the displayed shape was remapped above (scalar function of
 % matrix variable / matrix function of scalar variable), decompose the
 % unrolled linear indices into subscripts of the displayed shape; the old
