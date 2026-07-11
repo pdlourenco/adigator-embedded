@@ -100,6 +100,15 @@ derivative Contract (C-1..C-6) or `adigatorDerivativeConventions.m`.
 - **Single source of truth restored:** the sample in the PDF is a slice of the
   same bytes the tests assert on. A generator change that alters emitted code
   either updates the fixture (and the sample follows) or fails its fixture test.
+- **Emitted fragments are user-facing content ([ADR-0029](ADR-0029-v2-release-versioning-doc-cleanliness.md),
+  REVIEW_CONTEXT principle 8).** Both the `\lstinputlisting` source excerpts and
+  the producer-emitted `\input` tables render into the user guide, so they are
+  subject to the state-based / release-relative docs rule. The bench producers
+  must keep them free of in-fork dev-tracking (`ADR-xxxx` / `PR #x` / `#issue` /
+  roadmap `Rnn` / rev-date / `Bnn`, or an inline dev-doc `§` citation like
+  `ANALYSIS §` / `DESIGN §Contracts` — a navigation link is fine). `bench_compare.tex`
+  / `bench_interp.tex` are clean today; keeping them clean is the standing
+  producer-side obligation.
 - **Revisit when:** (a) marker maintenance proves burdensome or a needed snippet
   has no fixture to key off — fall back to the documented **B2** alternative (a
   committed curated excerpt file that the guide loads whole, pinned by a test

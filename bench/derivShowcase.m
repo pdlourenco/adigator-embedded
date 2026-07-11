@@ -338,6 +338,10 @@ function emitTexFragment(rows, n, timeReps, texPath)
 % timestamps (ADR-0025 constraint 4). Emits one row per (fn, DerType, method)
 % reference point plus the AD forward/reverse cells, so it carries all four
 % methods side by side.
+% USER-FACING OBLIGATION (ADR-0025 §Consequences / ADR-0029 / REVIEW_CONTEXT
+% principle 8): this fragment renders into the user guide, so the EMITTED text
+% must stay free of in-fork dev-tracking (ADR/PR/#issue/Rnn/rev-date/Bnn or an
+% inline dev-doc § citation). Keep every emitted line state-based.
 keep = rows(arrayfun(@(r) wantInTex(r), rows));
 if isempty(keep)
     warning('derivShowcase:texFragment', ...
