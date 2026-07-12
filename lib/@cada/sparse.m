@@ -3,6 +3,13 @@ function y = sparse(varargin)
 %
 % Copyright 2011-2014 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
+%
+% Modifications as described below are Copyright Pedro Lourenço and GMV.
+% Changelog:
+%   2026-07    Data-dependent (symbolic) index errors routed through the
+%              shared actionable helper cadaErrorSymbolicIndex (ADR-0024,
+%              B20 family; #121) - same construct, same logical-weight-sum
+%              rewrite advice as the subsref/subsasgn sites.
 global ADIGATOR
 NUMvod  = ADIGATOR.NVAROFDIFF;
 fid     = ADIGATOR.PRINT.FID;
@@ -63,7 +70,7 @@ elseif nargin == 3 || nargin == 5 || nargin == 6
       RowStr = yrows.func.name;
       yrows  = yrows.func.value;
     else
-      error('cannot index with a strictly symbolic variable')
+      cadaErrorSymbolicIndex(); % actionable B20-style error (ADR-0024, #121)
     end
   else
     if PFLAG; RowStr = cadaindprint(yrows); else RowStr = []; end
@@ -73,7 +80,7 @@ elseif nargin == 3 || nargin == 5 || nargin == 6
       ADIGATOR.VARINFO.LASTOCC(ycols.id,1) = ADIGATOR.VARINFO.COUNT;
       ColStr = ycols.func.name;   ycols = ycols.func.value;
     else
-      error('cannot index with a strictly symbolic variable')
+      cadaErrorSymbolicIndex(); % actionable B20-style error (ADR-0024, #121)
     end
   else
     if PFLAG; ColStr = cadaindprint(ycols); else ColStr = []; end
@@ -99,7 +106,7 @@ elseif nargin == 3 || nargin == 5 || nargin == 6
         FMrowStr  = FMrow.func.name;
         FMrow     = FMrow.func.value;
       else
-        error('cannot index with a strictly symbolic variable')
+        cadaErrorSymbolicIndex(); % actionable B20-style error (ADR-0024, #121)
       end
     else
       FMrowStr = sprintf('%1.0f',FMrow);
@@ -110,7 +117,7 @@ elseif nargin == 3 || nargin == 5 || nargin == 6
         FNcolStr = FNcol.func.name;
         FNcol = FNcol.func.value;
       else
-        error('cannot index with a strictly symbolic variable')
+        cadaErrorSymbolicIndex(); % actionable B20-style error (ADR-0024, #121)
       end
     else
       FNcolStr = sprintf('%1.0f',FNcol);
@@ -124,7 +131,7 @@ elseif nargin == 3 || nargin == 5 || nargin == 6
           ADIGATOR.VARINFO.LASTOCC(NZmax.id,1) = ADIGATOR.VARINFO.COUNT;
           NZmaxStr = NZmax.func.name;
         else
-          error('cannot index with a strictly symbolic variable')
+          cadaErrorSymbolicIndex(); % actionable B20-style error (ADR-0024, #121)
         end
       else
         NZmaxStr = sprintf('%1.0f',NZmax);

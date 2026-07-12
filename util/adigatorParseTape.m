@@ -84,6 +84,7 @@ reserved = {'S','Gator1Data','UserFunInputs','InNames','vodLoc','VodName',...
 % parse: lhs base name (with optional .f), scatter subscript text, rhs; for a
 % block, the union of written bases (its deps are resolved in the pass below).
 pendingReads = cell(n,1);
+lbg = adigatorLoopboundGuard();  % shared guard shape (#181)
 for k = 1:n
   S(k).keep = false;
   % LOOPBOUND runtime-bound guard `assert(name <= max)` (#173): the runtime
@@ -92,8 +93,7 @@ for k = 1:n
   % (writes nothing, reads the bound name) so the slicer never drops the
   % n <= Nmax check from a slimmed loopbound file. (Only TOP-LEVEL guards reach
   % here; an inner loop's assert is absorbed by analyzeBlock as a phantom write.)
-  if ~isempty(regexp(strtrim(char(S(k).text)), ...
-      '^assert\(\s*[A-Za-z]\w*\s*<=\s*\d+\s*\)\s*;$','once'))
+  if ~isempty(regexp(strtrim(char(S(k).text)),lbg.match,'once'))
     % Opaque keep-always: it writes nothing and has no parseable lhs/rhs, so the
     % slicer keeps it unconditionally (its bound name is a function input, always
     % in scope) - no deps need recording.

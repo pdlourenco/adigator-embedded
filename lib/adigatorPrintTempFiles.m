@@ -490,13 +490,15 @@ while MajorLineCount <= EndLocation(1) && ~isnumeric(FunStrFULL)
           ' variable name. At ',FunStri,' ',errlink]);
       elseif StrLength > 5 && strcmp(FunStri(1:6),'pause(')
         % PAUSE
-      elseif ~isempty(regexp(FunStri,'^assert\(\s*[A-Za-z]\w*\s*<=\s*\d+\s*\)\s*;?\s*$','once'))
+      elseif StrLength > 6 && strcmp(FunStri(1:7),'assert(') && ...
+          ~isempty(regexp(FunStri,adigatorLoopboundGuardMatch,'once'))
         % LOOPBOUND runtime-bound guard (#173). `assert(name <= max)` is the exact
-        % shape adigatorForInitialize emits for a runtime-bound loop, so as a
+        % shape adigatorForInitialize emits for a runtime-bound loop (the shared
+        % shape lives in util/adigatorLoopboundGuard, #181), so as a
         % source statement it appears only when RE-differentiating a
         % 'loopbound'-generated file (a Hessian or nth derivative of a loopbound
         % derivative).
-        assertName = regexp(FunStri,'^assert\(\s*([A-Za-z]\w*)','once','tokens');
+        assertName = regexp(FunStri,adigatorLoopboundGuardMatch,'once','tokens');
         if DerNumber >= 2 && ~isempty(ADIGATOR.OPTIONS.LOOPBOUND) && ...
             ~isempty(assertName) && ismember(assertName{1},{ADIGATOR.OPTIONS.LOOPBOUND.name})
           % PR B: this is a RE-differentiation (DERNUMBER>=2) of a loopbound file
@@ -813,4 +815,13 @@ if ~isempty(commentlocs)
     comment = commentlocs(1);
   end
 end
+end
+
+function m = adigatorLoopboundGuardMatch()
+% Shared loopbound-guard recognizer (#181): fetches the single-source-of-truth
+% match regex from util/adigatorLoopboundGuard so this file's two uses (the
+% classifier condition and the name/bound token extraction) cannot drift from
+% the emitter's template. Tokens = {name, bound}; callers use token 1 (name).
+g = adigatorLoopboundGuard();
+m = g.match;
 end

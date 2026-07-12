@@ -3,6 +3,13 @@ function y = diag(x,varargin)
 %
 % Copyright 2011-2014 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
+%
+% Modifications as described below are Copyright Pedro Lourenço and GMV.
+% Changelog:
+%   2026-07    Data-dependent (symbolic) index errors routed through the
+%              shared actionable helper cadaErrorSymbolicIndex (ADR-0024,
+%              B20 family; #121) - same construct, same logical-weight-sum
+%              rewrite advice as the subsref/subsasgn sites.
 global ADIGATOR
 NUMvod = ADIGATOR.NVAROFDIFF;
 fid    = ADIGATOR.PRINT.FID;
@@ -43,7 +50,7 @@ if nargin == 2
   if isa(varargin{1},'cada')
     K = varargin{1}.func.value;
     if isempty(K)
-      error('cannot assign to strictly symbolic diagonal')
+      cadaErrorSymbolicIndex(); % actionable B20-style error (ADR-0024, #121)
     end
     Kstr = varargin{1}.func.name;
   else
