@@ -67,6 +67,19 @@ still validates rather than assumes, per the Decision):
   scalar-of-matrix) must be *validated*, not assumed — they are exactly
   where ordering assumptions have broken before.
 
+**Value stream unchanged across the migration** (a first-class claim, not
+a nicety): both `'nonzeros'` today and `'csc'` tomorrow emit the value
+vector from `deriv.nzlocs` native order — the generator prints the
+unsorted derivative stream (`dy(:)` / `dydxdx(:)`; the column-major linear
+index it computes is used only for the matrix-mode scatter, not to re-sort
+the values). Wherever the canonicalizer confirms the identity permutation (the
+expected case for all three DerTypes, above), the runtime value vector is
+**identical** across the break — only the pattern *metadata* surface
+changes. Value-only consumers keep working unmodified; only pattern
+consumers migrate. A non-identity permutation (the remap watch item) is
+exactly where this claim fails, which is why the canonicalizer validates
+instead of assuming — and why TS-I-25 pins `isIdentity` as a tripwire.
+
 ## Decision
 
 1. **One option, two values.** `der_output ∈ {'matrix', 'csc'}` for every
@@ -109,7 +122,12 @@ still validates rather than assumes, per the Decision):
    same 2³²-assumption-with-a-guard posture ANALYSIS §1.5 adopted for the
    `Index*` down-cast (and the M7 guard precedent): silent saturation is a
    principle-1 wrong-gather, so out-of-range falls back to `double` with a
-   warning rather than saturating.
+   warning rather than saturating. The guard resolves at **generation
+   time**: `ColPtr`/`RowIdx` are compile-time constants, so the class is
+   fixed per generated file — never a runtime type switch. The per-call
+   output is only the double value vector (Decision 3), so the baked-in
+   metadata constants have one class per file with no runtime branch,
+   preserving the REQ-T-05/TS-S-02 fixed-size codegen posture.
 
 5. **Canonicalizer, used by every generator.**
    `[csc, perm, isIdentity] = adigatorBuildCSC(size_, locations)` in
@@ -132,7 +150,12 @@ still validates rather than assumes, per the Decision):
    not the internal `1×n`). `HessianCSC` describes the full existing output
    (scalar `n×n`; vector `[m·n, n]` fold; remap cases the documented
    displayed shape). **No** silent switch to triangular storage — symmetric
-   compression is a future, separately-contracted option.
+   compression is a future, separately-contracted option. A Hessian file's
+   `Grd` companion is unaffected by `der_output` (decision b) and is
+   returned dense in both modes; the generation result still exports
+   `GradientCSC` describing its structure — metadata is exported per
+   derivative role present (§2), with matrix-mode semantics for the
+   companion.
 
 ## Alternatives considered
 
@@ -167,7 +190,16 @@ still validates rather than assumes, per the Decision):
   `REVIEW_CONTEXT` terminology, the C-6 text here and in
   `adigatorDerivativeConventions.m`, the **CHANGELOG `[2.0]` output-forms
   bullet** (v2.0 is untagged — the entry must describe the CSC surface), and
-  a dev-doc terminology sweep (e.g. ANALYSIS §2's live `jac_output` mention).
+  a dev-doc terminology sweep (e.g. ANALYSIS §2's live `jac_output`
+  mention). The sweep is a **repo-wide grep census**
+  (`jac_output`/`der_output`/`nonzeros`/`*Locs`/`*Structure`) with every
+  hit triaged one of three ways: *migrate* (live docs/tests/code),
+  *historical-leave* (immutable ADR/analysis records describing what was
+  decided at the time), or *supersession-note* (forward-looking ADRs that
+  name the old surface as a current contract — e.g. ADR-0020's k≥3 output
+  discussion and ADR-0028's loopbound-Hessian text — get a one-line
+  pointer to this ADR rather than a rewrite). The named list above is the
+  known-consumer floor, not the ceiling.
 - `REQ-T-03` is restated onto CSC (superset property + placement
   consistency, now via reconstruction); `REQ-T-11`'s form clause is
   respelled. New tests: `UBuildCSCTest` (TS-U-20, canonicalizer + invariants)
