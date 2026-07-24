@@ -9,6 +9,8 @@ change** — it governs the `Index*`/`Data*` downcast layout, orthogonal to outp
 form). Implementation is roadmap **R25**, Hessian-nonzeros first (the R22/#85
 prerequisite); each phase lands its `Verified by:` test.
 
+**Update — 2026-07-24: partially superseded by [ADR-0030](ADR-0030-csc-sparse-pattern-contract.md) (issue #192, pre-v2.0-release break).** The `'nonzeros'` form spelling, the `*Locs` family, the public `*Structure` fields, and the `jac_output` alias are replaced by the canonical CSC contract (`der_output ∈ {matrix, csc}` + per-role `*CSC` metadata). This ADR's "decision b" (top-order-output selection, no cross-sync) and the C-2/C-3 data/pattern split are **unchanged** and remain binding. The flip lands with the R31 implementation PR; until then the surface below is what ships.
+
 **Update — R25 phase 1 shipped (#99, "decision b").** As implemented,
 `der_output` selects the form of each generator's **top-order output only** (a
 Hessian file's `Grd` companion stays dense regardless); `jac_output` is kept as

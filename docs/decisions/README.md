@@ -181,3 +181,9 @@ Contracts section (binding conventions), or for purely mechanical choices
   full audit trail** (only the version *tag* = ship-release, so a one-time `v1.5`→`v2.0`
   sweep). Upstream copyright preserved + fork attribution added (notice wording
   maintainer-signed-off). Issue #179.
+- [ADR-0030](ADR-0030-csc-sparse-pattern-contract.md) — **Accepted**: CSC becomes
+  the **sole** public sparse-pattern representation (`der_output ∈ {matrix, csc}`,
+  per-role `*CSC` metadata; `'nonzeros'`/`jac_output`/`*Locs`/`*Structure` removed)
+  — a pre-v2.0-release break (issue #192). Partially supersedes ADR-0022 (form
+  spelling + pattern representation; decision-b top-order semantics unchanged);
+  binds C-6, restates REQ-T-03 + respells REQ-T-11 when the R31 implementation PR lands.

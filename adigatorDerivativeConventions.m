@@ -58,6 +58,17 @@
 % all(c,r>1)	            all(n,m=1)		                r x c
 
 %%% GENERATED-FILE OUTPUTS: NAMES + ORDER (see docs/DESIGN.md Contract C-6)
+%
+%  ADR-0030 (issue #192, accepted 2026-07-24; planned R31, flips with the
+%  implementation PR - the shipped surface until then is der_output
+%  {matrix,nonzeros} + *Locs/*Structure): the output-form option respells to
+%  der_output {matrix,csc}; CSC (Size/ColPtr/RowIdx/Nnz/IndexBase=1) becomes
+%  the SOLE public sparse-pattern representation for 2-D derivatives, in both
+%  modes; csc mode returns the Nnz-by-1 value vector in CSC order under the
+%  same canonical names below (representation changes, names/order do not).
+%  GradientCSC.Size = [n 1] (the returned column convention); HessianCSC
+%  covers the full n-by-n / [m*n n] fold shapes - no triangular compression.
+
 % Every generated derivative file - forward, reverse, and matrix-free product -
 % returns its outputs under these canonical variable names, the same object
 % always named the same:
