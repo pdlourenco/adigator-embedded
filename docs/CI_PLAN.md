@@ -125,7 +125,7 @@ push and pull request.
 | TS-U-17 | `UNormTest` — the `@cada/norm` overload + `isnan`/`isinf`/`isfinite` predicates (issue #28): vector p-norm gradients (2/1/Inf/`fro`, row + column) vs FD, the induced/matrix norms raise `adigator:norm:matrixNorm` rather than mis-differentiating, and the predicates are derivative-free. | REQ-C-01 |
 | TS-U-18 | `UStripDeadOutputIndicesTest` — the output-index-metadata strip (#80/#81, approach D): the `_size`/`_location` output-field index tables are removed from the embeddable-mode generated data while retained tables/values are unchanged. | REQ-T-04 |
 | TS-U-19 | `ULoopboundGuardTest` — lockstep pin for the shared loopbound guard shape (`util/adigatorLoopboundGuard`, #181): what the emitter template prints, the recognizer regex matches with `{name, bound}` tokens (consumers: `adigatorForInitialize` emit, `adigatorPrintTempFiles` drop/rediff, `adigatorParseTape` slim keep-always); user-assert lookalikes (non-numeric bound, wrong operator, missing semicolon) must NOT match — they take the fail-loud `adigator:loopbound:rediff` path. util/-only path fixture by design. | REQ-T-02 (loopbound) |
-| TS-U-20 | *(planned, R31 — issue #192, ADR-0030)* `UBuildCSCTest` — the `adigatorBuildCSC` canonicalizer: CSC invariants (monotone `ColPtr`, `ColPtr(1)==1`, `ColPtr(end)==Nnz+1`, strictly-increasing per-column `RowIdx`, in-range/unique locations, empty columns as adjacent equal pointers), identity-permutation detection on natively-ordered input, non-identity constant-gather permutation correctness, duplicate/out-of-range rejection, uint32 range-guard fallback, and the host helpers (`adigatorCSCToLocs`/`adigatorCSCToSparse`) round-tripping. | REQ-T-03 |
+| TS-U-20 | `UBuildCSCTest` — the `adigatorBuildCSC` canonicalizer (`util/adigatorBuildCSC`, #192/ADR-0030, R31 Phase A): CSC invariants (monotone `ColPtr`, `ColPtr(1)==1`, `ColPtr(end)==Nnz+1`, strictly-increasing per-column `RowIdx`, in-range/unique locations, empty columns as adjacent equal pointers), identity-permutation detection on natively-ordered input, non-identity constant-gather permutation correctness, duplicate/out-of-range rejection, uint32 range-guard fallback, and the host helpers (`adigatorCSCToLocs`/`adigatorCSCToSparse`) round-tripping. util/-only path fixture by design. | REQ-T-03 |
 
 ### 2.2 Integration tests — `tests/integration` (TS-I)
 
@@ -179,7 +179,7 @@ merges; license-gated jobs skip cleanly when products are unavailable.
 |-------------|-------------------------|
 | REQ-T-01 | TS-I-01, TS-S-01, TS-I-13, TS-I-14, TS-I-15; TS-I-04 *(planned)*, TS-I-10 *(planned, R22)*, TS-I-25 *(planned, R31)* |
 | REQ-T-02 | TS-I-01, TS-I-05, TS-I-12, TS-I-20, TS-U-19 (loopbound); TS-I-10 *(planned, R22)* |
-| REQ-T-03 | TS-I-01; TS-U-20, TS-I-25 *(planned, R31)* |
+| REQ-T-03 | TS-I-01, TS-U-20; TS-I-25 *(planned, R31)* |
 | REQ-T-04 | TS-I-02, TS-I-06, TS-I-08, TS-I-09, TS-I-17; TS-I-11 *(planned, R24)* |
 | REQ-T-05 | TS-S-02; cross-validated at scale by the TS-S-04 `oracleCodegenEquivalence` (born-ERT, sampled, hand-rolled `codegen`+compare; ADR-0014). The `matlabtest.coder` supported-API migration is *(planned, R15)* |
 | REQ-T-06 | TS-I-03 |
