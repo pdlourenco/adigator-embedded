@@ -276,6 +276,19 @@ reverse-grad/`JtV`). **Phase 1 shipped** (R25/#99): Hessian-nonzeros +
 `HessianLocs` + the `Jac→Grd` forward-gradient name fix, verified by
 `IOutputModesTest` (`CI_PLAN.md` TS-I-12).
 
+**Respelling bound ([ADR-0030](decisions/ADR-0030-csc-sparse-pattern-contract.md),
+accepted 2026-07-24, issue #192; a pre-v2.0-release break, planned R31 —
+the paragraph above describes what currently ships and flips together with
+the implementation PR).** The form option becomes **`der_output ∈ {matrix,
+csc}`** (`'nonzeros'` and the `jac_output` alias removed), and **CSC becomes
+the sole public pattern representation in both modes**: per-role
+`output.{Jacobian|Gradient|Hessian}CSC` (`Size`/`ColPtr`/`RowIdx`/`Nnz`/
+`IndexBase=1`, uint32 + range guard) replaces the `*Locs`/`*Structure`
+fields; `'csc'` mode returns the `Nnz×1` value vector in CSC order (no
+`sparse()`, dense scatter, or runtime sort in generated code). Decision-b
+top-order selection is unchanged. Binding invariants and the per-DerType
+ordering analysis live in the ADR.
+
 *Verified by:* `tests/integration/ILevelSelectTest.m` (`CI_PLAN.md` TS-I-05,
 `DER_LEVELS` selection across generators); the order is exercised by every test
 that consumes the wrappers positionally — `IShapeMatrixTest`, `IEmbedModesTest`
