@@ -1,0 +1,106 @@
+name: Release
+
+# Release-as-code (ADR-0031; adapted from disciplined-project-seed's release
+# workflow, ADR-0015). Pushing a `vX.Y[.Z]` tag is the human release decision;
+# this workflow does the mechanical ceremony and GATES it, turning the "cut a
+# git tag at each CHANGELOG version" convention into a structural check.
+#
+# On a `v*` tag push it:
+#   1. Validates the tag against the CHANGELOG (the gate): the version must have
+#      a dated `## [X.Y] — YYYY-MM-DD` section AND [Unreleased] must be empty at
+#      the tagged commit. Mismatch → the run fails, no release.
+#   2. Extracts that version's CHANGELOG section as the release body.
+#   3. Assembles a curated runtime distribution archive (the tagged tree minus
+#      the test/bench/dev material) so "download the release" gives the tool +
+#      examples + user guide, ready to `addpath`.
+#   4. Creates the GitHub release with the archive attached (alongside GitHub's
+#      auto "Source code" archives, which are the everything-included variant).
+#
+# Human triggers, machine executes and validates. Fully-automatic
+# release-on-merge is deliberately NOT used — a release is a human decision.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# The only workflow needing write: it creates releases and uploads assets.
+# Scoped to contents and justified by running only on tag pushes.
+permissions:
+  contents: write
+
+env:
+  # The changelog the gate reads (repo root).
+  CHANGELOG_PATH: CHANGELOG.md
+  # Paths excluded from the curated distribution archive (space-separated,
+  # repo-root-relative): test/bench/dev material and anything internal. What
+  # STAYS in is the runtime set — the tool source (top-level adigator*.m, lib/,
+  # util/, embedding/), examples/, the user guide (docs/userguide), the contracts
+  # (docs/DESIGN.md), docs/README.md, CHANGELOG, and LICENSE. Stripped: the test
+  # and bench harnesses; the dev-process docs (ROADMAP/CI_PLAN/REVIEW_CONTEXT/
+  # CONTRIBUTING/decisions ADRs); the ~2.5 MB of academic reference PDFs
+  # (docs/papers, docs/thesis); CLAUDE.md (agent rules); and the tooling dirs.
+  # `.git` never appears in a `git archive` stream. `docs/known-bugs` is
+  # gitignored (never tracked), so `git archive HEAD` already omits it; it is
+  # listed here belt-and-suspenders because it holds proprietary content that
+  # must never ship. Tune as needed.
+  ARCHIVE_EXCLUDES: >-
+    tests bench CLAUDE.md .github .claude
+    docs/analyses docs/known-bugs docs/decisions docs/papers docs/thesis
+    docs/CI_PLAN.md docs/REVIEW_CONTEXT.md docs/ROADMAP.md docs/CONTRIBUTING.md
+
+jobs:
+  release:
+    name: Publish release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate tag ↔ CHANGELOG (the gate)
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          python3 .github/scripts/release_changelog.py validate \
+            --changelog "$CHANGELOG_PATH" --version "$version"
+
+      - name: Extract release notes from the CHANGELOG
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          python3 .github/scripts/release_changelog.py extract \
+            --changelog "$CHANGELOG_PATH" --version "$version" > release-notes.md
+          # Single-quoted heredoc: literal text (markdown backticks never
+          # trigger shell expansion). Body and terminator sit at the block-scalar
+          # indent so YAML dedents them uniformly.
+          cat >> release-notes.md <<'EOF'
+
+          ---
+
+          **Getting the tool:** download the `*-dist.zip` / `*-dist.tar.gz` asset below — the tagged tree with the test/bench/dev material stripped (the tool + `examples/` + the user guide, ready to `addpath`). The auto-generated "Source code" archives are the everything-included variant.
+          EOF
+
+      # Assembly and publish share one step so the archive names never cross a
+      # step boundary.
+      - name: Assemble distribution archive and create release
+        env:
+          REPO_NAME: ${{ github.event.repository.name }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          name="${REPO_NAME}-${GITHUB_REF_NAME}-dist"
+          mkdir "$name"
+          # `git archive HEAD` = the tagged commit's tracked tree (no .git, no
+          # untracked files, so gitignored proprietary material is already out).
+          git archive HEAD | tar -x -C "$name"
+          read -ra excludes <<< "$ARCHIVE_EXCLUDES"
+          for path in "${excludes[@]}"; do
+            rm -rf "${name:?}/${path}"
+          done
+          zip -qr "${name}.zip" "$name"
+          tar -czf "${name}.tar.gz" "$name"
+          # Re-run recovery: `gh release create` errors if the release already
+          # exists, so a partial run (release created but an asset upload died)
+          # does NOT self-heal on re-run — delete the partial release (or
+          # re-push the tag) first, then re-run.
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file release-notes.md \
+            "${name}.zip" "${name}.tar.gz"

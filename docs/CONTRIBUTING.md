@@ -129,6 +129,37 @@ Per [`../CLAUDE.md`](../CLAUDE.md) §5:
 - **Merging always requires explicit maintainer approval** — never on an
   agent's own initiative, not even a green PR.
 
+## Cutting a release
+
+Releases are **tag-gated** ([ADR-0031](decisions/ADR-0031-release-as-code.md)):
+pushing a `vX.Y` tag is the human release decision, and
+[`.github/workflows/release.yml`](../.github/workflows/release.yml) does the
+ceremony and validates it against the CHANGELOG. To cut a release from an
+up-to-date `master`:
+
+1. **Cut the CHANGELOG section.** Rename `## [Unreleased]` to
+   `## [X.Y] — YYYY-MM-DD` (today's date), leaving a fresh empty `[Unreleased]`
+   above it. Confirm the version matches the `version` constant in
+   [`adigator.m`](../adigator.m). Optionally dry-run the gate:
+
+   ```bash
+   python3 .github/scripts/release_changelog.py validate --changelog CHANGELOG.md --version X.Y
+   ```
+
+2. **Commit** the CHANGELOG on a PR, review, and merge to `master` as usual.
+3. **Tag and push** the merge commit:
+
+   ```bash
+   git tag vX.Y && git push origin vX.Y
+   ```
+
+The workflow then re-validates the tag ↔ CHANGELOG (fails loud, no release, if
+the `[X.Y]` section is missing/undated or `[Unreleased]` is non-empty), extracts
+the `[X.Y]` section as the release body, and publishes the GitHub release with a
+curated runtime-distribution archive (`*-dist.zip`/`.tar.gz`) attached. If a run
+half-completes (release created, asset upload failed), delete the partial
+release and re-push the tag before re-running.
+
 ## Two-session authoring / review workflow
 
 For parallel agentic development the default topology is **two sessions per

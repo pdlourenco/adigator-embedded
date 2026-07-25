@@ -38,6 +38,11 @@ examples/**/generated/
 **/adigator-bugs.md
 **/*embedded-field-report*.md
 
+# Python bytecode from the release-gate script (.github/scripts) and any other
+# tooling: never commit the compiled cache.
+__pycache__/
+*.pyc
+
 # Intentional, committed generated-shaped fixtures (synthetic + offline-test
 # fixtures): keep them — and any future ones — trackable without `git add -f`.
 # Must stay last so it overrides the suffix rules above.
