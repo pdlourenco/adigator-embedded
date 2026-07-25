@@ -1,12 +1,13 @@
 function r = oracleDerOutputInvariance(c)
-%ORACLEDEROUTPUTINVARIANCE  R27 Phase 2: der_output {matrix,nonzeros} identity.
+%ORACLEDEROUTPUTINVARIANCE  R27 Phase 2: der_output {matrix,csc} identity.
 %
 % For a jacobian case, generate the wrapper in the default dense-matrix form and
-% in the jac_output='nonzeros' form, then assert that scattering the returned
-% nonzero vector into output.JacobianLocs reconstructs the *exact* dense
-% Jacobian (and the function values agree). This covers the der_output option
-% axis -- a real option the body-only Monte-Carlo battery never swept (issue
-% #103, ROADMAP R27 Phase 2). Interpreter-only (classic wrappers), no Coder.
+% in the der_output='csc' form, then assert that reconstructing the returned CSC
+% value vector (via adigatorCSCToSparse over output.JacobianCSC) reproduces the
+% *exact* dense Jacobian (and the function values agree). This covers the
+% der_output option axis -- a real option the body-only Monte-Carlo battery
+% never swept (issue #103, ROADMAP R27 Phase 2; the CSC respelling is #192,
+% ADR-0030). Interpreter-only (classic wrappers), no Coder.
 %
 % Copyright Pedro Lourenço and GMV. Distributed under the GNU General Public License v3.0.
 
@@ -29,7 +30,7 @@ try
     adigatorGenJacFile(c.name, {adigatorCreateDerivInput(c.xsize, 'x')}, ...
         struct('overwrite', 1, 'echo', 0, 'path', mdM));
     outN = adigatorGenJacFile(fnN, {adigatorCreateDerivInput(c.xsize, 'x')}, ...
-        struct('overwrite', 1, 'echo', 0, 'path', mdN, 'jac_output', 'nonzeros'));
+        struct('overwrite', 1, 'echo', 0, 'path', mdN, 'der_output', 'csc'));
 catch e
     r.pass = false;
     r.message = sprintf('generation failed: %s', oneline(e.message));
@@ -42,30 +43,27 @@ if ~okM
     r.pass = false; r.message = sprintf('matrix wrapper run failed: %s', mM); return;
 end
 if ~okN
-    r.pass = false; r.message = sprintf('nonzeros wrapper run failed: %s', mN); return;
+    r.pass = false; r.message = sprintf('csc wrapper run failed: %s', mN); return;
 end
 
 % the two forms are the same computation, so the function value must agree
 if ~isequaln(FM, FN)
     r.pass = false;
-    r.message = 'function value differs between matrix and nonzeros forms';
+    r.message = 'function value differs between matrix and csc forms';
     return;
 end
 
 JM = full(JM);
-locs = outN.JacobianLocs;
-if size(locs, 1) ~= numel(vals)
+csc = outN.JacobianCSC;
+if csc.Nnz ~= numel(vals)
     r.pass = false;
-    r.message = sprintf('nonzeros count %d ~= JacobianLocs rows %d', numel(vals), size(locs, 1));
+    r.message = sprintf('csc value count %d ~= JacobianCSC.Nnz %d', numel(vals), csc.Nnz);
     return;
 end
-JS = zeros(size(JM));
-if ~isempty(vals)
-    JS(sub2ind(size(JM), locs(:, 1), locs(:, 2))) = vals(:);
-end
+JS = full(adigatorCSCToSparse(csc, vals));
 if ~isequaln(JS, JM)   % isequaln also fails on a size mismatch
     r.pass = false;
-    r.message = sprintf('nonzeros reconstruction differs from matrix form (max %.3g)', ...
+    r.message = sprintf('csc reconstruction differs from matrix form (max %.3g)', ...
         maxAbsDiff(JS, JM));
     return;
 end

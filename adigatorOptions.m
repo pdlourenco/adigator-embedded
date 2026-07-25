@@ -115,25 +115,24 @@ function options = adigatorOptions(varargin)
 %                  re-synthesized) still fails loud with `adigator:loopbound:rediff`.
 %                  (Reverse mode does not apply to loopbound files: it requires
 %                  unrolled loops, which loopbound forbids.)
-% DER_OUTPUT: 'matrix' (default) | 'nonzeros' - the derivative output FORM,
-%                  generalized across DerTypes (#84/R25, ADR-0022). 'nonzeros'
-%                  returns the nonzero VECTOR in the fixed pattern order, with
-%                  the pattern exported once through output.<Der>Locs
-%                  (JacobianLocs, HessianLocs, ...) so embedded consumers
-%                  assemble - or never form - the dense object themselves.
+% DER_OUTPUT: 'matrix' (default) | 'csc' - the derivative output FORM,
+%                  generalized across DerTypes (#84/R25, ADR-0022; the sole
+%                  two-value contract per #192/ADR-0030). It selects each
+%                  generator's TOP-ORDER output only (a Hessian file's Grd
+%                  companion is unaffected - ADR-0022 decision b).
 %                  'matrix' projects into the dense/sparse object each call.
-%                  JAC_OUTPUT is the back-compat alias (Jacobian/gradient only);
-%                  setting either keeps both in sync.
-% JAC_OUTPUT: 'matrix' - adigatorGenJacFile wrappers project the
-%                  derivative into a dense or sparse Jacobian/gradient
-%                  matrix on every call (default).
-%             'nonzeros' - the wrapper returns the nonzero VECTOR in the
-%                  fixed pattern order, with the pattern exported once
-%                  through output.JacobianLocs (value order) and
-%                  output.JacobianStructure. No per-call allocation or
-%                  scatter: embedded consumers assemble - or never form -
-%                  the matrix themselves (roadmap R5, ANALYSIS.md 2.3).
-%                  Back-compat alias of DER_OUTPUT (adigatorGenJacFile only).
+%                  'csc' returns the structurally-possible-nonzero VECTOR in
+%                  compressed-sparse-column order (Nnz x 1); the generated
+%                  procedure returns values only. In BOTH modes the constant
+%                  pattern is exported once as compressed-sparse-column
+%                  metadata output.<Der>CSC (JacobianCSC, GradientCSC,
+%                  HessianCSC) with fields Size/ColPtr/RowIdx/Nnz/IndexBase;
+%                  in 'csc' mode that metadata also defines the returned value
+%                  order. Host-only helpers adigatorCSCToLocs / adigatorCSCToSparse
+%                  reconstruct coordinate/sparse forms when needed. Embedded
+%                  consumers assemble - or never form - the dense object
+%                  themselves. (Replaces the pre-release 'nonzeros' form and the
+%                  jac_output alias, removed in v2.0.)
 % DER_LEVELS: []  - (default) the wrapper returns every derivative level its
 %                  generator produces, reproducing the historical
 %                  signatures exactly ([Jac,Fun] for Jacobian/gradient,
@@ -218,8 +217,7 @@ options.optoutput    = 0;
 options.maxwhileiter = 10;
 options.complex      = 0;
 options.loopbound    = {}; % roadmap R3 (issue #6 Tier 1): runtime loop bounds
-options.jac_output   = 'matrix'; % roadmap R5: 'matrix' | 'nonzeros' (back-compat alias of der_output)
-options.der_output   = 'matrix'; % #84/R25 (ADR-0022): 'matrix' | 'nonzeros', per-DerType output form
+options.der_output   = 'matrix'; % #84/R25 (ADR-0022) / #192 (ADR-0030): 'matrix' | 'csc', per-DerType output form
 options.der_levels   = []; % roadmap R7a: [] (all) | vector subset of {0,1,2}
 options.slim_embed   = []; % roadmap R7b (issue #21): [] (unset) resolved per entry point; embedded generator -> on, others -> off
 
@@ -249,23 +247,33 @@ for i = 1:nargin/2
           'input(s) of the differentiated function']);
       end
       options.loopbound = value;
-      case {'jac_output','der_output'} % roadmap R5 (ANALYSIS.md 2.3) / #84 R25 (ADR-0022)
+      case 'der_output' % #84/R25 (ADR-0022) / #192 (ADR-0030)
       % der_output selects each generator's TOP-ORDER output form only (the
       % Jacobian for adigatorGenJacFile, the Hessian for adigatorGenHesFile) --
-      % NOT every level (genuine per-level selection is R25 phase 2). jac_output
-      % is a pure FIRST-DERIVATIVE-level alias. Set ONLY the named option - NO
-      % cross-sync (#84/R25, ADR-0022 "decision b"): so jac_output never
-      % reaches the Hessian (adigatorGenHesFile reads der_output only), while
-      % adigatorGenJacFile reads `der_output || jac_output` so a level-1
-      % jac_output still gives a nonzeros Jacobian/gradient without flipping the
-      % Hessian's form. der_output='nonzeros' flips the TOP output only (e.g.
-      % the Hessian; adigatorGenHesFile's companion gradient stays dense).
+      % NOT every level (genuine per-level selection is R25 phase 2), and it does
+      % NOT flip a Hessian file's companion gradient (ADR-0022 "decision b").
+      % The two-value {matrix, csc} contract is the sole sparse-pattern form
+      % (#192, ADR-0030): 'csc' returns the CSC value vector with the pattern in
+      % output.<Der>CSC; 'matrix' projects the dense/sparse object each call.
       value = lower(char(value));
-      if ~any(strcmp(value,{'matrix','nonzeros'}))
-        error('adigator:jacOutput',...   % legacy id kept for both aliases
-          '%s must be ''matrix'' (default) or ''nonzeros''', field);
+      if strcmp(value,'nonzeros')
+        error('adigator:derOutput:nonzerosRemoved',...
+          ['der_output=''nonzeros'' was removed in v2.0; use der_output=''csc'' ',...
+           '- the wrapper returns the same nonzero VALUE vector, now in CSC ',...
+           'order, with the pattern exported as output.<Der>CSC (issue #192, ',...
+           'ADR-0030).']);
       end
-      options.(field) = value;   % set ONLY the named option - no cross-sync
+      if ~any(strcmp(value,{'matrix','csc'}))
+        error('adigator:derOutput',...
+          'der_output must be ''matrix'' (default) or ''csc''');
+      end
+      options.der_output = value;
+      case 'jac_output' % removed in v2.0 (#192, ADR-0030)
+      error('adigator:jacOutputRemoved',...
+        ['jac_output was removed in v2.0; use der_output=''matrix''|''csc'' ',...
+         'instead. der_output already selects the top-order output form only, ',...
+         'so a Jacobian file honours it and a Hessian file''s companion ',...
+         'gradient is unaffected (ADR-0022 decision b; #192, ADR-0030).']);
       case 'der_levels' % roadmap R7a (issue #21)
       % shape/range check only; the level-vs-maxlevel and mandatory-top-level
       % checks need the derivative type, so they live in the generators'

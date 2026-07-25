@@ -43,10 +43,16 @@ function output = adigatorGenHesFile(UserFunName,UserFunInputs,varargin)
 %     output.FunctionFile = 'myfun'
 %     output.GradientFile = 'myfun_Grd'
 %     output.HessianFile  = 'myfun_Hes'
-%     output.HessianStructure = sparse ones and zeros.
+%     output.HessianCSC  = the CSC sparse pattern {Size, ColPtr, RowIdx, Nnz,
+%         IndexBase} of the returned Hessian, and output.GradientCSC likewise
+%         for the companion gradient. The sole exported sparse-pattern
+%         representation (#192, ADR-0030); rebuild coordinate/sparse forms with
+%         adigatorCSCToLocs / adigatorCSCToSparse.
 % The generated Hessian/gradient files have the same input structure as the
 % original user function. The output of Hessian file is [Hes, Grd, Fun].
-% The output of gradient file is [Grd, Fun].
+% The output of gradient file is [Grd, Fun]. With der_output='csc', the
+% top-order Hes is the Nnz x 1 value vector in CSC order; the companion Grd is
+% unaffected (decision b).
 % The DER_LEVELS option (adigatorOptions) trims the Hessian file's outputs
 % to a requested subset - 2=Hessian (always returned), 1=gradient,
 % 0=function value - e.g. [2] yields a Hessian file returning only Hes. The
@@ -110,6 +116,14 @@ function output = adigatorGenHesFile(UserFunName,UserFunInputs,varargin)
 %                                   {Hes,Grd,Fun} (Hes always); the gradient
 %                                   wrapper stays [Grd,Fun] (roadmap R7a,
 %                                   issue #21).
+%   2026-07                         CSC contract (#192, ADR-0030, R31): the
+%                                   output form is der_output {matrix,csc}
+%                                   ('nonzeros' removed); export
+%                                   output.HessianCSC + GradientCSC (the sole
+%                                   sparse pattern) in both modes; csc mode
+%                                   returns the Hessian value vector in CSC
+%                                   order, the Grd companion unaffected
+%                                   (decision b).
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ OPTIONS SETUP ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 opts = adigatorOptions();
@@ -418,27 +432,46 @@ ysize = adiout.func.size;
 % n>1	m>1	n x m	r x n*m	c x n*m	r*c x n*m
 
 % Check to see how many non-zeros in Hessian
-dydxdxlocs = adiout2.(['d',vodname]).deriv.nzlocs; % v2.0 - hoisted, also used for HessianStructure
+dydxdxlocs = adiout2.(['d',vodname]).deriv.nzlocs; % v2.0 - hoisted, also used for the Hessian CSC pattern
 dydxlocs   = adiout.deriv.nzlocs;
 dydxdxnnz  = size(dydxdxlocs,1);
 n = prod(xsize);
 m = prod(ysize);
 dydxdx = [ystr,'.d',vodname,'d',vodname];
-if strcmp(opts.der_output,'nonzeros')
-% #84/R25 (ADR-0022): return the Hessian nonzero VECTOR in dydxdx order; the
-% constant pattern is exported once via output.HessianLocs (the JacobianLocs
-% analog, set below). No per-call dense allocation or scatter, mode-independent.
-% NB: reads opts.der_output ONLY, not jac_output - jac_output is a first-
-% derivative-level back-compat alias (ADR-0022) and must not flip the Hessian's
-% form (do NOT "fix" this into `der_output || jac_output`).
-fprintf(Hfid,['Hes = ',dydxdx,'(:);\n']);
+% v2.0 (#192, ADR-0030): the RETURNED Hessian's CSC pattern (value/dydxdx
+% order), computed here - before the value emission - so 'csc' mode can assert
+% the value stream is already CSC order. ysize is still the true output shape
+% (the remapcase block below mutates it only for the gradient scatter); n==1
+% uses that shape (B23), else the documented [m*n x n] fold.
+HesLocs1 = dydxlocs(dydxdxlocs(:,1),:);
+if n == 1
+  hesSize = ysize;
+  [hlr_,hlc_] = ind2sub(hesSize, HesLocs1(:,1));
+  hesLocs = [hlr_(:) hlc_(:)];
+else
+  hesSize = [m*n, n];
+  hesLocs = [(HesLocs1(:,2)-1)*m+HesLocs1(:,1), dydxdxlocs(:,2)];
+end
+[HesCSC, hesperm, hesisid] = adigatorBuildCSC(hesSize, hesLocs);
+% #192/ADR-0030: der_output selects the TOP-order (Hessian) output FORM only;
+% the companion gradient is unaffected (ADR-0022 decision b). 'csc' returns the
+% Hessian value vector in CSC order (values only); the pattern is exported once
+% as output.HessianCSC. The native stream (dydxdx order) is already CSC order
+% for every current shape (asserted via the identity flag); a future ordering
+% change emits a constant gather instead - never a runtime sort.
+if strcmp(opts.der_output,'csc')
+  if hesisid
+    fprintf(Hfid,['Hes = ',dydxdx,'(:);\n']);
+  else
+    fprintf(Hfid,['Hes = ',dydxdx,'(',mat2str(hesperm(:).'),');\n']);
+  end
 else
 % v2.0 (ANALYSIS.md §2.1): in embed modes, compute the Hessian scatter
 % indices at generation time and emit a literal vector instead of the
 % runtime _location arithmetic. dydxdxlocs(:,1) indexes the first-derivative
 % nonzeros (rows of dydxlocs); dydxdxlocs(:,2) is the linear index of the
 % second differentiation variable. This mirrors the runtime mapping and
-% output.HessianStructure exactly.
+% the Hessian CSC pattern exactly.
 if opts.embed_mode ~= 'c' && ~(n == 1 && m == 1)
   HesLocs1_ = dydxlocs(dydxdxlocs(:,1),:);
   if n == 1
@@ -518,7 +551,7 @@ else
   else
     rowind = 'xyind1';
     % v2.0 (B7 fix): row of the [m*n x n] Hessian is (x1-1)*m + y, matching
-    % the documented layout and output.HessianStructure below. The previous
+    % the documented layout and the Hessian CSC pattern below. The previous
     % multiplier n made rows exceed m*n for n>m (runtime error) and collide
     % for n<m (silently wrong Hessian); only m==n worked.
     fprintf(Hfid,[rowind,' = (',xind1,'-1)*%1.0f + ',yind,';\n'],m);
@@ -531,20 +564,18 @@ else
     fprintf(Hfid,['Hes(',ind,') = ',dydxdx,';\n']);
   end
 end
-end  % #84/R25: close the der_output nonzeros/matrix branch for the Hessian output
+end  % #192/ADR-0030: close the der_output csc/matrix branch for the Hessian output
 
 % If dydx has => 250 elements and has <= 75% nonzeros, project into sparse
 % matrix, otherwise project into full matrix.
 dydxsize = [prod(ysize), prod(xsize)];
 dydxnumel  = dydxsize(1)*dydxsize(2);
-% v2.0 (B23): preserve the TRUE output shape before the remapcase block below
-% mutates ysize for the gradient scatter. The Hessian-metadata block (the n==1
-% branch that builds output.HessianStructure/HessianLocs) must allocate the
-% pattern in the real y shape; using the mutated ysize corrupts it for a matrix
-% function of a scalar variable (remapcase 2) -- the r*c linear indices overflow
-% the r-row column, silently producing a wrong HessianLocs. remapcase 0 leaves
-% ysize untouched, so HesOutSize == ysize there (no behavior change).
-HesOutSize = ysize;
+% v2.0 (B23): the remapcase block below mutates ysize for the gradient scatter,
+% so the Hessian CSC pattern (HesCSC) was already built ABOVE - before this
+% block - from the true output shape (`ysize` there), not the mutated one. Using
+% the mutated ysize would corrupt the n==1 Hessian pattern for a matrix function
+% of a scalar variable (remapcase 2). The gradient (GradientCSC) is built AFTER
+% this block, deliberately using the remapped shape.
 remapcase = 0; % v2.0: remember the shape remap (see adigatorGenJacFile B10 fix)
 if dydxsize(1) == 1 && all(xsize>1) % scalar function of matrix variable
   remapcase = 1;
@@ -576,6 +607,29 @@ if embedscatter
 else
   scatteridx = [dydx,'_location']; % single-column cases only (see below)
 end
+% v2.0 (#192, ADR-0030): the companion gradient's CSC pattern, describing the
+% RETURNED Grd shape/convention (matrix-mode semantics; the Grd companion stays
+% matrix regardless of der_output - decision b). Mirrors adigatorGenJacFile: a
+% scalar-function gradient is returned [n,1] (D7), remapcase decomposes the
+% unrolled indices into displayed subscripts.
+if remapcase == 1
+  [gcr_,gcc_] = ind2sub(dydxsize, adiout.deriv.nzlocs(:,2));
+elseif remapcase == 2
+  [gcr_,gcc_] = ind2sub(dydxsize, adiout.deriv.nzlocs(:,1));
+else
+  gcr_ = adiout.deriv.nzlocs(:,1);
+  gcc_ = adiout.deriv.nzlocs(:,2);
+end
+if dydxsize(1) == 1 && ~strcmp(NameAppendix,'Jac')
+  % scalar function, gradient convention -> [n,1] (D7); also scalar-of-scalar
+  % ([1,1], orientation-neutral) so the role follows the naming convention.
+  grdSize = [dydxsize(2), 1];
+  grdLocs = [gcc_(:), ones(numel(gcc_),1)];
+else
+  grdSize = dydxsize;
+  grdLocs = [gcr_(:), gcc_(:)];
+end
+GradientCSC = adigatorBuildCSC(grdSize, grdLocs);
 %v2.0:	process this to output Jacobians correctly, i.e., in [m n] form ( m = numel(y), n = numel(x))
 % roadmap R7a (issue #21): the gradient wrapper (Gfid) always returns
 % [Grd,Fun]; the Hessian wrapper (Hfid) receives Grd / Fun only when
@@ -675,23 +729,14 @@ output.GenFiles(2).func = ADi_DerivFuns2;
 output.FunctionFile = UserFunName;
 output.GradientFile = GrdFileName;
 output.HessianFile  = HesFileName;
-% (dydxdxlocs/dydxlocs hoisted above the Hessian print section, v2.0)
-HesLocs1 = dydxlocs(dydxdxlocs(:,1),:);
-if n == 1
-  HesPat = zeros(HesOutSize);   % v2.0 (B23): true y shape, not the mutated ysize
-  HesPat(HesLocs1(:,1)) = 1;
-  output.HessianStructure = sparse(HesPat);
-  % #84/R25 (ADR-0022): HessianLocs is the [row col] pattern in dydxdx nonzero
-  % order (the JacobianLocs analog), exported once for der_output='nonzeros'.
-  [hlr_,hlc_] = ind2sub(size(HesPat), HesLocs1(:,1));
-  output.HessianLocs = [hlr_(:) hlc_(:)];
-else
-  HesRow   = (HesLocs1(:,2)-1)*m+HesLocs1(:,1);
-  HesCol   = dydxdxlocs(:,2);
-  output.HessianStructure = sparse(HesRow,HesCol,ones(dydxdxnnz,1),m*n,n);
-  % #84/R25 (ADR-0022): [row col] into the [m*n x n] Hessian, dydxdx order.
-  output.HessianLocs = [HesRow(:) HesCol(:)];
-end
+% v2.0 (#192, ADR-0030): CSC is the sole exported pattern, in BOTH matrix and
+% csc modes. HessianCSC / GradientCSC were canonicalized above (Hessian in the
+% true [m*n x n] / n==1 y-shape via adigatorBuildCSC, gradient in its returned
+% convention). Host code rebuilds coordinate/sparse forms with adigatorCSCToLocs
+% / adigatorCSCToSparse. The B23 true-output-shape guarantee is now carried by
+% hesSize (= ysize on the n==1 arm), not a separately reconstructed HesPat.
+output.HessianCSC  = HesCSC;
+output.GradientCSC = GradientCSC;
 
 if opts.echo
   fprintf(['\n<strong>adigatorGenHesFile</strong> successfully generated Hessian wrapper file: ''',HesFileName,''';\n\n']);

@@ -119,7 +119,7 @@ unaffected by it. Which outputs appear, in what order, and the selection
 invariants are governed by **C-6**.
 
 *Verified by:* `tests/integration/IShapeMatrixTest.m` (shape matrix + the
-exported `JacobianStructure`/`HessianStructure`/`*Locs`; `CI_PLAN.md` TS-I-01),
+exported per-role `*CSC` pattern reconstruction; `CI_PLAN.md` TS-I-01),
 `ILevelSelectTest` (TS-I-05, output selection); `ISecondDerivTest` (TS-I-04)
 *(planned — an analytic-Hessian enhancement; Hessian correctness is already
 guarded, see the TS-I-04 note in `CI_PLAN.md`)*. *Note:* several branches here
@@ -131,12 +131,12 @@ A generated derivative file returns the function value `y.f` and the derivative
 nonzeros `y.dX`: the vector of possible nonzeros of the *unrolled* Jacobian
 (size `[prod(ysize) × prod(xsize)]`, column-major on both sides), ordered by
 ascending linear index. `y.dX_location` has one column per dimension listed in
-`y.dX_size`. Under `der_output='nonzeros'` this possible-nonzeros +
-exported-pattern statement generalizes beyond the Jacobian: each supporting
-DerType exports its constant pattern once via its `*Locs` companion
-(`HessianLocs`, …), the tuples carrying one column per dimension
-([ADR-0022](decisions/ADR-0022-generalized-der-output-nonzeros.md); the
-higher-order `*Locs` of ADR-0020 drop in on this).
+`y.dX_size`. This possible-nonzeros + exported-pattern statement generalizes
+beyond the Jacobian: for 2-D derivatives each supporting DerType exports its
+constant pattern once as per-role CSC metadata
+(`output.{Jacobian|Gradient|Hessian}CSC` — [ADR-0030](decisions/ADR-0030-csc-sparse-pattern-contract.md),
+respelling ADR-0022's `*Locs`); higher-order patterns keep the multi-column
+location tuples of ADR-0020.
 
 *Verified by:* `tests/unit/UStructuralOpsTest.m` (`CI_PLAN.md` TS-U-03) — each
 structural op's raw `y.dX`/`y.dX_location`/`y.dX_size` reconstructed and checked
@@ -261,39 +261,36 @@ generator, including the matrix-free products as they land:
 `adigatorGenRevGradFile` (`[Grd, Fun]`) / `adigatorGenJtVFile` (`[Jtv, Fun]`).
 
 **Output form ([ADR-0022](decisions/ADR-0022-generalized-der-output-nonzeros.md),
-ratified).** A fourth facet: each wrapper's derivative outputs may be emitted in
-**`matrix`** or **`nonzeros`** form per the **`der_output ∈ {matrix, nonzeros}`**
-option, which selects the form of the generator's **top-order output** —
-`der_output='nonzeros'` on a Hessian file flips only `Hes`; its `Grd` companion
-stays dense. `jac_output` is a **level-1-only alias** (no cross-sync — it never
-flips a Hessian). True per-derivative-level selection is deferred (R25 phase 2,
-"decision b"). In `nonzeros` form the constant sparsity pattern is exported once
-via a **`*Locs` family** — `HessianLocs` the `output.JacobianLocs` analog, one
-per DerType that supports nonzeros. The full `(der_output × DerType × mode)`
-support/N-A matrix is **deferred to R25 phase 2** (N/A by design, e.g.
-`classic + slim`; `nonzeros` of a dense gradient; `nonzeros` of
-reverse-grad/`JtV`). **Phase 1 shipped** (R25/#99): Hessian-nonzeros +
-`HessianLocs` + the `Jac→Grd` forward-gradient name fix, verified by
-`IOutputModesTest` (`CI_PLAN.md` TS-I-12).
-
-**Respelling bound ([ADR-0030](decisions/ADR-0030-csc-sparse-pattern-contract.md),
-accepted 2026-07-24, issue #192; a pre-v2.0-release break, planned R31 —
-the paragraph above describes what currently ships and flips together with
-the implementation PR).** The form option becomes **`der_output ∈ {matrix,
-csc}`** (`'nonzeros'` and the `jac_output` alias removed), and **CSC becomes
-the sole public pattern representation in both modes**: per-role
-`output.{Jacobian|Gradient|Hessian}CSC` (`Size`/`ColPtr`/`RowIdx`/`Nnz`/
-`IndexBase=1`, uint32 + range guard) replaces the `*Locs`/`*Structure`
-fields; `'csc'` mode returns the `Nnz×1` value vector in CSC order (no
-`sparse()`, dense scatter, or runtime sort in generated code). Decision-b
-top-order selection is unchanged. Binding invariants and the per-DerType
-ordering analysis live in the ADR.
+ratified; respelled to CSC by
+[ADR-0030](decisions/ADR-0030-csc-sparse-pattern-contract.md), issue #192,
+R31).** A fourth facet: each wrapper's derivative outputs may be emitted in
+**`matrix`** or **`csc`** form per the **`der_output ∈ {matrix, csc}`** option,
+which selects the form of the generator's **top-order output** —
+`der_output='csc'` on a Hessian file flips only `Hes`; its `Grd` companion stays
+dense (ADR-0022 "decision b"; true per-derivative-level selection is deferred to
+R25 phase 2). **CSC is the sole public sparse-pattern representation, in both
+modes**: per-role `output.{Jacobian|Gradient|Hessian}CSC` — fields
+`Size`/`ColPtr`/`RowIdx`/`Nnz`/`IndexBase=1`, `ColPtr`/`RowIdx` uint32 with a
+range guard that falls back to double rather than saturating — describing the
+returned derivative's shape/convention (`GradientCSC.Size = [n,1]`, the returned
+column). In `matrix` mode CSC describes the returned matrix's structure; in
+`csc` mode it additionally defines the returned `Nnz×1` value vector's order, and
+the generated procedure returns values only (no `sparse()`, dense scatter, or
+runtime sort). Host-only `adigatorCSCToLocs`/`adigatorCSCToSparse` reconstruct
+coordinate/sparse forms. The pre-release `'nonzeros'` form, the `jac_output`
+alias, and the `*Locs`/`*Structure` fields are **removed** (v2.0, a free
+pre-release break). Binding invariants and the per-DerType ordering analysis
+live in the ADR; the canonicalizer `adigatorBuildCSC` builds and validates every
+pattern. The full `(der_output × DerType × mode)` support/N-A matrix is deferred
+to R25 phase 2.
 
 *Verified by:* `tests/integration/ILevelSelectTest.m` (`CI_PLAN.md` TS-I-05,
-`DER_LEVELS` selection across generators); the order is exercised by every test
-that consumes the wrappers positionally — `IShapeMatrixTest`, `IEmbedModesTest`
-(forward), and `IRevGradTest`, `IOutputModesTest` (reverse `[Grd, Fun]` /
-`[Jtv, Fun]`). Rationale in
+`DER_LEVELS` selection across generators); the `der_output ∈ {matrix, csc}` form
+facet and the `*CSC` pattern contract by `IOutputModesTest` (TS-I-12) and
+`ICscOutputTest` (TS-I-25); the order is exercised by every test that consumes
+the wrappers positionally — `IShapeMatrixTest`, `IEmbedModesTest` (forward), and
+`IRevGradTest`, `IOutputModesTest` (reverse `[Grd, Fun]` / `[Jtv, Fun]`).
+Rationale in
 [ADR-0005](decisions/ADR-0005-der-levels-output-selection.md) (roadmap R7a,
 issue #21).
 

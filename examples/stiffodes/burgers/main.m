@@ -23,7 +23,8 @@ y0 = [ainit xinit];
 % Generate ADiGator Jacobian files using adigatorGenJacFile
 ay = adigatorCreateDerivInput(size(y0),'y');
 output = adigatorGenJacFile('burgersfun_noloop',{1,ay,N},adigatorOptions('overwrite',1));
-Jpat = output.JacobianStructure;
+% v2.0 (#192, ADR-0030): reconstruct the JPattern sparse matrix from the sole CSC metadata
+Jpat = adigatorCSCToSparse(output.JacobianCSC, ones(output.JacobianCSC.Nnz,1));
 
 % solve ODE
 opts = odeset('Mass',@(t,y)burgersmass(t,y,N),'MStateDependence','strong','JPattern',Jpat,...

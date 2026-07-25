@@ -57,8 +57,7 @@ implies you want embeddable, optimized output); the classic generators default t
 | `path` | calling dir | output directory for all generated files |
 | `unroll` | `0` | keep loops & subfunctions rolled (`1` = unroll) |
 | `loopbound` | `{}` | name input(s) as runtime loop bounds — generate at max, run at any `n ≤ max` |
-| `der_output` | `'matrix'` | canonical output form; `'nonzeros'` returns the **top-order** derivative's nonzero vector + a once-exported `*Locs` pattern (`JacobianLocs`/`HessianLocs`), no per-call projection; on a Hessian flips only `Hes` (the `Grd` companion stays dense) |
-| `jac_output` | `'matrix'` | level-1-only alias of `der_output` (Jacobian/gradient only; never flips a Hessian) |
+| `der_output` | `'matrix'` | output form; `'csc'` returns the **top-order** derivative's structurally-possible-nonzero vector in CSC order + a once-exported per-role `*CSC` pattern (`JacobianCSC`/`GradientCSC`/`HessianCSC`, `Size`/`ColPtr`/`RowIdx`/`Nnz`/`IndexBase`), values only (no projection); on a Hessian flips only `Hes` (the `Grd` companion stays dense) |
 | `der_levels` | `[]` (all) | subset of `{0,1,2}` selecting which levels the wrapper returns (top level always included) |
 | `slim_embed` | `[]`† | slice unread `_location`/`_size` chains from embedded code so their index tables drop |
 
@@ -126,11 +125,13 @@ Embeddable generation
 - Option to set the output path for all generated files.
 
 Output forms
-- `der_output='nonzeros'` (canonical; `jac_output` is a level-1-only alias): the
-  wrapper returns the **top-order** derivative's nonzero vector with the constant
-  sparsity pattern exported once (`output.JacobianLocs` for the Jacobian,
-  `output.HessianLocs` for the Hessian), with no per-call dense projection; on a
-  Hessian file it flips only the Hessian output (the `Grd` companion stays dense).
+- `der_output='csc'`: the wrapper returns the **top-order** derivative's
+  structurally-possible-nonzero vector in compressed-sparse-column order (values
+  only), with the constant pattern exported once as the per-role `*CSC` metadata
+  (`output.JacobianCSC`/`GradientCSC`/`HessianCSC`), no per-call dense
+  projection; on a Hessian file it flips only the Hessian output (the `Grd`
+  companion stays dense). Host-only `adigatorCSCToLocs`/`adigatorCSCToSparse`
+  rebuild coordinate/sparse forms.
 - `adigatorGenJtVFile`: computes J'*v in a single forward+adjoint sweep.
 - `adigatorGenDerFile_embedded('gradient-reverse', …)`: an embeddable reverse-mode
   adjoint gradient through the classic/inline pipeline.
