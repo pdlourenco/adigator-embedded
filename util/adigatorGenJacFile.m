@@ -379,8 +379,11 @@ else
   csrows = adiout.deriv.nzlocs(:,1);
   cscols = adiout.deriv.nzlocs(:,2);
 end
-if dydxsize(1) == 1 && dydxsize(2) > 1 && ~strcmp(NameAppendix,'Jac')
-  cscRole = 'Gradient';                 % scalar function, gradient convention
+if dydxsize(1) == 1 && ~strcmp(NameAppendix,'Jac')
+  % scalar function, gradient convention -> returned [n,1] (D7). Also covers
+  % scalar-of-scalar ([1,1], orientation-neutral) so the exported role follows
+  % the requested naming convention (GradientCSC), not the shape.
+  cscRole = 'Gradient';
   cscSize = [dydxsize(2), 1];
   cscLocs = [cscols(:), ones(numel(cscols),1)];
 else

@@ -2,7 +2,7 @@ function r = oracleSparsitySuperset(c)
 %ORACLESPARSITYSUPERSET  Structure ⊇ numeric nonzeros (REQ-T-03, ADR-0007).
 %
 % A structural oracle that needs no derivative reference: the declared
-% output.{Jacobian|Hessian}Structure must cover every numerically nonzero
+% output.{Jacobian|Hessian}CSC pattern must cover every numerically nonzero
 % entry of the evaluated derivative at c.x0. Catches the B10-class metadata
 % drift where the exported sparsity pattern disagrees with the wrapper's
 % element placement.

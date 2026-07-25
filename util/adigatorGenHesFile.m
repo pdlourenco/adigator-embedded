@@ -620,7 +620,9 @@ else
   gcr_ = adiout.deriv.nzlocs(:,1);
   gcc_ = adiout.deriv.nzlocs(:,2);
 end
-if dydxsize(1) == 1 && dydxsize(2) > 1 && ~strcmp(NameAppendix,'Jac')
+if dydxsize(1) == 1 && ~strcmp(NameAppendix,'Jac')
+  % scalar function, gradient convention -> [n,1] (D7); also scalar-of-scalar
+  % ([1,1], orientation-neutral) so the role follows the naming convention.
   grdSize = [dydxsize(2), 1];
   grdLocs = [gcc_(:), ones(numel(gcc_),1)];
 else

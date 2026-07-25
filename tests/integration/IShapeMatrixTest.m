@@ -319,7 +319,7 @@ end
 end
 
 function Hexp = expectedVectorHessian(f, x, m, n)
-% expected wrapper layout (docs and HessianStructure):
+% expected wrapper layout (docs and HessianCSC):
 % Hes((x1-1)*m + y, x2) = d2 f_y / dx1 dx2, size [m*n, n]
 H3 = fdhess(f, x);
 Hexp = zeros(m*n, n);

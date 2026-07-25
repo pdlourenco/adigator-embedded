@@ -73,11 +73,37 @@ classdef ICscOutputTest < matlab.unittest.TestCase
             checkHes(tc, 'cms', [1 1], 0.8, [2 2]);
         end
 
-        function emptyDerivativeCsc(tc)
-            % structurally constant output -> zero-nnz CSC, still reconstructs
+        function partiallyConstantOutputCsc(tc)
+            % a partially-constant output (row 2 is a literal) -> the CSC pattern
+            % carries the structural zero (an empty column/row region) and still
+            % reconstructs exactly.
             writeFcn('cz', {'function y = cz(x)', 'y = [x(1); 2.0];', 'end'});
             out = checkJac(tc, 'cz', [2 1], [0.3;0.9], 'Jacobian');
-            tc.verifyGreaterThanOrEqual(out.JacobianCSC.Nnz, 1);
+            tc.verifyEqual(out.JacobianCSC.Nnz, 1);   % only d(y1)/dx1 is structural
+        end
+
+        function singleRowJacobianCsc(tc)
+            % 1 x n Jacobian (scalar function, Jacobian convention)
+            writeFcn('csr', {'function y = csr(x)', 'y = x(1)^2 + sin(x(4));', 'end'});
+            checkJac(tc, 'csr', [4 1], [0.7;-1.3;0.4;2.1], 'Jacobian');
+        end
+
+        function singleColumnJacobianCsc(tc)
+            % m x 1 Jacobian (vector function of a scalar variable)
+            writeFcn('csc1', {'function y = csc1(x)', 'y = [x^2; sin(x); 2];', 'end'});
+            checkJac(tc, 'csc1', [1 1], 0.8, 'Jacobian');
+        end
+
+        function scalarOfScalarGradientRole(tc)
+            % regression guard: a scalar-of-scalar function with the 'Grd'
+            % appendix must export GradientCSC (not JacobianCSC), so consumers
+            % that read out.GradientCSC unconditionally (e.g. mcGenClassic's
+            % gradient arm) do not crash on the [1,1] shape.
+            writeFcn('cs11', {'function y = cs11(x)', 'y = x^2 + sin(x);', 'end'});
+            out = checkJac(tc, 'cs11', [1 1], 0.8, 'Gradient', 'Grd');
+            tc.verifyEqual(out.GradientCSC.Size, [1 1]);
+            tc.verifyFalse(isfield(out, 'JacobianCSC'), ...
+                'scalar-of-scalar gradient must export GradientCSC, not JacobianCSC');
         end
 
         function generatedCscProcedureIsValuesOnly(tc)
@@ -136,6 +162,32 @@ classdef ICscOutputTest < matlab.unittest.TestCase
                 'csc values must be identical across classic/inline modes');
             tc.verifyEqual(adigatorCSCToLocs(oi.JacobianCSC), ...
                 adigatorCSCToLocs(oc.JacobianCSC));
+        end
+
+        function loopboundJacobianCscPaddedZeros(tc)
+            % loopbound (#173): the file is generated at Nmax and evaluated for
+            % n < Nmax; the CSC pattern keeps the Nmax shape with structural
+            % zeros beyond n (padded-program semantics). csc reconstruction must
+            % equal matrix mode at the SAME runtime n.
+            writeFcn('clb', {'function y = clb(x, N)', 'y = zeros(3,1);', ...
+                'for a = 1:N', '  y(a) = x(a)^2;', 'end', 'end'});
+            Nmax = 3;
+            gx = @() adigatorCreateDerivInput([Nmax 1],'x');
+            % loopbound needs adigatorOptions (it normalizes the bound name to a
+            % cellstr; a raw options struct would not).
+            adigatorGenJacFile('clb', {gx(), Nmax}, ...
+                adigatorOptions('overwrite',1,'echo',0,'loopbound','N')); rehash;
+            xv = [0.7; -1.3; 0.4]; nrun = 2;            % evaluate BELOW Nmax
+            Jm = full(clb_Jac(xv, nrun));
+            out = adigatorGenJacFile('clb', {gx(), Nmax}, ...
+                adigatorOptions('overwrite',1,'echo',0,'loopbound','N','der_output','csc'));
+            rehash;
+            v = clb_Jac(xv, nrun);
+            tc.verifyEqual(out.JacobianCSC.Size, [3 3], ...
+                'CSC pattern must keep the padded Nmax shape');
+            tc.verifyEqual(full(adigatorCSCToSparse(out.JacobianCSC, v)), Jm, ...
+                'AbsTol', 1e-12, ...
+                'loopbound csc reconstruction must equal matrix mode at n<Nmax');
         end
     end
 end
