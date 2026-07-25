@@ -26,8 +26,17 @@
 % golden fixtures via \lstinputlisting keyed on named comment-marker ranges (not
 % line numbers), so they cannot silently drift from what the generator emits.
 % Hand-written user code keeps using verbatim. Plain pdflatex, no shell-escape.
+% listings reads \lstinputlisting source files byte-wise (independent of the
+% document's default UTF-8 input), so non-ASCII bytes in a listed .m file -- e.g.
+% the "Lourenço" copyright headers -- need explicit UTF-8 handling here or the
+% build dies with "Invalid UTF-8 byte sequence". extendedchars + a literate map
+% for the Latin/Portuguese accents render them without a font-encoding change.
 \lstset{language=Matlab,basicstyle=\ttfamily\footnotesize,columns=fullflexible,%
-  keepspaces=true,breaklines=true,showstringspaces=false,frame=single,captionpos=b}
+  keepspaces=true,breaklines=true,showstringspaces=false,frame=single,captionpos=b,%
+  extendedchars=true,inputencoding=utf8,%
+  literate={ç}{{\c c}}1 {Ç}{{\c C}}1 {á}{{\'a}}1 {à}{{\`a}}1 {ã}{{\~a}}1 %
+    {â}{{\^a}}1 {é}{{\'e}}1 {ê}{{\^e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {õ}{{\~o}}1 %
+    {ô}{{\^o}}1 {ú}{{\'u}}1 {ñ}{{\~n}}1 {É}{{\'E}}1 {Á}{{\'A}}1}
 \usepackage{alltt,rotating, amsbsy}
 \usepackage{tikz,xfrac}
 \usepackage{etoolbox}
