@@ -116,6 +116,14 @@ function output = adigatorGenHesFile(UserFunName,UserFunInputs,varargin)
 %                                   {Hes,Grd,Fun} (Hes always); the gradient
 %                                   wrapper stays [Grd,Fun] (roadmap R7a,
 %                                   issue #21).
+%   2026-07                         CSC contract (#192, ADR-0030, R31): the
+%                                   output form is der_output {matrix,csc}
+%                                   ('nonzeros' removed); export
+%                                   output.HessianCSC + GradientCSC (the sole
+%                                   sparse pattern) in both modes; csc mode
+%                                   returns the Hessian value vector in CSC
+%                                   order, the Grd companion unaffected
+%                                   (decision b).
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ OPTIONS SETUP ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 opts = adigatorOptions();

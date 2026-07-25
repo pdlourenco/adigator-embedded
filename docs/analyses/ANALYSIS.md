@@ -727,8 +727,9 @@ range-compressed (item 4) or eliminated (b) at *any* length. The genuinely large
 structured (never identity), so it is **not** removable by a peephole — R12 was
 shelved for exactly this reason. So the location map is the only part this
 clean-up reaches, and it is small once range-compressed. On top of that,
-`jac_output='nonzeros'` (R5) already removes the per-call dense scatter (returns
-the nonzero vector, exports the pattern once), and a *fully* index-free forward
+`der_output='csc'` (R5, respelled by #192/ADR-0030) already removes the per-call
+dense scatter (returns the CSC value vector, exports the pattern once via
+`output.*CSC`), and a *fully* index-free forward
 dense gradient would mean re-deriving the dense closed form — which is exactly
 what reverse mode does (§3.5: the reverse gradient of such a cost carries **zero**
 static data). So forward dense-location elimination polishes the path one would

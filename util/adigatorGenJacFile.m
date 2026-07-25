@@ -108,6 +108,13 @@ function output = adigatorGenJacFile(UserFunName,UserFunInputs,varargin)
 %                                   value Fun only when level 0 is requested
 %                                   (the first derivative is always
 %                                   returned) (roadmap R7a, issue #21).
+%   2026-07                         CSC contract (#192, ADR-0030, R31): the
+%                                   output form is der_output {matrix,csc}
+%                                   ('nonzeros' and the jac_output alias
+%                                   removed); export output.JacobianCSC /
+%                                   GradientCSC (the sole sparse pattern) in
+%                                   both modes; csc mode returns the Nnz x 1
+%                                   value vector in CSC order.
 
 %% ~~~~~~~~~~~~~~~~~~~~~~~~~~ OPTIONS SETUP ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 opts = adigatorOptions(); % default options

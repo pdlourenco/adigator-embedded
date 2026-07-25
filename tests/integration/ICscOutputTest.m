@@ -95,20 +95,28 @@ classdef ICscOutputTest < matlab.unittest.TestCase
 
         function buildCscPermutationIsIdentityTripwire(tc)
             % the native value stream must already be CSC order for the plain
-            % Jacobian / gradient / Hessian - assert isIdentity so a future
-            % nzlocs reordering that silently needs a gather trips here.
+            % Jacobian / Hessian, so the generator emits the identity form
+            % `<name> = <deriv>(:);` (NOT a constant gather `<deriv>([...])`).
+            % This reads the GENERATED emission - the only place the native
+            % nzlocs order is observable - so a future nzlocs reordering that
+            % silently introduces the gather trips here. (The exported CSC struct
+            % is already CSC-sorted, so it cannot witness the native order.)
             writeFcn('ti', {'function y = ti(x)', 'y = [x(1)*x(2); sin(x(3)); x(1)^2];', 'end'});
-            oj = adigatorGenJacFile('ti',{adigatorCreateDerivInput([3 1],'x')}, ...
-                struct('overwrite',1,'echo',0)); rehash;
-            [~,~,isid] = adigatorBuildCSC(oj.JacobianCSC.Size, ...
-                adigatorCSCToLocs(oj.JacobianCSC));
-            tc.verifyTrue(isid, 'Jacobian value stream must already be CSC order');
+            adigatorGenJacFile('ti',{adigatorCreateDerivInput([3 1],'x')}, ...
+                struct('overwrite',1,'echo',0,'der_output','csc')); rehash;
+            jtxt = fileread('ti_Jac.m');
+            tc.verifyNotEmpty(regexp(jtxt, 'Jac = \w+\.d\w+\(:\);', 'once'), ...
+                'Jacobian csc emission must be the identity form <deriv>(:)');
+            tc.verifyEmpty(regexp(jtxt, 'Jac = \w+\.d\w+\(\[', 'once'), ...
+                'Jacobian value stream is no longer CSC order - a gather crept in');
             writeFcn('th', {'function y = th(x)', 'y = x(1)^2*x(2) + sin(x(3));', 'end'});
-            oh = adigatorGenHesFile('th',{adigatorCreateDerivInput([3 1],'x')}, ...
-                struct('overwrite',1,'echo',0)); rehash;
-            [~,~,isidH] = adigatorBuildCSC(oh.HessianCSC.Size, ...
-                adigatorCSCToLocs(oh.HessianCSC));
-            tc.verifyTrue(isidH, 'Hessian value stream must already be CSC order');
+            adigatorGenHesFile('th',{adigatorCreateDerivInput([3 1],'x')}, ...
+                struct('overwrite',1,'echo',0,'der_output','csc')); rehash;
+            htxt = fileread('th_Hes.m');
+            tc.verifyNotEmpty(regexp(htxt, 'Hes = \w+\.d\w+d\w+\(:\);', 'once'), ...
+                'Hessian csc emission must be the identity form <deriv>(:)');
+            tc.verifyEmpty(regexp(htxt, 'Hes = \w+\.d\w+d\w+\(\[', 'once'), ...
+                'Hessian value stream is no longer CSC order - a gather crept in');
         end
 
         function classicInlineCrossModeAgree(tc)
