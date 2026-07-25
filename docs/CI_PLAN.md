@@ -174,12 +174,13 @@ merges; license-gated jobs skip cleanly when products are unavailable.
 | TS-S-06 | `SRolledErtCodegenTest` — **ERT regression guard** (#80 Gap B / Path A): the rolled (`unroll=0`) `scostfun` gradient + Hessian must codegen under strict Embedded Coder (`coder.config('lib','ecoder',true)`, `GenCodeOnly`) at **n=32** — the size where identical index tables get de-duplicated, the regime where the old `S.x.IndexN = S.x.IndexM` static-data self-alias broke ERT ("field added after struct read"). Pins ERT *acceptance* end-to-end (the unit test `UEmbedMfileTest` pins only the emitted form). Coder + Embedded Coder gated; skips clean without the licenses. | REQ-T-10 | MATLAB Coder + Embedded Coder (skip-clean) |
 | TS-S-05 | `SCasadiOracleTest` — **independent-oracle** cross-check: ADiGator's generated derivative vs **CasADi** (symbolic expression graph — a method independent of source transformation) on the *same unmodified* source m-file, compared on reconstructed dense values. Battery: `vvecfun/jacobian`, `scostfun/{gradient, gradient-reverse, hessian}`, `vcostfun/gradient` (`vfun` omitted — not `SX`-consumable; covered by `vvecfun`). Tool-gated: skips cleanly when CasADi is absent; CasADi binaries are not committed (uses whatever is on the MATLAB path, or `CASADI_DIR` if set). *(Issue #87, ADR-0018; the independent ground truth for the #80 v2 engine work.)* | REQ-T-09 (independent cross-validation of REQ-T-01..05) | base MATLAB; CasADi (skip-clean) |
 | TS-S-07 | `SDerivShowcaseTest` — pins `bench/derivShowcase.m` (R17a): the all-axes MATLAB-level complexity/correctness grid (embed_mode × slim × unroll × DerType) that emits `bench/SHOWCASE.md`, with each cell gated for correctness against the analytic derivative. | REQ-T-09 (showcase, R17a) | base MATLAB |
+| TS-S-08 | `SCscMetadataTest` — pins `bench/cscMetadataSize.m` (#192, ADR-0030 phase-C bench, `bench/SHOWCASE.md` ## CSC pattern metadata): the exported CSC pattern index count is `nnz+ncols+1`, smaller than the removed two-copy surface (coordinate `*Locs` `2·nnz` + sparse `*Structure`), and beats coordinates outright when `nnz>ncols`. Interpreted generation only (PR-gate, no Coder). | REQ-T-09 (bench), REQ-T-03 | base MATLAB |
 
 | Requirement | Verified / validated by |
 |-------------|-------------------------|
 | REQ-T-01 | TS-I-01, TS-S-01, TS-I-13, TS-I-14, TS-I-15; TS-I-04 *(planned)*, TS-I-10 *(planned, R22)*, TS-I-25 |
 | REQ-T-02 | TS-I-01, TS-I-05, TS-I-12, TS-I-20, TS-U-19 (loopbound); TS-I-10 *(planned, R22)* |
-| REQ-T-03 | TS-I-01, TS-U-20; TS-I-25 |
+| REQ-T-03 | TS-I-01, TS-U-20; TS-I-25, TS-S-08 |
 | REQ-T-04 | TS-I-02, TS-I-06, TS-I-08, TS-I-09, TS-I-17; TS-I-11 *(planned, R24)* |
 | REQ-T-05 | TS-S-02; cross-validated at scale by the TS-S-04 `oracleCodegenEquivalence` (born-ERT, sampled, hand-rolled `codegen`+compare; ADR-0014). The `matlabtest.coder` supported-API migration is *(planned, R15)* |
 | REQ-T-06 | TS-I-03 |

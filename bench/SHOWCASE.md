@@ -273,5 +273,51 @@ is **n-independent**: ROM 4624, RAM 0, stack 240 bytes.
 
 ---
 
+## CSC pattern metadata
+
+`der_output='csc'` (issue #192, ADR-0030) returns the derivative's
+structurally-possible-nonzero value vector; the constant sparsity pattern is
+exported once as the per-role CSC triple `output.<Der>CSC`
+(`Size`/`ColPtr`/`RowIdx`, plus `Nnz`/`IndexBase`). `bench/cscMetadataSize.m`
+measures the pattern-metadata index count against the removed v1 surface, which
+exported the pattern **twice** — the `nnz x 2` coordinate `*Locs` (`2·nnz`
+indices) **and** a MATLAB sparse `*Structure` (a second full copy):
+
+```matlab
+addpath bench
+r = cscMetadataSize('n', 8);
+```
+
+Snapshot (`n = 8`):
+
+| shape | nnz | cscIdx (`nnz+ncols+1`) | coord `*Locs` (`2·nnz`) | old total (`Locs`+`Structure`) | reduction |
+|---|---:|---:|---:|---:|---:|
+| scalar-cost gradient `[8×1]` (dense) | 8 | 10 | 16 | 26 | 2.6× |
+| arrowhead Jacobian `[8×8]` (dense row+col) | 22 | 31 | 44 | 75 | 2.4× |
+| diagonal Jacobian `[8×8]` (sparse) | 8 | 17 | 16 | 33 | 1.9× |
+| scalar-cost Hessian `[8×8]` (diagonal) | 8 | 17 | 16 | 33 | 1.9× |
+
+- **The value vector is identical; the win is metadata, not arithmetic.** CSC
+  mode computes and returns the same `nnz` doubles as the removed `'nonzeros'`
+  form, so evaluation cost is unchanged — the ADR does not claim otherwise. What
+  shrinks is the exported *pattern*.
+- **~2× less pattern metadata by exporting ONE representation, not two.** v1
+  shipped both the coordinate `*Locs` and a sparse `*Structure`; CSC is the sole
+  copy, so the pattern index footprint drops **~1.9–2.6×** across shapes (`old
+  total` vs `cscIdx`).
+- **CSC beats coordinates outright when `nnz > ncols`.** `nnz+ncols+1 < 2·nnz`
+  exactly when `nnz > ncols+1`: the dense gradient (`ncols = 1`) and the
+  arrowhead (dense row+column) win on index count alone; a strict diagonal
+  (`nnz = ncols`) is a wash (`+1` for the extra column pointer) — but even there
+  the second-copy removal keeps the ~2× total win.
+- **Downstream assembly is direct.** An embedded CSC kernel consumes
+  `values`/`ColPtr`/`RowIdx` with no runtime coordinate sort or search and no
+  MATLAB-sparse construction; the removed surface made the consumer scatter
+  coordinates or hold a sparse object. Host-only
+  `adigatorCSCToLocs`/`adigatorCSCToSparse` reconstruct the old forms when a host
+  caller still wants them. Pinned by `SCscMetadataTest`.
+
+---
+
 *Development context (roadmap, design rationale) lives in `docs/ROADMAP.md` and
 `docs/DESIGN.md`.*
