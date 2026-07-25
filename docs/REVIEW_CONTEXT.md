@@ -90,8 +90,8 @@ A bundled review covers both. Narrow with "review in verification mode" /
   `hessian`).
 - **`y.dX` / `y.dX_location` / `y.dX_size`** — the generated-file derivative
   outputs (contract C-2), distinct from the *wrapper* outputs (`Jac`, `Grd`,
-  `Hes`) and from the sparsity metadata (`JacobianStructure` /
-  `HessianStructure`).
+  `Hes`) and from the exported CSC pattern metadata (`JacobianCSC` /
+  `GradientCSC` / `HessianCSC`, the sole sparse-pattern representation — ADR-0030).
 - **Unrolled Jacobian** — the `[prod(ysize) × prod(xsize)]` layout `y.dX`
   indexes into, distinct from the user-facing `m×n` Jacobian shape (C-1).
 - **`Bn`** — a numbered bug in `ANALYSIS.md`. Reference fixes by `Bn`.

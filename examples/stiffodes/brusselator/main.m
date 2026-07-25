@@ -24,7 +24,8 @@ gout = adigatorGenJacFile('mybrussode',{gt,gy,N});
 adigatorgentime = toc;
 
 % Get Jacobian sparsity pattern from output of adigator
-S = gout.JacobianStructure;
+% v2.0 (#192, ADR-0030): reconstruct the sparse pattern from the sole CSC metadata
+S = adigatorCSCToSparse(gout.JacobianCSC, ones(gout.JacobianCSC.Nnz,1));
 
 % ---------------- Solve ODE Using Finite Difference -------------------- %
 if fdflag

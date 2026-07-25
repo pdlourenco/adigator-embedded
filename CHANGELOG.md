@@ -42,10 +42,15 @@ is unchanged.
   agrees exactly with a file generated directly at `n`. Composes with nested
   runtime bounds and N-D parameters, and supports gradient, Jacobian, and
   (scalar-cost) Hessian.
-- **Alternative output forms (`der_output` + `*Locs`).** `der_output = 'nonzeros'`
-  returns the derivative's nonzero vector in a fixed pattern order, with the
-  sparsity pattern exported once via `output.JacobianLocs` / `output.HessianLocs`,
-  so a downstream solver assembles (or never forms) the dense matrix itself.
+- **Compressed-sparse-column output (`der_output = 'csc'`).** Returns the
+  derivative's structurally-possible-nonzero vector in CSC order, with the
+  constant pattern exported once as compressed-sparse-column metadata
+  `output.{Jacobian|Gradient|Hessian}CSC` (`Size`/`ColPtr`/`RowIdx`/`Nnz`/
+  `IndexBase`) — the single canonical sparse-pattern representation, used in both
+  `matrix` and `csc` modes. A downstream (embedded) solver consumes the value
+  vector and constant `ColPtr`/`RowIdx` directly, assembling — or never forming —
+  the dense matrix itself. Host-only `adigatorCSCToLocs` / `adigatorCSCToSparse`
+  reconstruct coordinate / MATLAB-sparse forms when needed.
 - **Derivative-level selection (`der_levels`).** The Hessian file's returned
   outputs can be trimmed to a requested subset of `{Hessian, gradient, function}`.
 - **`slim_embed` dead-code slicing.** Trims unread `_location`/`_size` chains and

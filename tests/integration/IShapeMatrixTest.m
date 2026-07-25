@@ -254,24 +254,27 @@ end
 %% ============================ helpers ================================ %%
 
 function verifyExportedStructure(tc, out, kind, D)
-% Assert the generator's exported sparsity metadata is consistent with the
+% Assert the generator's exported CSC pattern metadata is consistent with the
 % actual derivative D (the AD wrapper's dense output, whose structural zeros
-% are exact). Guards the TS-I-01 claim (c) and the B23 class (corrupted
-% *Structure/*Locs built with a mutated output size):
-%   (1) <kind>Structure has the derivative's shape (B23 was a size leak);
-%   (2) it is a sparsity SUPERSET - every structural zero is a true zero;
-%   (3) <kind>Locs reproduces the <kind>Structure pattern.
-S = full(out.([kind 'Structure'])) ~= 0;
-locs = out.([kind 'Locs']);
-tc.verifySize(S, size(D), ...
-    sprintf('%sStructure size must match the derivative shape (B23)', kind));
+% are exact). Guards the TS-I-01 claim (c) and the B23 class (corrupted pattern
+% built with a mutated output size). v2.0 (#192, ADR-0030): CSC is the sole
+% exported pattern, so this reconstructs the sparse form via adigatorCSCToSparse:
+%   (1) <kind>CSC.Size has the derivative's shape (B23 was a size leak);
+%   (2) the reconstructed pattern is a SUPERSET - every structural zero is a
+%       true zero of D;
+%   (3) the CSC invariants hold (monotone ColPtr, in-range RowIdx).
+csc = out.([kind 'CSC']);
+tc.verifyEqual(csc.Size, size(D), ...
+    sprintf('%sCSC.Size must match the derivative shape (B23)', kind));
+S = full(adigatorCSCToSparse(csc, ones(csc.Nnz,1))) ~= 0;
 tc.verifyEqual(nnz(D(~S)), 0, ...
-    sprintf('%sStructure must cover every nonzero of the derivative', kind));
-tc.verifyEqual(size(locs,2), 2, ...
-    sprintf('%sLocs must be an [nnz x 2] list of [row col]', kind));
-Sl = full(sparse(locs(:,1), locs(:,2), 1, size(D,1), size(D,2))) ~= 0;
-tc.verifyEqual(Sl, S, ...
-    sprintf('%sLocs must reproduce the %sStructure pattern', kind, kind));
+    sprintf('%sCSC pattern must cover every nonzero of the derivative', kind));
+cp = double(csc.ColPtr(:));
+tc.verifyEqual(cp(1), 1);
+tc.verifyEqual(cp(end), csc.Nnz + 1);
+tc.verifyTrue(all(diff(cp) >= 0), 'ColPtr must be non-decreasing');
+tc.verifyTrue(isempty(csc.RowIdx) || all(double(csc.RowIdx(:)) >= 1 & ...
+    double(csc.RowIdx(:)) <= size(D,1)), 'RowIdx must be in [1,nrows]');
 end
 
 function writeFixture(name, body)

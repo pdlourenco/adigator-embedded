@@ -59,15 +59,18 @@
 
 %%% GENERATED-FILE OUTPUTS: NAMES + ORDER (see docs/DESIGN.md Contract C-6)
 %
-%  ADR-0030 (issue #192, accepted 2026-07-24; planned R31, flips with the
-%  implementation PR - the shipped surface until then is der_output
-%  {matrix,nonzeros} + *Locs/*Structure): the output-form option respells to
-%  der_output {matrix,csc}; CSC (Size/ColPtr/RowIdx/Nnz/IndexBase=1) becomes
-%  the SOLE public sparse-pattern representation for 2-D derivatives, in both
-%  modes; csc mode returns the Nnz-by-1 value vector in CSC order under the
-%  same canonical names below (representation changes, names/order do not).
-%  GradientCSC.Size = [n 1] (the returned column convention); HessianCSC
-%  covers the full n-by-n / [m*n n] fold shapes - no triangular compression.
+%  ADR-0030 (issue #192, R31): the output-form option is der_output
+%  {matrix,csc}; CSC (Size/ColPtr/RowIdx/Nnz/IndexBase=1) is the SOLE public
+%  sparse-pattern representation for 2-D derivatives, in both modes, exported as
+%  per-role output.{Jacobian|Gradient|Hessian}CSC. csc mode returns the
+%  Nnz-by-1 value vector in CSC order under the same canonical names below
+%  (representation changes, names/order do not). GradientCSC.Size = [n 1] (the
+%  returned column convention); HessianCSC covers the full n-by-n / [m*n n] fold
+%  shapes - no triangular compression. ColPtr/RowIdx are uint32 with a range
+%  guard that falls back to double rather than saturating. The pre-release
+%  der_output='nonzeros' form, the jac_output alias, and the *Locs/*Structure
+%  fields are removed (v2.0). Host-only adigatorCSCToLocs/adigatorCSCToSparse
+%  reconstruct coordinate/sparse forms; adigatorBuildCSC is the canonicalizer.
 
 % Every generated derivative file - forward, reverse, and matrix-free product -
 % returns its outputs under these canonical variable names, the same object
@@ -103,9 +106,10 @@
 % j_l in 1..N, and is symmetric in j1..jk.
 %
 %  - Native/default form: the vector of possible nonzeros (C-2) with one location
-%    column per dimension (output + k deriv dims) + an exported pattern via the
-%    der_output='nonzeros' / *Locs family (issue #84). DEFAULT for k>=3 (the dense
-%    object is M*N^k).
+%    column per dimension (output + k deriv dims). For 2-D derivatives the
+%    exported pattern is CSC (der_output {matrix,csc}, ADR-0030); higher-order
+%    (k>=3) patterns keep the multi-column location tuples (issue #84). DEFAULT
+%    for k>=3 (the dense object is M*N^k).
 %  - Optional dense fold (vec(x)->columns, vec(f)->output block, column-major with
 %    i fastest and the last deriv dim as columns):
 %        size = [M*N^(k-1)  x  N]

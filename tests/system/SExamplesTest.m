@@ -44,7 +44,7 @@ classdef SExamplesTest < matlab.unittest.TestCase
             % sparsity structure reported to the user must cover the values
             tc.assertTrue(isfield(ws,'S'));
             tc.verifyEmpty(find(full(ws.Jac) ~= 0 & full(ws.S) == 0), ...
-                'JacobianStructure misses nonzeros of the actual Jacobian');
+                'reconstructed CSC sparsity misses nonzeros of the actual Jacobian');
         end
 
         function polydatafitExample(tc)

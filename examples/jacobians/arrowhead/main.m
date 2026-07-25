@@ -17,7 +17,9 @@ opts.overwrite = 1;
 
 gx = adigatorCreateDerivInput([N, 1],'x'); % Create Deriv Input
 genout = adigatorGenJacFile('arrowhead',{gx},opts);
-S = genout.JacobianStructure;
+% v2.0 (#192, ADR-0030): CSC is the sole pattern metadata; reconstruct the
+% sparse pattern from it for the timing/plots below.
+S = adigatorCSCToSparse(genout.JacobianCSC, ones(genout.JacobianCSC.Nnz,1));
 
 addpath(fullfile(pwd,opts.path));
 tic;

@@ -174,9 +174,10 @@ classdef MCSmokeTest < matlab.unittest.TestCase
 
         function derOutputInvarianceIsClean(tc)
             % R27 Phase 2 (issue #103): the der_output option axis. For a
-            % jacobian case, the jac_output='nonzeros' form must reconstruct
-            % (scatter into JacobianLocs) to the exact dense matrix form -- an
-            % option the body-only battery never swept.
+            % jacobian case, the der_output='csc' form must reconstruct (via
+            % adigatorCSCToSparse over JacobianCSC) to the exact dense matrix
+            % form -- an option the body-only battery never swept (CSC respelling
+            % #192, ADR-0030).
             report = mcCampaign('nIters', 16, 'seed', 141421, ...
                 'generators', {'mcGenAffine','mcGenQuadratic'}, ...
                 'oracles', {'oracleDerOutputInvariance'}, ...
@@ -186,7 +187,7 @@ classdef MCSmokeTest < matlab.unittest.TestCase
                 sprintf('derOutput invariance found %d failing case(s)', report.nFail));
             do = report.oracleStats.oracleDerOutputInvariance;
             tc.verifyGreaterThan(do.pass, 0, ...
-                'derOutput oracle never passed — harness not exercising the matrix/nonzeros forms');
+                'derOutput oracle never passed — harness not exercising the matrix/csc forms');
             tc.verifyEqual(do.fail, 0, 'derOutput oracle reported a hard failure');
         end
 

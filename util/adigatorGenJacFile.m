@@ -43,9 +43,14 @@ function output = adigatorGenJacFile(UserFunName,UserFunInputs,varargin)
 % The output of adigatorGenJacFile is the structure:
 %     output.FunctionFile = 'myfun'
 %     output.JacobianFile = 'myfun_Jac' | 'myfun_NameAppendix'
-%     output.JacobianStructure = sparse ones and zeros.
+%     output.JacobianCSC = the CSC sparse pattern {Size, ColPtr, RowIdx, Nnz,
+%         IndexBase} of the returned Jacobian (GradientCSC for the scalar-
+%         function gradient convention). The sole exported sparse-pattern
+%         representation (#192, ADR-0030); rebuild coordinate/sparse forms with
+%         adigatorCSCToLocs / adigatorCSCToSparse.
 % The generated Jacobian file has the same input structure as the original
-% user function. The output of Jacobian file is [Jac, Fun].
+% user function. The output of Jacobian file is [Jac, Fun]. With
+% der_output='csc', Jac is the Nnz x 1 value vector in CSC order.
 %
 % ----------------------- Additional Information -------------------------
 % The Jacobian is built as a sparse matrix under the condition that
@@ -318,7 +323,7 @@ xsize = x.func.size;
 ysize = adiout.func.size;
 dydxsize = [prod(ysize), prod(xsize)];
 dydxnumel  = dydxsize(1)*dydxsize(2);
-remapcase = 0; % v2.0 (B10 fix): remember the shape remap for JacobianStructure
+remapcase = 0; % v2.0 (B10 fix): remember the shape remap for the CSC pattern
 if dydxsize(1) == 1 && all(xsize>1) % scalar function of matrix variable
   remapcase = 1;
   dydxsize = xsize;
@@ -354,19 +359,45 @@ if embedscatter
 else
   scatteridx = [dy,'_location']; % single-column cases only (see below)
 end
+% v2.0 (#192, ADR-0030): the CSC pattern of the RETURNED derivative. nzlocs are
+% in VALUE order; decompose remapped unrolled indices into displayed subscripts
+% (same mapping as the structure build below), then orient to the returned
+% convention - a scalar-function gradient is returned as [n,1], not the [1,n]
+% Jacobian, so its pattern is transposed (ADR-0030 D7).
+if remapcase == 1
+  [csrows,cscols] = ind2sub(dydxsize, adiout.deriv.nzlocs(:,2));
+elseif remapcase == 2
+  [csrows,cscols] = ind2sub(dydxsize, adiout.deriv.nzlocs(:,1));
+else
+  csrows = adiout.deriv.nzlocs(:,1);
+  cscols = adiout.deriv.nzlocs(:,2);
+end
+if dydxsize(1) == 1 && dydxsize(2) > 1 && ~strcmp(NameAppendix,'Jac')
+  cscRole = 'Gradient';                 % scalar function, gradient convention
+  cscSize = [dydxsize(2), 1];
+  cscLocs = [cscols(:), ones(numel(cscols),1)];
+else
+  cscRole = 'Jacobian';
+  cscSize = dydxsize;
+  cscLocs = [csrows(:), cscols(:)];
+end
+[JacCSC, cscperm, cscisid] = adigatorBuildCSC(cscSize, cscLocs);
+
 %v2.0:	process this to output Jacobians and Gradients correctly, as shown above
-% #84/R25: der_output is the canonical GLOBAL form; jac_output is a level-1
-% (Jacobian/gradient) alias. adigatorOptions does NOT cross-sync them, so honor
-% either here - an explicit 'nonzeros' in der_output OR jac_output selects the
-% nonzeros form for this (first-derivative) output. The Hessian reads der_output
-% only, so a level-1 jac_output never flips the Hessian (ADR-0022, decision b).
-if strcmp(opts.der_output,'nonzeros') || strcmp(opts.jac_output,'nonzeros')
-  % roadmap R5 (ANALYSIS.md 2.3): return the nonzero vector in nzlocs
-  % order; the constant sparsity pattern is exported once through
-  % output.JacobianLocs/JacobianStructure. No per-call dense allocation
-  % or scatter - embedded first-order solvers assemble (or never form)
-  % the Jacobian themselves.
-  fprintf(fid,[NameAppendix,' = ',dy,'(:);\n']);
+% #192/ADR-0030: der_output selects this (top-order) output's FORM. 'csc'
+% returns the structurally-possible-nonzero VALUE vector in CSC order (values
+% only); the constant pattern is exported once as output.<Role>CSC. The native
+% value stream (y.d<vod> in nzlocs order) is already CSC order for every current
+% shape (verified via the identity flag), so this is dy(:) with an ASSERTED
+% identity; a future nzlocs-ordering change that broke it emits a constant
+% gather instead - never a runtime sort. The Hessian reads der_output only, so
+% this never flips the Hessian's form (ADR-0022, decision b).
+if strcmp(opts.der_output,'csc')
+  if cscisid
+    fprintf(fid,[NameAppendix,' = ',dy,'(:);\n']);
+  else
+    fprintf(fid,[NameAppendix,' = ',dy,'(',mat2str(cscperm(:).'),');\n']);
+  end
 elseif dydxnnz == dydxnumel % all elements are nonzero
     if dydxsize(1) == 1 % the function is a scalar, use the Gradient convention if user selected
         if strcmp(NameAppendix,'Jac') % Use Jacobian convention
@@ -441,27 +472,13 @@ output.GenFiles(1).main = ADiGator_GeneratedFiles.Jac;
 output.GenFiles(1).name = JacFileName;
 output.GenFiles(1).func = ADi_DerivFuns;
 
-% v2.0 (B10 fix): nzlocs index the unrolled [prod(ysize) x prod(xsize)]
-% Jacobian. When the displayed shape was remapped above (scalar function of
-% matrix variable / matrix function of scalar variable), decompose the
-% unrolled linear indices into subscripts of the displayed shape; the old
-% code passed the unrolled indices to sparse() with the remapped size,
-% which errored or produced a wrong pattern.
-if remapcase == 1 % scalar function of matrix variable: column index is x
-  [strrows,strcols] = ind2sub(dydxsize, adiout.deriv.nzlocs(:,2));
-elseif remapcase == 2 % matrix function of scalar variable: row index is y
-  [strrows,strcols] = ind2sub(dydxsize, adiout.deriv.nzlocs(:,1));
-else
-  strrows = adiout.deriv.nzlocs(:,1);
-  strcols = adiout.deriv.nzlocs(:,2);
-end
-output.JacobianStructure = sparse(strrows,strcols,...
-  ones(dydxnnz,1),dydxsize(1),dydxsize(2));
-% roadmap R5: row/column pattern in VALUE order (matching the nonzero
-% vector returned by jac_output='nonzeros' and the y.d<vod> ordering);
-% note sparse() above reorders, so consumers scattering values themselves
-% should use JacobianLocs
-output.JacobianLocs = [strrows(:) strcols(:)];
+% v2.0 (#192, ADR-0030): CSC is the sole exported pattern, in BOTH matrix and
+% csc modes, describing the RETURNED derivative's shape/convention (Jacobian, or
+% Gradient for the scalar-function gradient convention - built above with the
+% [n,1] orientation and the remapcase-aware displayed subscripts, then
+% canonicalized by adigatorBuildCSC). Host code can rebuild coordinate/sparse
+% forms with adigatorCSCToLocs / adigatorCSCToSparse.
+output.([cscRole,'CSC']) = JacCSC;
 
 if opts.echo
   fprintf(['\n<strong>adigatorGenJacFile</strong> successfully generated Jacobian wrapper file: ''',JacFileName,''';\n\n']);
