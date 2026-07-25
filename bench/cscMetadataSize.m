@@ -30,6 +30,7 @@ p.parse(varargin{:});
 n = p.Results.n;
 
 root   = fileparts(fileparts(mfilename('fullpath')));   % repo root
+savedPath = path;                                      % restored on cleanup
 addpath(root, fullfile(root,'lib'), fullfile(root,'lib','cadaUtils'), ...
         fullfile(root,'util'), fullfile(root,'embedding'), ...
         fullfile(root,'bench','showcase'), ...
@@ -37,7 +38,7 @@ addpath(root, fullfile(root,'lib'), fullfile(root,'lib','cadaUtils'), ...
 
 % Generate into an isolated working folder so the tree stays clean.
 home = pwd;  wd = tempname;  mkdir(wd);
-cleaner = onCleanup(@() cleanup(home, wd));
+cleaner = onCleanup(@() cleanup(home, wd, savedPath));
 cd(wd);
 
 % (anchor, DerType, label) - a spread of nnz/ncols ratios.
@@ -88,8 +89,9 @@ if p.Results.verbose
 end
 end
 
-function cleanup(home, wd)
+function cleanup(home, wd, savedPath)
 cd(home);
+path(savedPath);
 try
     rmdir(wd, 's');
 catch

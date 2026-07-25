@@ -305,7 +305,7 @@ Snapshot (`n = 8`):
   shipped both the coordinate `*Locs` and a sparse `*Structure`; CSC is the sole
   copy, so the pattern index footprint drops **~1.9–2.6×** across shapes (`old
   total` vs `cscIdx`).
-- **CSC beats coordinates outright when `nnz > ncols`.** `nnz+ncols+1 < 2·nnz`
+- **CSC beats coordinates outright when `nnz > ncols+1`.** `nnz+ncols+1 < 2·nnz`
   exactly when `nnz > ncols+1`: the dense gradient (`ncols = 1`) and the
   arrowhead (dense row+column) win on index count alone; a strict diagonal
   (`nnz = ncols`) is a wash (`+1` for the extra column pointer) — but even there
