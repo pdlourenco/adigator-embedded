@@ -9,7 +9,13 @@ Matthew J. Weinstein and Anil V. Rao and distributed under the GNU GPL v3. The
 version numbering restarts at 2.0 to reflect the accumulated new capability (see
 below); it is not a patch of upstream 1.x.
 
-## [2.0] — 2026-07-11
+## [Unreleased]
+
+<!-- Add user-facing changes here as they land. At release time, the release
+     workflow (.github/workflows/release.yml) requires this section to be empty
+     and the new version to have its own dated section below. -->
+
+## [2.0] — 2026-07-26
 
 First release of the embedded fork. Everything below is new relative to the
 upstream 1.x baseline; the core source-transformation differentiation algorithm
@@ -78,9 +84,43 @@ is unchanged.
   Coder, and its compiled footprint converges with inline `'i'`. Prefer `'i'`;
   `'l'` is retained for now with removal planned in a later release.
 
+### Known limitations
+
+Each of the following is **fail-loud** (a clear, actionable error) or has a
+documented workaround — none produces an incorrect derivative silently.
+
+- **Loopbound Hessian of a vector/matrix-output function** is not yet supported;
+  it fails loud with `adigator:loopbound:vectorhessian`. Scalar-output loopbound
+  Hessians *are* supported (generated at `Nmax`, correct for any `n ≤ Nmax`).
+- **Re-differentiating a loopbound-generated file** (e.g. taking a Hessian)
+  without re-passing the `loopbound` option fails loud with
+  `adigator:loopbound:rediff` — pass the option so the runtime guard is
+  re-synthesized. Reverse mode does not apply to loopbound files (it needs
+  unrolled loops, which `loopbound` forbids).
+- **Reverse-mode adjoint of a non-scalar matrix division** (`A/B` with a
+  non-scalar denominator) is not supported; it is guarded with an actionable
+  error rather than returning a wrong adjoint.
+- **Embedded Coder (ERT) code generation of two forms**, both of which compile
+  fine under plain MATLAB Coder (`coder.config('lib')`) — the limitation is the
+  stricter ERT target only:
+  - the *unslimmed* inline Hessian — use the default `slim_embed = 1`, which
+    ERT-codegens;
+  - the *unrolled* subscripted scalar-cost derivative — use the **rolled** form
+    (`unroll = 0`), the recommended form for loop-based costs, which ERT-codegens
+    with a flat, `n`-independent structure.
+- **`if`-guarded `while`-counter indexing**: a narrow N-D-indexing edge case
+  raises a raw `MATLAB:badsubscript` instead of the actionable
+  data-dependent-index error.
+- **The inherited `adigatorGenFiles4{Fminunc,Fsolve,Fmincon,Ipopt,gpops2}`
+  solver wrappers** are host-only and not at embedded feature parity (no
+  `embed_mode`, `path`, `der_output='csc'`, or reverse mode). They are retained
+  for drop-in compatibility with upstream ADiGator; use the core generators
+  (`adigatorGenJacFile` / `adigatorGenHesFile` / `adigatorGenDerFile_embedded`)
+  for embeddable derivatives.
+
 ### Attribution
 
 Preserves the upstream copyright (© Matthew J. Weinstein and Anil V. Rao) and the
-GNU GPL v3; adds the fork's contributions (© GMV / Pedro Lourenço).
+GNU GPL v3; adds the fork's contributions (© Pedro Lourenço and GMV).
 
 [2.0]: https://github.com/pdlourenco/adigator-embedded/releases/tag/v2.0

@@ -65,7 +65,7 @@ path for you, so a class can't silently rely on a dirty path. A class needing
 extra paths adds its own `TestClassSetup` on top. `UTestPathHygieneTest`
 enforces that every `tests/{unit,integration}` class does one or the other. The
 suite lives under `tests/{unit,integration,system}`;
-`unit_tests/test_unarymath_rules.m` remains the legacy finite-difference rule
+`tests/legacy/test_unarymath_rules.m` remains the legacy finite-difference rule
 harness it was built from.
 
 Note: the MATLAB suite **cannot** run in a Claude-Code-on-the-web container
@@ -128,6 +128,41 @@ Per [`../CLAUDE.md`](../CLAUDE.md) §5:
   `CLAUDE.md` §4 (surface it, wait for go-ahead) before the PR opens.
 - **Merging always requires explicit maintainer approval** — never on an
   agent's own initiative, not even a green PR.
+
+## Cutting a release
+
+Releases are **tag-gated** ([ADR-0031](decisions/ADR-0031-release-as-code.md)):
+pushing a `vX.Y` tag is the human release decision, and
+[`.github/workflows/release.yml`](../.github/workflows/release.yml) does the
+ceremony and validates it against the CHANGELOG. To cut a release from an
+up-to-date `master`:
+
+1. **Cut the CHANGELOG section.** Rename `## [Unreleased]` to
+   `## [X.Y] — YYYY-MM-DD` (today's date), leaving a fresh empty `[Unreleased]`
+   above it. Confirm the version matches the `version` constant in
+   [`adigator.m`](../adigator.m). Optionally dry-run the gate:
+
+   ```bash
+   python3 .github/scripts/release_changelog.py validate --changelog CHANGELOG.md --version X.Y
+   ```
+
+2. **Commit** the CHANGELOG on a PR, review, and merge to `master` as usual.
+3. **Tag a green `master`.** Tag the merge commit whose CI has passed (the
+   workflow does *not* check CI status — tagging a red or arbitrary commit still
+   publishes, so this is your responsibility), then push the tag:
+
+   ```bash
+   git tag vX.Y && git push origin vX.Y
+   ```
+
+The workflow then re-validates the tag against the CHANGELOG **and** against
+`adigator.m`'s `version = '…'` constant (fails loud, no release, if the `[X.Y]`
+section is missing/undated, `[Unreleased]` is non-empty, or the source version
+disagrees), extracts the `[X.Y]` section as the release body, and publishes the
+GitHub release with a curated runtime-distribution archive
+(`*-dist.zip`/`.tar.gz`) attached. If a run half-completes (release created,
+asset upload failed), delete the partial release and re-push the tag before
+re-running.
 
 ## Two-session authoring / review workflow
 

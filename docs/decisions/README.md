@@ -187,3 +187,10 @@ Contracts section (binding conventions), or for purely mechanical choices
   — a pre-v2.0-release break (issue #192). Partially supersedes ADR-0022 (form
   spelling + pattern representation; decision-b top-order semantics unchanged);
   binds C-6, restates REQ-T-03 + respells REQ-T-11 when the R31 implementation PR lands.
+- [ADR-0031](ADR-0031-release-as-code.md) — **Accepted**: a tag-gated
+  **release-as-code** workflow (`.github/workflows/release.yml` +
+  `release_changelog.py`). Pushing a `vX.Y[.Z]` tag is the human release
+  decision; the workflow validates the tag against `CHANGELOG.md` (dated
+  `[X.Y]` section present, `[Unreleased]` empty), extracts that section as the
+  release notes, and publishes a curated runtime-distribution archive. Enforces
+  ADR-0029's release-versioning discipline; adapted from disciplined-project-seed.

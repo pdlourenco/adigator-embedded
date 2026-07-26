@@ -616,7 +616,7 @@ B28 is a late sibling of the B17/B22 embedded-field-report family; ROADMAP R26.
   `d/dx asec(x) = 1/(x²√(1-1/x²)) = 1/(|x|√(x²-1))`) and the degree-mode
   factor is now correctly `π/180` *with degree-mode trig on the RHS* instead
   of `180/π` with radian trig — both upstream errors. Covered by
-  `unit_tests/test_unarymath_rules.m` (finite-difference check).
+  `tests/legacy/test_unarymath_rules.m` (finite-difference check).
 - `adigatorGenJacFile` vector-function-of-scalar allocation fixed from
   `zeros(dydxsize(2),1)` (= `zeros(1,1)`) to `zeros(dydxsize(1),1)`.
 - `any(ysize) == 1` → `any(ysize == 1)` (two occurrences) in
@@ -901,7 +901,7 @@ becomes the binding constraint, rolled loops (Stage 3) are the lever.
 - Validation harness: for every example (`brownf`, `gapfun`, brachistochrone,
   `logsumexp`), assert `‖g_reverse − g_forward‖ ≤ tol` and compare against
   finite differences; add a vector-output `J'*v` check against the forward
-  Jacobian. Wire into `unit_tests/`.
+  Jacobian. Wire into `tests/unit/`.
 - Follow-up: Hessian-vector products as forward-over-reverse (differentiate
   the generated reverse file with the existing forward machinery) — gives
   `H*v` in O(1) sweeps for Newton-CG-type embedded solvers, versus the

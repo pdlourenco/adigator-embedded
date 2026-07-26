@@ -77,8 +77,7 @@ Full reference: [`adigatorOptions.m`](../adigatorOptions.m).
 | [`CI_PLAN.md`](CI_PLAN.md) | CI strategy + requirement/test traceability |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | contributor mechanics, pre-push review, ADR policy |
 | [`decisions/`](decisions/) | architecture decision records |
-| [`papers/`](papers/) | the original ADiGator papers (TOMS, CALGO) + the AIAA-GNC GPOPS-II paper |
-| [`thesis/`](thesis/) | M. J. Weinstein's PhD dissertation |
+| reference publications | the original ADiGator papers (TOMS, CALGO), the AIAA-GNC GPOPS-II paper, and M. J. Weinstein's PhD dissertation — publisher-copyrighted third-party works, kept in the [source repository](https://github.com/pdlourenco/adigator-embedded/tree/master/docs) (`docs/papers/`, `docs/thesis/`), **not bundled in the release archive**. See [Citing ADiGator](#citing-adigator). |
 
 ## Requirements
 
@@ -90,7 +89,7 @@ Full reference: [`adigatorOptions.m`](../adigatorOptions.m).
 
 ## Citing ADiGator
 
-Please cite the most recent ACM-TOMS CALGO article. BibTex is here:
+Please cite the most recent ACM-TOMS CALGO article ([doi:10.1145/2699456](https://doi.org/10.1145/2699456)). BibTeX:
 
 ```
 @article{weinstein2017algorithm,
@@ -104,6 +103,13 @@ Please cite the most recent ACM-TOMS CALGO article. BibTex is here:
   publisher={ACM}
 }
 ```
+
+The reference publications (TOMS 2011 & 2013/CALGO, the AIAA-GNC GPOPS-II paper,
+and the Weinstein dissertation) are third-party, publisher-copyrighted works. To
+respect their redistribution terms they are **not included in the release
+archive**; the PDFs are available in the source repository under
+[`docs/papers/`](https://github.com/pdlourenco/adigator-embedded/tree/master/docs/papers)
+and [`docs/thesis/`](https://github.com/pdlourenco/adigator-embedded/tree/master/docs/thesis).
 
 ## What's new in v2.0
 
