@@ -45,7 +45,7 @@ env:
   # listed here belt-and-suspenders because it holds proprietary content that
   # must never ship. Tune as needed.
   ARCHIVE_EXCLUDES: >-
-    tests bench CLAUDE.md .github .claude
+    tests unit_tests bench CLAUDE.md .github .claude
     docs/analyses docs/known-bugs docs/decisions docs/papers docs/thesis
     docs/CI_PLAN.md docs/REVIEW_CONTEXT.md docs/ROADMAP.md docs/CONTRIBUTING.md
 
@@ -94,6 +94,11 @@ jobs:
           for path in "${excludes[@]}"; do
             rm -rf "${name:?}/${path}"
           done
+          # The release is for a user, not a contributor: strip every dot-entry
+          # (.github, .githooks, .gitignore, .gitattributes, …) at any depth, so
+          # no tooling/VCS file ships regardless of the exclude list above.
+          find "${name:?}" -depth -name '.*' ! -name '.' ! -name '..' \
+            -exec rm -rf {} +
           zip -qr "${name}.zip" "$name"
           tar -czf "${name}.tar.gz" "$name"
           # Re-run recovery: `gh release create` errors if the release already
