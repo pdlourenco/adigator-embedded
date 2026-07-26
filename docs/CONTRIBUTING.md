@@ -65,7 +65,7 @@ path for you, so a class can't silently rely on a dirty path. A class needing
 extra paths adds its own `TestClassSetup` on top. `UTestPathHygieneTest`
 enforces that every `tests/{unit,integration}` class does one or the other. The
 suite lives under `tests/{unit,integration,system}`;
-`unit_tests/test_unarymath_rules.m` remains the legacy finite-difference rule
+`tests/legacy/test_unarymath_rules.m` remains the legacy finite-difference rule
 harness it was built from.
 
 Note: the MATLAB suite **cannot** run in a Claude-Code-on-the-web container

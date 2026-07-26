@@ -2,7 +2,7 @@ classdef URulesUnaryTest < matlab.unittest.TestCase
     % URulesUnaryTest  Finite-difference check of every unary derivative rule.
     %
     % CI plan: TS-U-01, verifies REQ-C-01. This is a matlab.unittest port of
-    % unit_tests/test_unarymath_rules.m (same test points, perturbation,
+    % tests/legacy/test_unarymath_rules.m (same test points, perturbation,
     % tolerance, and singularity-skip rules), parameterized so each rule in
     % lib/@cada/cadaunarymath.m>getdydx reports individually.
 
@@ -61,7 +61,7 @@ classdef URulesUnaryTest < matlab.unittest.TestCase
             rehash;
 
             % same points, perturbation, tolerance, and skip rules as the
-            % original unit_tests/test_unarymath_rules.m
+            % original tests/legacy/test_unarymath_rules.m
             xtest = [linspace(-0.9,0.9,10), linspace(-2*pi,2*pi,10), linspace(-360,360,10)];
             ee = 1e-6;
             bad = strings(1,0);

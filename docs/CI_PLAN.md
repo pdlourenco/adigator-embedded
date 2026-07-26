@@ -41,7 +41,7 @@ Constraints that shape the plan (verified against the codebase):
   parallel jobs that each pay the install (§3.1).
 - The repository already contains validation assets that the test suites
   reuse rather than reinvent: the finite-difference harness in
-  `unit_tests/test_unarymath_rules.m`, and examples with built-in
+  `tests/legacy/test_unarymath_rules.m`, and examples with built-in
   ADiGator-vs-finite-difference comparisons (`examples/jacobians/arrowhead`,
   `examples/jacobians/polydatafit`, `examples/stiffodes/brusselator`) —
   see §2.4a.
@@ -106,7 +106,7 @@ push and pull request.
 
 | ID | Test | Verifies |
 |----|------|----------|
-| TS-U-01 | `URulesUnaryTest` — port of `unit_tests/test_unarymath_rules.m` to `matlab.unittest`, FD sweep per rule with singularity exclusion. | REQ-C-01 |
+| TS-U-01 | `URulesUnaryTest` — port of `tests/legacy/test_unarymath_rules.m` to `matlab.unittest`, FD sweep per rule with singularity exclusion. | REQ-C-01 |
 | TS-U-02 | `URulesBinaryTest` — FD check of each binary derivative rule (plus, minus, times/`.*`, rdivide/`./`, power/`.^` with an inactive exponent, mtimes/`*`) with the variable of differentiation against constants of varied shapes (scalar/column variable × scalar/column/matrix constant) and against itself; the raw generated-file derivative reconstructed from the C-2 fields and compared to a dense FD Jacobian. | REQ-C-02 |
 | TS-U-03 | `UStructuralOpsTest` — small fixed functions exercising each structural op (concatenation, gather with duplicate indices, indexed-assignment scatter, transpose, reshape, sum, mtimes); reconstruct the unrolled derivative from `y.dX`/`y.dX_location`/`y.dX_size` (asserting the C-2 interface shape) and compare against dense FD Jacobians. | REQ-C-03 |
 | TS-U-04 | `UPruneMatTest` — synthetic Gator structs (Index*, integer-valued Data*, sparse, empty fields) → prune → assert retained fields, classes (`Data*` stays double), values. B1 fixed → hard-assertion guard (`dataFieldsStayDouble`); no longer tagged. Plus the `referenced*` cases (issue #21, ADR-0010): the optional referenced-map drops the unread `Index*`, keeps a referenced (even empty) one, the unshrunk-table fallback, drops a wholly-unreferenced table, leaves `Data*` alone, and `emptyMap == 2-arg` keep-all. | REQ-C-05 |
@@ -216,7 +216,7 @@ than parallel new machinery:
 
 | Existing asset | Reused as |
 |----------------|-----------|
-| FD harness in `unit_tests/test_unarymath_rules.m` (perturbation, tolerance, singularity exclusion) | The unary-rule points/tolerance live in TS-U-01; a shared central-difference Jacobian/Hessian oracle `tests/helpers/fdcheck.m` is used by TS-U-02/03 (TS-U-01 and TS-I-01 keep equivalent inline FD). |
+| FD harness in `tests/legacy/test_unarymath_rules.m` (perturbation, tolerance, singularity exclusion) | The unary-rule points/tolerance live in TS-U-01; a shared central-difference Jacobian/Hessian oracle `tests/helpers/fdcheck.m` is used by TS-U-02/03 (TS-U-01 and TS-I-01 keep equivalent inline FD). |
 | `examples/jacobians/arrowhead/main.m` (ADiGator vs FD and compressed FD) | TS-S-01 case with the existing comparison promoted from printed output to an assertion; small `N` for PR-speed, large `N` nightly. |
 | `examples/jacobians/polydatafit/main.m` (FD comparison) | TS-S-01 assertion case. |
 | `examples/stiffodes/brusselator/main.m` (FD comparison) | TS-S-01 assertion case. |
@@ -357,7 +357,7 @@ an opt-in local / release run.
 ### 3.3 Conventions and policies
 
 - **Test layout:** new `tests/{unit,integration,system}` tree using
-  `matlab.unittest` classes; existing `unit_tests/test_unarymath_rules.m`
+  `matlab.unittest` classes; existing `tests/legacy/test_unarymath_rules.m`
   is ported into TS-U-01 (keep the FD harness, wrap in test methods).
   Shared fixtures (small user functions, golden patch files) under
   `tests/fixtures`. All generation goes to `TestCase`-managed temp folders

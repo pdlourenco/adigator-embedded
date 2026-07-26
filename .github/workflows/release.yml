@@ -35,18 +35,19 @@ env:
   # Paths excluded from the curated distribution archive (space-separated,
   # repo-root-relative): test/bench/dev material and anything internal. What
   # STAYS in is the runtime set — the tool source (top-level adigator*.m, lib/,
-  # util/, embedding/), examples/, the user guide (docs/userguide), the contracts
+  # util/, embedding/), examples/, the user guide PDF and the reference-paper
+  # PDFs (docs/userguide, docs/papers, docs/thesis), the contracts
   # (docs/DESIGN.md), docs/README.md, CHANGELOG, and LICENSE. Stripped: the test
   # and bench harnesses; the dev-process docs (ROADMAP/CI_PLAN/REVIEW_CONTEXT/
-  # CONTRIBUTING/decisions ADRs); the ~2.5 MB of academic reference PDFs
-  # (docs/papers, docs/thesis); CLAUDE.md (agent rules); and the tooling dirs.
-  # `.git` never appears in a `git archive` stream. `docs/known-bugs` is
-  # gitignored (never tracked), so `git archive HEAD` already omits it; it is
-  # listed here belt-and-suspenders because it holds proprietary content that
-  # must never ship. Tune as needed.
+  # CONTRIBUTING/decisions ADRs); CLAUDE.md (agent rules); and the tooling dirs.
+  # The user-guide LaTeX SOURCE (.tex/.jpg/.bib/.sh) is stripped separately in
+  # the assembly step below — only the built PDF ships. `.git` never appears in
+  # a `git archive` stream. `docs/known-bugs` is gitignored (never tracked), so
+  # `git archive HEAD` already omits it; it is listed belt-and-suspenders
+  # because it holds proprietary content that must never ship. Tune as needed.
   ARCHIVE_EXCLUDES: >-
-    tests unit_tests bench CLAUDE.md .github .claude
-    docs/analyses docs/known-bugs docs/decisions docs/papers docs/thesis
+    tests bench CLAUDE.md .github .claude
+    docs/analyses docs/known-bugs docs/decisions
     docs/CI_PLAN.md docs/REVIEW_CONTEXT.md docs/ROADMAP.md docs/CONTRIBUTING.md
 
 jobs:
@@ -99,6 +100,9 @@ jobs:
           # no tooling/VCS file ships regardless of the exclude list above.
           find "${name:?}" -depth -name '.*' ! -name '.' ! -name '..' \
             -exec rm -rf {} +
+          # Ship the user guide as the built PDF only — drop its LaTeX source
+          # (.tex/.jpg/.bib/.sh); the reference-paper PDFs stay.
+          find "${name:?}/docs/userguide" -type f ! -name '*.pdf' -delete
           zip -qr "${name}.zip" "$name"
           tar -czf "${name}.tar.gz" "$name"
           # Re-run recovery: `gh release create` errors if the release already
