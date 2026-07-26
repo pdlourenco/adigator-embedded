@@ -109,9 +109,33 @@ jobs:
           # Ship the user guide as the built PDF only — drop its LaTeX source
           # (.tex/.jpg/.bib/.sh).
           find "${name:?}/docs/userguide" -type f ! -name '*.pdf' -delete
-          # Surface a top-level README in the dist (the repo keeps it under
-          # docs/), so an unpacked archive shows a readme, not just Contents.m.
-          cp "${name:?}/docs/README.md" "${name:?}/README.md"
+          # Surface a top-level README so the unpacked dist shows a readme, not
+          # just Contents.m. Generated (not a copy of docs/README.md, whose
+          # relative links resolve from docs/ and would break at the root and
+          # point at stripped dev docs); it links only to dist-present paths.
+          cat > "${name:?}/README.md" <<'EOF'
+          # ADiGator-embedded
+
+          Embedded-focused fork of ADiGator — source-transformation automatic
+          differentiation for MATLAB, producing derivative files that code-generate
+          to embedded C (MATLAB Coder / Embedded Coder).
+
+          Add the toolbox to your path with `startupadigator`, then use
+          `adigatorGenJacFile`, `adigatorGenHesFile`, or `adigatorGenDerFile_embedded`.
+
+          Documentation in this distribution:
+
+          - **User guide (PDF):** `docs/userguide/ADiGatorUserGuide.pdf`
+          - **Overview, options, embed modes, citation:** `docs/README.md`
+          - **Architecture + binding contracts:** `docs/DESIGN.md`
+          - **Release notes / changelog:** `CHANGELOG.md`
+          - **Worked examples:** `examples/`
+
+          Licensed under the GNU GPL v3 (`LICENSE`). Upstream ADiGator is
+          © Matthew J. Weinstein and Anil V. Rao; the embedded-fork additions are
+          © Pedro Lourenço and GMV. See `docs/README.md` for attribution and the
+          ADiGator citation.
+          EOF
           zip -qr "${name}.zip" "$name"
           tar -czf "${name}.tar.gz" "$name"
           # Re-run recovery: `gh release create` errors if the release already
