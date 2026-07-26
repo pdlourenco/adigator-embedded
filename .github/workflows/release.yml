@@ -35,19 +35,22 @@ env:
   # Paths excluded from the curated distribution archive (space-separated,
   # repo-root-relative): test/bench/dev material and anything internal. What
   # STAYS in is the runtime set — the tool source (top-level adigator*.m, lib/,
-  # util/, embedding/), examples/, the user guide PDF and the reference-paper
-  # PDFs (docs/userguide, docs/papers, docs/thesis), the contracts
-  # (docs/DESIGN.md), docs/README.md, CHANGELOG, and LICENSE. Stripped: the test
-  # and bench harnesses; the dev-process docs (ROADMAP/CI_PLAN/REVIEW_CONTEXT/
-  # CONTRIBUTING/decisions ADRs); CLAUDE.md (agent rules); and the tooling dirs.
-  # The user-guide LaTeX SOURCE (.tex/.jpg/.bib/.sh) is stripped separately in
-  # the assembly step below — only the built PDF ships. `.git` never appears in
-  # a `git archive` stream. `docs/known-bugs` is gitignored (never tracked), so
-  # `git archive HEAD` already omits it; it is listed belt-and-suspenders
-  # because it holds proprietary content that must never ship. Tune as needed.
+  # util/, embedding/), examples/, the user guide PDF (docs/userguide), the
+  # contracts (docs/DESIGN.md), docs/README.md, CHANGELOG, and LICENSE. Stripped:
+  # the test and bench harnesses; the dev-process docs (ROADMAP/CI_PLAN/
+  # REVIEW_CONTEXT/CONTRIBUTING/decisions ADRs); CLAUDE.md (agent rules); the
+  # tooling dirs; and the third-party reference PUBLICATIONS (docs/papers,
+  # docs/thesis) — publisher-copyrighted works (ACM TOMS, AIAA, a dissertation)
+  # that this fork may not redistribute inside its release; the README carries
+  # their citation/DOIs and points at the source repo instead. The user-guide
+  # LaTeX SOURCE (.tex/.jpg/.bib/.sh) is stripped separately in the assembly step
+  # below — only the built PDF ships. `.git` never appears in a `git archive`
+  # stream. The proprietary GMV reports under `docs/analyses` are gitignored
+  # per-file (never tracked), so `git archive HEAD` already omits them;
+  # `docs/analyses` is also excluded outright belt-and-suspenders. Tune as needed.
   ARCHIVE_EXCLUDES: >-
     tests bench CLAUDE.md .github .claude
-    docs/analyses docs/known-bugs docs/decisions
+    docs/analyses docs/decisions docs/papers docs/thesis
     docs/CI_PLAN.md docs/REVIEW_CONTEXT.md docs/ROADMAP.md docs/CONTRIBUTING.md
 
 jobs:
@@ -57,11 +60,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate tag ↔ CHANGELOG (the gate)
+      - name: Validate tag ↔ CHANGELOG ↔ source version (the gate)
         run: |
           version="${GITHUB_REF_NAME#v}"
+          # --source-file cross-checks the tag against adigator.m's
+          # `version = '…'` constant, so a tag can't disagree with the source.
           python3 .github/scripts/release_changelog.py validate \
-            --changelog "$CHANGELOG_PATH" --version "$version"
+            --changelog "$CHANGELOG_PATH" --version "$version" \
+            --source-file adigator.m
 
       - name: Extract release notes from the CHANGELOG
         run: |
@@ -101,8 +107,11 @@ jobs:
           find "${name:?}" -depth -name '.*' ! -name '.' ! -name '..' \
             -exec rm -rf {} +
           # Ship the user guide as the built PDF only — drop its LaTeX source
-          # (.tex/.jpg/.bib/.sh); the reference-paper PDFs stay.
+          # (.tex/.jpg/.bib/.sh).
           find "${name:?}/docs/userguide" -type f ! -name '*.pdf' -delete
+          # Surface a top-level README in the dist (the repo keeps it under
+          # docs/), so an unpacked archive shows a readme, not just Contents.m.
+          cp "${name:?}/docs/README.md" "${name:?}/README.md"
           zip -qr "${name}.zip" "$name"
           tar -czf "${name}.tar.gz" "$name"
           # Re-run recovery: `gh release create` errors if the release already

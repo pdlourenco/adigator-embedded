@@ -15,7 +15,7 @@ below); it is not a patch of upstream 1.x.
      workflow (.github/workflows/release.yml) requires this section to be empty
      and the new version to have its own dated section below. -->
 
-## [2.0] — 2026-07-11
+## [2.0] — 2026-07-26
 
 First release of the embedded fork. Everything below is new relative to the
 upstream 1.x baseline; the core source-transformation differentiation algorithm
@@ -121,6 +121,6 @@ documented workaround — none produces an incorrect derivative silently.
 ### Attribution
 
 Preserves the upstream copyright (© Matthew J. Weinstein and Anil V. Rao) and the
-GNU GPL v3; adds the fork's contributions (© GMV / Pedro Lourenço).
+GNU GPL v3; adds the fork's contributions (© Pedro Lourenço and GMV).
 
 [2.0]: https://github.com/pdlourenco/adigator-embedded/releases/tag/v2.0

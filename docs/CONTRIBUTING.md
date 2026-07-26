@@ -147,18 +147,22 @@ up-to-date `master`:
    ```
 
 2. **Commit** the CHANGELOG on a PR, review, and merge to `master` as usual.
-3. **Tag and push** the merge commit:
+3. **Tag a green `master`.** Tag the merge commit whose CI has passed (the
+   workflow does *not* check CI status — tagging a red or arbitrary commit still
+   publishes, so this is your responsibility), then push the tag:
 
    ```bash
    git tag vX.Y && git push origin vX.Y
    ```
 
-The workflow then re-validates the tag ↔ CHANGELOG (fails loud, no release, if
-the `[X.Y]` section is missing/undated or `[Unreleased]` is non-empty), extracts
-the `[X.Y]` section as the release body, and publishes the GitHub release with a
-curated runtime-distribution archive (`*-dist.zip`/`.tar.gz`) attached. If a run
-half-completes (release created, asset upload failed), delete the partial
-release and re-push the tag before re-running.
+The workflow then re-validates the tag against the CHANGELOG **and** against
+`adigator.m`'s `version = '…'` constant (fails loud, no release, if the `[X.Y]`
+section is missing/undated, `[Unreleased]` is non-empty, or the source version
+disagrees), extracts the `[X.Y]` section as the release body, and publishes the
+GitHub release with a curated runtime-distribution archive
+(`*-dist.zip`/`.tar.gz`) attached. If a run half-completes (release created,
+asset upload failed), delete the partial release and re-push the tag before
+re-running.
 
 ## Two-session authoring / review workflow
 

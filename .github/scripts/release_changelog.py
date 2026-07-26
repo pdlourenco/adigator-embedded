@@ -60,6 +60,12 @@ UNRELEASED_HEADING = re.compile(r"^##\s+\[Unreleased\]\s*$", re.IGNORECASE)
 TOP_LEVEL_HEADING = re.compile(r"^##\s")
 SUBSECTION_HEADING = re.compile(r"^#{3,}\s")  # ### / #### stubs — not entries
 HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+# A markdown link-reference definition: "[2.0]: https://…". These live at the
+# bottom of the file and get pulled into the last section's body — strip them
+# from the extracted release notes (they render as nothing on GitHub).
+LINK_DEF = re.compile(r"^\[[^\]]+\]:\s+\S+")
+# The fork's version constant: `version = '2.0';` in adigator.m (single quotes).
+SOURCE_VERSION = re.compile(r"^\s*version\s*=\s*'([^']+)'")
 
 
 def _read(path: str) -> list[str]:
@@ -109,8 +115,29 @@ def _unreleased_entries(body: list[str]) -> list[str]:
     ]
 
 
-def cmd_validate(path: str, version: str) -> int:
+def _source_version(source_file: str) -> str:
+    """The `version = '…'` constant from the tool source (e.g. adigator.m)."""
+    for line in _read(source_file):
+        m = SOURCE_VERSION.match(line)
+        if m:
+            return m.group(1)
+    sys.exit(
+        f"error: no `version = '…'` constant found in {source_file!r} "
+        f"(the release gate reads it to cross-check the tag)."
+    )
+
+
+def cmd_validate(path: str, version: str, source_file: str | None = None) -> int:
     lines = _read(path)
+
+    if source_file is not None:
+        src = _source_version(source_file)
+        if src != version:
+            sys.exit(
+                f"error: tag version {version!r} does not match the "
+                f"`version = '{src}'` constant in {source_file}. Bump the source "
+                f"version (or the tag) so they agree before tagging."
+            )
 
     idx = _find_version(lines, version)
     if idx is None:
@@ -141,8 +168,12 @@ def cmd_extract(path: str, version: str) -> int:
     idx = _find_version(lines, version)
     if idx is None:
         sys.exit(f"error: no `## [{version}] — ...` section found in {path}.")
-    body = "\n".join(_section_body(lines, idx)).strip("\n")
-    print(body)
+    body = _section_body(lines, idx)
+    # Drop a trailing run of blank lines and link-reference definitions (the
+    # `[2.0]: https://…` footer that follows the last section).
+    while body and (not body[-1].strip() or LINK_DEF.match(body[-1])):
+        body.pop()
+    print("\n".join(body).strip("\n"))
     return 0
 
 
@@ -153,10 +184,15 @@ def main() -> int:
         p = sub.add_parser(name)
         p.add_argument("--changelog", required=True, help="path to the CHANGELOG file")
         p.add_argument("--version", required=True, help="release version, no leading v")
+        if name == "validate":
+            p.add_argument(
+                "--source-file", default=None,
+                help="optional: a source file whose `version = '…'` constant "
+                     "must match the tag version (e.g. adigator.m)")
 
     args = parser.parse_args()
     if args.command == "validate":
-        return cmd_validate(args.changelog, args.version)
+        return cmd_validate(args.changelog, args.version, args.source_file)
     return cmd_extract(args.changelog, args.version)
 
 
