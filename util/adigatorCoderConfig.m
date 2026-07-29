@@ -5,9 +5,9 @@ function cfg = adigatorCoderConfig(varargin)
 % ADiGator codegen site uses to build an embedded ('l'/'i') derivative. Kept in
 % one place so the "strict everywhere" policy (issue #80) cannot drift across
 % the sites that consume it — tests/system/SCodegenTest, SRolledErtCodegenTest,
-% the Monte-Carlo tests/montecarlo/oracles/oracleCodegenEquivalence, and
-% bench/derivShowcaseC — and so an end user embedding a generated derivative can
-% ask for the same blessed config.
+% the Monte-Carlo tests/montecarlo/oracles/oracleCodegenEquivalence, and the
+% bench tools derivShowcaseC + loopboundPaddingPenalty — and so an end user
+% embedding a generated derivative can ask for the same blessed config.
 %
 %   cfg = adigatorCoderConfig()                       % strict ERT lib, compiles
 %   cfg = adigatorCoderConfig('GenCodeOnly', true)    % emit C only, no C compiler
@@ -37,6 +37,23 @@ p.parse(varargin{:});
 
 cfg = coder.config('lib', 'ecoder', true);    % strict Embedded Coder (ERT) target
 cfg.EnableDynamicMemoryAllocation = false;     % no malloc — embedded-target safe (#80)
+
+% Portable, deterministic embedded-C settings — the profile a real embedded
+% Embedded Coder target uses (validated against a reference embedded config;
+% #80). These are mostly the current defaults, set explicitly so the strict
+% profile is version-proof rather than relying on defaults that can shift.
+cfg.TargetLang             = 'C';              % C (not C++)
+cfg.TargetLangStandard     = 'C99 (ISO)';      % pin the C standard (default is 'Auto')
+cfg.CodeReplacementLibrary = 'None';           % portable ANSI — no target-specific replacements
+cfg.PurelyIntegerCode      = false;            % support floating point (derivatives are double)
+% Set SupportNonFinite explicitly to its (safe) default true — precisely because
+% it is the setting a shifted default would make MOST dangerous: a derivative can
+% legitimately produce Inf/NaN (e.g. 1/x, sqrt/log near 0), and a false here
+% generates code that ASSUMES finiteness, silently mis-computing those
+% (principle 1). A reference embedded config keeps it on too. A caller wanting a
+% leaner non-finite-off build overrides it explicitly.
+cfg.SupportNonFinite       = true;
+
 cfg.GenerateReport = false;                    % no HTML report under batch/CI
 cfg.GenCodeOnly = p.Results.GenCodeOnly;       % skip the C-compiler step when set
 end

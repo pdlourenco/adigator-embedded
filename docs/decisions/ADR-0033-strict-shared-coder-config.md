@@ -41,6 +41,18 @@ Embedded Coder config — and route every codegen site through it.
   = false`** (no `malloc`; an unbounded-varsize derivative now fails codegen as a
   *test failure*) + `GenerateReport=false`; a `GenCodeOnly` name/value for sites
   that assert ERT *acceptance* without a C toolchain (`SRolledErtCodegenTest`).
+- Plus the **portable, deterministic embedded-C profile** a real embedded
+  Embedded Coder target uses (cross-checked against a reference embedded config):
+  `TargetLang='C'`, `TargetLangStandard='C99 (ISO)'` (pinned, vs the `Auto`
+  default), `CodeReplacementLibrary='None'` (portable ANSI), `PurelyIntegerCode
+  =false` (derivatives are `double`). These are mostly the current defaults, set
+  **explicitly** so the strict profile is version-proof. `SupportNonFinite` is
+  also set explicitly to its (safe) default **`true`** — precisely because it is
+  the setting a shifted default would make *most* dangerous: a derivative can
+  legitimately produce Inf/NaN (`1/x`, `sqrt`/`log` near 0), and a `false` here
+  generates code that assumes finiteness, silently mis-computing those (Principle
+  1). A reference embedded config keeps it on; a lean non-finite-off build stays
+  an explicit caller opt-out.
 - All five sites consume it, so the strict policy has one source of truth and
   cannot drift. It is also **user-facing** (shipped in `util/`): the config an
   end user should hand `codegen` when embedding a generated derivative.
