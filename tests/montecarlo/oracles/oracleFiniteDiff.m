@@ -111,15 +111,6 @@ for j = 1:n
     om = mcEval(g.wrapper, 3, x0 - e); Gm = om{2};
     Hfd(:, j) = (Gp(:) - Gm(:)) / (2*h);
 end
-% Guard the FD reference itself: a non-finite Hfd (e.g. an overflow at a
-% perturbed point) would make closeEnoughFD's `Inf <= Inf` compare pass
-% vacuously -- a false pass on a principle-1 oracle. Skip such a (degenerate,
-% ill-conditioned) case rather than trust the reference.
-if ~all(isfinite(Hfd(:)))
-    skipped = true;
-    msg = 'non-finite FD-Hessian reference (ill-conditioned); skipped';
-    return;
-end
 [ok2, m2] = closeEnoughFD(H, Hfd, atol, rtol, 'hessian (vs grad)');
 
 pass = ok1 && ok2;
@@ -142,6 +133,23 @@ end
 
 %% ------------------------------------------------------------------- %%
 function [ok, msg] = closeEnoughFD(A, B, atol, rtol, what)
+% Compare a generated derivative A against an FD reference B.
+%
+% FAIL CLOSED on a non-finite REFERENCE (principle 1). The tolerance bound is
+% `|A-B| <= atol + rtol*|B|`; with an Inf in B that becomes `Inf <= Inf`, which
+% is TRUE -- so an overflowed reference would validate ANY finite generated
+% value, a vacuous pass on a value oracle. (NaN is already safe: comparisons
+% against NaN are false, so it fails closed.) Checked here, centrally, so every
+% caller is covered: the jacobian/gradient reference from fdJacobian, the
+% FD-of-f gradient reference, and the FD-of-gradient hessian reference -- the
+% last two being the two links of the chained FD-Hessian check, whose whole
+% principle-1 argument rests on the FD-of-f link being trustworthy.
+if ~all(isfinite(B(:)))
+    ok = false;
+    msg = sprintf(['%s FD-reference is non-finite (ill-conditioned / overflow ', ...
+        'at a perturbed point) - refusing to validate against it'], what);
+    return;
+end
 ok = isequal(size(A), size(B)) && ...
      all(abs(A(:)-B(:)) <= atol + rtol*abs(B(:)));
 if ok
