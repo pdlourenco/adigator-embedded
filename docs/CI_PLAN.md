@@ -413,3 +413,38 @@ follow-up.
   Linux runner suffices until an OS-specific issue appears (the historical
   filesep issues are covered by tests running through `fullfile`).
 - Testing the vectorized (GPOPS-II) mode beyond what the examples cover.
+
+### 3.6 Coverage floor (V&V release gate)
+
+Two coverage mechanisms, deliberately separate, for two purposes:
+
+- **PR-gate ratchet — `tests/ci_coverage.m`** (Phase 4). Runs the fast suites
+  (unit + integration) on base MATLAB, reports a *single aggregate* line rate
+  over `lib/ + util/ + embedding/`, and fails if it drops more than 0.5 pp
+  below `tests/coverage_baseline.txt`. Cheap, runs on every PR; catches gross
+  regressions early. Left unchanged.
+
+- **Release floor — `tests/ci_coverage_folders.m`** (ADR-0032, the
+  V&V-for-release gate). Runs the **full** deterministic suite
+  (unit + integration + system + montecarlo) in the `extended.yml`
+  `full-products` job — the only job with the licensed products (Optimization
+  Toolbox, MATLAB Coder) and the system/montecarlo runtime the PR gate omits —
+  and enforces a **per-folder no-regression ratchet**
+  (`tests/coverage_baseline_folders.txt`). The folders separate the
+  **derivative-correctness path** (`lib/@cada`, `lib/@cadastruct`,
+  `lib/cadaUtils`, `lib` orchestration — where a *wrong* derivative can
+  originate) from the downstream emitter (`util`, `embedding`), so a regression
+  on the correctness path can never be masked by a rise elsewhere. Enforced
+  post-merge, not on the PR, so the gate sees the real (full-suite,
+  licensed-product) numbers while the PR gate stays fast.
+
+The correctness-path buckets start baselined at their *current* (low) levels —
+the ratchet only forbids backsliding. Their targets are **raised as the value
+oracles land** (#38 FD-Hessian oracle, #103 option×operation oracle matrix),
+driven by the shipped-surface overload inventory
+(`docs/vv/cada-surface-inventory.md`), which classifies every `@cada` /
+`@cadastruct` overload as supported / guarded-unsupported / dead so the floor's
+denominator is the *shipped* surface, not raw lines. Coverage is **necessary,
+not sufficient**: a covered line can still return a wrong value, which is why
+this floor is a ratchet under the value oracles, not a correctness claim on its
+own. Cross-validation of the derivatives themselves is REQ-T-09 (TS-S-04).

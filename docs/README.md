@@ -77,6 +77,7 @@ Full reference: [`adigatorOptions.m`](../adigatorOptions.m).
 | [`CI_PLAN.md`](CI_PLAN.md) | CI strategy + requirement/test traceability |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | contributor mechanics, pre-push review, ADR policy |
 | [`decisions/`](decisions/) | architecture decision records |
+| [`vv/`](vv/) | verification & validation working notes (e.g. the shipped-surface overload inventory behind the coverage floor) |
 | reference publications | the original ADiGator papers (TOMS, CALGO), the AIAA-GNC GPOPS-II paper, and M. J. Weinstein's PhD dissertation — publisher-copyrighted third-party works, kept in the [source repository](https://github.com/pdlourenco/adigator-embedded/tree/master/docs) (`docs/papers/`, `docs/thesis/`), **not bundled in the release archive**. See [Citing ADiGator](#citing-adigator). |
 
 ## Requirements

@@ -21,6 +21,9 @@ slprj/
 *.mexmaca64
 *.mexmaci64
 
+# CI test-result + coverage artifacts (ci_coverage*.m, run-tests JUnit/Cobertura).
+results/
+
 # Editor / MATLAB autosave cruft.
 *.asv
 
