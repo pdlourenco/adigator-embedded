@@ -83,6 +83,16 @@ separate from the untouched PR-gate ratchet.
   merge, not on the PR. That is the accepted trade for keeping the PR gate fast
   and for measuring the *real* (full-suite, licensed-product) numbers; the
   maintainer chose this enforcement point explicitly.
+- **The "extra pass is affordable" is now a measured claim.** On the first
+  post-merge run the coverage step took **~19 min** — longer than the job's
+  integration + system + Monte-Carlo steps *combined* (~17 min) — taking the
+  `full-products` job from a historical **3–11 min to ~37 min**. The cost is the
+  instrumented re-run of the whole suite (the plugin must own execution, and it
+  also runs `unit`, which the job's explicit steps do not). Affordable only
+  because the job is per-merge, not per-PR. The escape hatch, if that ~37 min
+  ever bites, is to harvest coverage from the existing `run-tests` steps'
+  `code-coverage-cobertura` output and merge the per-suite Cobertura reports
+  rather than re-run under instrumentation — not done now (premature).
 - **A single tolerance, not stacked margins.** Even on one machine with fixed
   montecarlo seeds, the correctness-path buckets show ~0.3–0.6 pp run-to-run
   jitter: the set of `@cada`/`@cadastruct` files a run *instruments* shifts with

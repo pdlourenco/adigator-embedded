@@ -448,3 +448,17 @@ denominator is the *shipped* surface, not raw lines. Coverage is **necessary,
 not sufficient**: a covered line can still return a wrong value, which is why
 this floor is a ratchet under the value oracles, not a correctness claim on its
 own. Cross-validation of the derivatives themselves is REQ-T-09 (TS-S-04).
+
+**Measured cost.** The floor is a deliberate second, instrumented pass over the
+full suite, and its cost is now measured, not assumed: on the first post-merge
+run the coverage step took **~19 min** on its own — longer than the job's
+integration + system + Monte-Carlo steps *combined* (~17 min) — taking the
+`full-products` job from its historical **3–11 min to ~37 min**. That is the
+price of re-running the whole suite (unit + integration + system + montecarlo)
+under coverage instrumentation rather than reusing the earlier steps'
+execution. It is affordable *because* the job is post-merge (per-merge, not
+per-PR) — the fast PR gate is untouched. If that ~37 min becomes a problem, the
+lever is to measure coverage from the existing `run-tests` steps'
+`code-coverage-cobertura` output (as `ci.yml` does) and merge the per-suite
+Cobertura reports, instead of a separate instrumented re-run — deferred as
+premature until the cost actually bites.
