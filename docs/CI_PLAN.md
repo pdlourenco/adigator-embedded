@@ -71,7 +71,7 @@ Constraints that shape the plan (verified against the codebase):
 | REQ-T-02 | **Output conventions.** Wrapper outputs shall conform to `adigatorDerivativeConventions.m` / DESIGN §Contracts C-1: gradient of scalar f: Rⁿ→R is n×1; Jacobian of f: Rⁿ→Rᵐ is m×n; Hessian of scalar f is n×n; vector-function Hessian is [m·n × n] with row = (x₁−1)·m + y; **higher order (order k>2, C-1/ADR-0020)** the `[M·Nᵏ⁻¹ × N]` fold (row = i + (j₁−1)·M + … + (j_{k−1}−1)·M·Nᵏ⁻², col = j_k) *(planned, R22)*; generalized shapes per the conventions table. The output **form** (`matrix` vs `csc`/`*CSC`) and canonical **names** (C-6) are governed by REQ-T-11. | Asserted shape and element placement for every (input shape × output shape × density) combination; the order-k fold's shape + placement per stage, and the Decision-6 host utilities `dvp(D,V)` (contracts one derivative order — directional-derivative / Taylor-step reconstruction — permute-free for a single direction) and `unfold(D)` (lossless N-D view ↔ the flat fold) verified against the fold *(planned, R22)*. |
 | REQ-T-03 | **Sparsity metadata consistency.** The exported per-role CSC pattern (`output.{Jacobian\|Gradient\|Hessian}CSC`, the sole sparse-pattern representation — [ADR-0030](decisions/ADR-0030-csc-sparse-pattern-contract.md), #192) shall be a superset of the numerically nonzero pattern and consistent with the wrapper's element placement, and shall satisfy the CSC invariants (monotone `ColPtr` with `ColPtr(1)==1`/`ColPtr(end)==Nnz+1`, strictly-increasing per-column `RowIdx`, unique in-range locations, empty-column pointers). | Superset + placement via `adigatorCSCToSparse` reconstruction equalling the matrix-mode derivative at random test points, plus the CSC invariant checks (TS-U-20/TS-I-25). |
 | REQ-T-04 | **Embeddability.** With `embed_mode='l'` the tool-generated code shall introduce no `global` declarations and no runtime `load`; with `embed_mode='i'` additionally no `.mat` file and no `coder.load` (a *user's own* construct may pass through per ADR-0023 below). All three modes shall return numerically identical results. Per ADR-0021 (C-4), `'l'` is **deprecated** — it shall emit a one-time deprecation warning while remaining numerically identical — and the inline **`split_data`** two-file form shall hold the same invariants (both derivative and data files are source; no `global`/`load`/`.mat`/`coder.load`) *(planned, R24)*. Per ADR-0023 rev 2026-07-04 (C-4), a user's own cells / `load` / `global` in the differentiated source shall pass through **verbatim (as classic) with a `adigator:embed:unsupportedConstruct` warning** — embed is no more restrictive than classic; generation continues, the embed result is numerically identical to classic (B21 reclassified warn-and-allow; B22-in-embed cells generate), and constructs classic itself rejects still error from the core. | Static text checks on generated files + cross-mode numeric equality (exact, same arithmetic); the embed source-construct gate **warns and still generates** on a user's cells/`load`/`global` (construct emitted verbatim, embed-vs-classic AbsTol 0) while classic stays silent; split-form static + cross-mode checks and the `'l'` deprecation warning *(planned, R24)*. |
-| REQ-T-05 | **Code-generation compatibility.** Files generated in modes 'l' and 'i' shall pass MATLAB Coder `codegen` (lib target) without errors and the MEX/lib shall reproduce MATLAB results. Where MATLAB Test is licensed (R2023a+), the equivalence check is performed via `matlabtest.coder.TestCase` (Build→Execute→`verifyExecutionMatchesMATLAB`), with the hand-rolled `codegen`+compare path retained as the Coder-only / floor-release fallback (ADR-0014). | `codegen` exit success; MEX output equals MATLAB output to 1e-12. License-gated. |
+| REQ-T-05 | **Code-generation compatibility.** Files generated in modes 'l' and 'i' shall pass MATLAB Coder `codegen` (lib target) without errors and the MEX/lib shall reproduce MATLAB results. Where MATLAB Test is licensed (R2023a+), the equivalence check is performed via `matlabtest.coder.TestCase` (Build→Execute→`verifyExecutionMatchesMATLAB`), with the hand-rolled `codegen`+compare path retained as the Coder-only / floor-release fallback (ADR-0014). | `codegen` exit success; MEX output equals MATLAB output to 1e-12. License-gated — and **not verifiable on hosted CI**: Coder is unlicensed there, so every codegen test is *Filtered* inside a green job. **Verified by a LOCAL run only** (§3.2 "CI cannot verify codegen"). |
 | REQ-T-06 | **Reproducibility.** Regeneration with identical inputs and options shall produce functionally identical files; `overwrite=0` shall refuse to clobber; user-specified `path` shall receive all generated artifacts and nothing shall be left in the calling directory. | Byte comparison modulo timestamps; file-location assertions. |
 | REQ-T-07 | **Robustness / hygiene.** Invalid inputs and mid-transformation errors shall raise clean errors, restore the MATLAB path, close all file handles, and leave no stray globals. | `path()` before == after; `fopen('all')` empty delta; `who('global')` delta empty after failure injection. |
 | REQ-T-08 | **Example health.** All shipped examples shall run headless without error (toolbox-gated where applicable). | Each example `main.m` completes; spot numeric checks. |
@@ -165,6 +165,11 @@ and compare. Run on every pull request (slower, still base MATLAB).
 
 Validate the tool against user-level intent. Run nightly and on `master`
 merges; license-gated jobs skip cleanly when products are unavailable.
+
+> **On hosted CI the Coder-gated rows below never actually run** — Coder and
+> Embedded Coder are unlicensed there, so TS-S-02 / TS-S-06 and the codegen
+> halves of TS-S-03/04/05 are *Filtered* inside a green job. They are verified by
+> a **local** run only; see §3.2 "CI cannot verify codegen".
 
 | ID | Test | Validates | Gate |
 |----|------|-----------|------|
@@ -347,13 +352,66 @@ an opt-in local / release run.
   be on the license tied to the token.
 - If the token cannot cover Coder, run TS-S-02 on a self-hosted runner with
   a local install, kept in the nightly workflow only.
-- *Observed on hosted public-repo runners:* requesting `products:
-  MATLAB_Coder` does not yield `codegen` (`license('test','MATLAB_Coder')`
-  is false, `which codegen` empty), while `coder.load`/`coder.const`
-  resolve in base MATLAB regardless. Consequently TS-I-02's numeric
-  cross-mode checks run everywhere, but TS-S-02 stays assumption-filtered
-  until run on a runner whose license actually includes Coder (MLM token
-  or self-hosted).
+
+#### CI cannot verify codegen — local runs are required (binding)
+
+**Nothing that compiles executes on GitHub-hosted runners.** Measured
+2026-07-29 in a dedicated probe (`ubuntu-latest` / `release: latest`,
+`products: MATLAB_Coder Embedded_Coder` — note `extended.yml`'s `full-products`
+job requests only `Optimization_Toolbox MATLAB_Coder`): both products **install**
+(`ver` lists "MATLAB Coder" and "Embedded Coder") but **neither is licensed** —
+`license('test','MATLAB_Coder')` and `license('test','RTW_Embedded_Coder')` are
+both **0**, and a strict `coder.config('lib','ecoder',true)` build of a trivial
+function fails. **Adding products to the `products:` list does not fix this.**
+
+Two calibrations:
+
+- Base-MATLAB features still work: `coder.load`/`coder.const` resolve, so
+  TS-I-02's numeric cross-mode checks *do* run everywhere. It is specifically
+  compilation that does not.
+- Because the product installs, **`which codegen` now resolves** on a hosted
+  runner — so a `which`-only probe is no longer evidence of Coder. That is why
+  every gate in the suite ANDs `license('test','MATLAB_Coder')`; do not
+  "simplify" one to a `which` check.
+
+Observed on a real `extended.yml` run (`full-products` job, run `30467810852`,
+2026-07-29): every codegen test that reached its license gate was *Filtered by
+assumption*, each with its own diagnostic — `SCodegenTest` (all methods,
+including the ERT lib builds; *"TS-S-02 requires MATLAB Coder"*),
+`SCodegenShowcaseTest/cellsCompileAndMatch` (*"MATLAB Coder not available"*),
+`SLoopboundPaddingTest` (*"MATLAB Coder / Embedded Coder not available"* — it
+gates on **both**, and its ROM assertions need a `gcc`/`size` toolchain on top),
+and `MCSmokeTest/codegenEquivalenceIsClean` (*"codegen-equivalence oracle
+requires MATLAB Coder"*). **0 failed; the job was green.** `SRolledErtCodegenTest`
+(TS-S-06) — the dedicated REQ-T-10 ERT guard — gates its whole class on
+`license('test','MATLAB_Coder') && license('test','RTW_Embedded_Coder')`, so it
+cannot verify ERT acceptance on a hosted runner either. (Per-run pass/skip counts
+are deliberately not quoted here: they shift as test methods are added, so read
+the job log rather than trusting a number in this document.)
+
+Consequences, which are binding for anyone reading a green `Extended` run:
+
+- **`REQ-T-05` (compiled-output equivalence) and `REQ-T-10` (ERT acceptance) are
+  NOT verified by CI.** Neither is the strict shared codegen config
+  (`adigatorCoderConfig`, ADR-0033), the compiled
+  footprint / stack measurements (R17c, `measureErtFootprint`), or the born-ERT
+  Monte-Carlo codegen oracle (#64). A green `Extended` run says nothing about
+  any of them.
+- **A green job is not evidence of codegen health** — the skips are *Filtered*,
+  which is visible in the log but does not fail anything. Always check the job
+  log for `Filtered by assumption` before claiming a codegen property holds.
+- **Validation of any codegen/embeddability property must be a LOCAL run** on a
+  machine with licensed MATLAB Coder + Embedded Coder (and, for footprint/stack,
+  a standalone `gcc`/`size` toolchain). See
+  [`CONTRIBUTING.md`](CONTRIBUTING.md) §"Local development & pre-push CI": a
+  change touching the generators, the embed pipeline, or the codegen config must
+  be validated locally and the result recorded in the PR.
+- Moving this into CI needs a **MathWorks batch-licensing token whose license
+  includes Coder + Embedded Coder**, or a **self-hosted runner** with a local
+  install. Until then the local run *is* the gate; contrast MATLAB **Test**,
+  which *is* licensed on hosted public-repo runners (`products: MATLAB_Test`,
+  `license('test','MATLAB_Test') == 1`) and so can host the #64 vendor-framework
+  and generated-code-coverage work.
 
 ### 3.3 Conventions and policies
 
