@@ -76,6 +76,14 @@ Embedded Coder config — and route every codegen site through it.
   gating by the *property* (stack is O(n), caught via an n-vs-2n scaling check or
   an absolute bound) — tracked as **#80a-2**. That is what turns "codegens" into
   "embeddable".
+- **The bench baselines were measured under the *old* config.** `derivShowcaseC`
+  and `loopboundPaddingPenalty` now build with the strict profile (`C99` pinned,
+  `CodeReplacementLibrary='None'`, dynamic allocation off) — and the fifth site
+  was previously the laxest copy. The committed `bench/SHOWCASE.md` / guide
+  footprint tables were honest under the old config, so nothing needs
+  regenerating now; but **the next regeneration may shift ROM/stack values, and
+  that delta must be attributed to this config change, not read as a code
+  regression.**
 - **The `× slim_embed` axis is transitional.** Several consumers still sweep
   `slim=false`/`true` (`SCodegenTest` `FullData`/`SlimData`, the CI_PLAN two-point
   rows). #80b removes `slim_embed` as a user option (always-on + automatic
