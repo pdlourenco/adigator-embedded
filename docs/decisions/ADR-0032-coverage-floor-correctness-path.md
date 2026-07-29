@@ -83,18 +83,20 @@ separate from the untouched PR-gate ratchet.
   merge, not on the PR. That is the accepted trade for keeping the PR gate fast
   and for measuring the *real* (full-suite, licensed-product) numbers; the
   maintainer chose this enforcement point explicitly.
-- **Baseline is a conservative floor, not a measured peak.** Even on one
-  machine with fixed montecarlo seeds, the correctness-path buckets show
-  ~0.3–0.6 pp run-to-run jitter: the set of `@cada`/`@cadastruct` files a run
-  *instruments* shifts with which overloads that run happens to touch (the
-  stable emitter buckets `embedding`/`util`/`cadaUtils` do not move). So
-  `'write'` records each rate **rounded down to 2 decimals**, placing the floor
-  at/below the observed minimum, and `TOL = 0.01` adds a further point — ordinary
-  jitter never trips the ratchet; only a real backslide does. Cross-release RNG
-  and line-count shifts are the same phenomenon at larger amplitude: the baseline
-  is authoritative for the release the Extended `full-products` job runs
-  (`latest`); regenerate (`'write'`) when the pinned release moves. Any mismatch
-  fails **loud** (a `regression`/`missingBucket` error), never a silent green.
+- **A single tolerance, not stacked margins.** Even on one machine with fixed
+  montecarlo seeds, the correctness-path buckets show ~0.3–0.6 pp run-to-run
+  jitter: the set of `@cada`/`@cadastruct` files a run *instruments* shifts with
+  which overloads that run happens to touch (the stable emitter buckets
+  `embedding`/`util`/`cadaUtils` do not move). The baseline stores the **exact**
+  measured rate and the ratchet tolerates a single `TOL = 0.01` — one predictable
+  ~1 pp guard, sized above the observed jitter, so ordinary jitter never trips it
+  while a real ≳1 pp backslide does. (An earlier draft *also* rounded the floor
+  down, stacking ~2 pp of slack on precisely the buckets this ADR calls
+  correctness-critical — dropped in review: two mitigations where one suffices
+  weakens the guard.) The baseline is measured on, and authoritative for, the
+  release the Extended `full-products` job runs (`latest`); regenerate
+  (`'write'`) when the pinned release moves. Any mismatch fails **loud** (a
+  `regression`/`missingBucket`/`noMatch` error), never a silent green.
 - Two coverage scripts now coexist (`ci_coverage.m` aggregate PR-gate,
   `ci_coverage_folders.m` per-folder release floor). They have different scopes
   and different jobs; the small duplication is deliberate to keep each simple.

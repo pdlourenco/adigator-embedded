@@ -62,7 +62,7 @@ runner.addPlugin(CodeCoveragePlugin.forFolder( ...
     'IncludingSubfolders', true, 'Producing', CoberturaFormat(covfile)));
 runner.run(suite);
 
-measured = bucketCoverage(covfile);
+measured = bucketCoverage(covfile, root);
 
 basefile = fullfile(thisDir,'coverage_baseline_folders.txt');
 
@@ -107,17 +107,19 @@ fprintf('ci_coverage_folders: all %d folders hold their floor (tol %.3f).\n', ..
 end
 
 % ------------------------------------------------------------------------
-function cov = bucketCoverage(covfile)
+function cov = bucketCoverage(covfile, root)
 % Parse the Cobertura XML and aggregate covered/total lines into the 6
 % buckets. Returns a struct keyed by canonical bucket id, each with fields
-% .cov .tot .rate.
+% .cov .tot .rate. `root` is the repo root, used to relativize filenames so
+% bucketing does not depend on whether MATLAB emitted repo-relative or
+% absolute Cobertura paths (or on the caller's cwd).
 doc = xmlread(covfile);
 classes = doc.getElementsByTagName('class');
 acc = containers.Map('KeyType','char','ValueType','any');
 for c = 0:classes.getLength-1
     cls = classes.item(c);
     fn = char(cls.getAttribute('filename'));
-    key = bucketOf(fn);
+    key = bucketOf(fn, root);
     if isempty(key); continue; end
     % Count only the class-level <lines>'s direct <line> children. Scoping to
     % the direct child (not a getElementsByTagName('line') descendant query)
@@ -138,6 +140,14 @@ for c = 0:classes.getLength-1
     if tot == 0; continue; end
     if isKey(acc, key); v = acc(key); else; v = [0 0]; end
     acc(key) = v + [covered tot];
+end
+if isempty(keys(acc))
+    % Every file bucketed to '' — the Cobertura filenames did not have the
+    % expected lib/util/embedding shape (absolute path we failed to relativize,
+    % or a wrong cwd). Name the real cause rather than surfacing later as a
+    % misleading "baselined bucket X produced no coverage data".
+    error('ci_coverage_folders:noMatch', ...
+        'no coverage rows matched lib/util/embedding under %s (unexpected Cobertura filename shape or cwd)', root);
 end
 cov = struct();
 ks = keys(acc);
@@ -161,10 +171,14 @@ end
 end
 
 % ------------------------------------------------------------------------
-function key = bucketOf(fn)
-% Map a Cobertura filename (relative, backslash- or slash-separated) to a
-% canonical bucket id (a valid struct fieldname).
+function key = bucketOf(fn, root)
+% Map a Cobertura filename to a canonical bucket id (a valid struct
+% fieldname), or '' if outside the measured tree. Relativizes against `root`
+% first, so an absolute filename (`<root>/lib/@cada/x.m`) buckets the same as
+% a repo-relative one (`lib\@cada\x.m`) — the code does not depend on which
+% shape MATLAB emits.
 fn = strrep(fn, '\', '/');
+fn = erase(fn, strrep([root filesep], '\', '/'));  % absolute -> relative; no-op if already relative
 if startsWith(fn, 'lib/@cada/')
     key = 'lib_cada';
 elseif startsWith(fn, 'lib/@cadastruct/')
@@ -184,7 +198,10 @@ end
 
 % ------------------------------------------------------------------------
 function lbl = bucketLabel(key)
-% Human-facing folder path for a canonical bucket id.
+% Human-facing folder path for a canonical bucket id (display only). NOTE:
+% the orchestration bucket reads 'lib (orchestration)' here but is written to
+% the baseline file as plain 'lib' by bucketLabel2key; key2bucket inverts
+% that, so the two spellings are round-trip-safe — do not unify them naively.
 switch key
     case 'lib_cada';           lbl = 'lib/@cada';
     case 'lib_cadastruct';     lbl = 'lib/@cadastruct';
@@ -224,21 +241,17 @@ if fid < 0
 end
 cleaner = onCleanup(@() fclose(fid));
 fprintf(fid, '# Per-folder full-suite line-coverage FLOOR (ci_coverage_folders.m).\n');
-fprintf(fid, '# No-regression ratchet: each folder must hold its floor (tol in the script).\n');
-fprintf(fid, '# Values are the measured rate rounded DOWN to 2 decimals: the correctness-\n');
-fprintf(fid, '# path buckets (lib/@cada, lib/@cadastruct, lib) have ~0.3-0.6pp run-to-run\n');
-fprintf(fid, '# jitter (their instrumented-line set shifts with which overloads a run\n');
-fprintf(fid, '# touches), so the floor sits at/below the observed minimum, not the peak.\n');
-fprintf(fid, '# Regenerate with: ci_coverage_folders(''write''). Correctness-path floors are\n');
-fprintf(fid, '# RAISED as the #38/#103 value oracles land (re-run write to re-floor).\n');
+fprintf(fid, '# No-regression ratchet: each folder must hold its baselined rate within a\n');
+fprintf(fid, '# single tolerance TOL (in the script). Values are the exact measured rate on\n');
+fprintf(fid, '# the pinned release; one TOL (not a rounded floor *and* a tolerance) absorbs\n');
+fprintf(fid, '# the ~0.3-0.6pp run-to-run jitter on the correctness-path buckets (lib/@cada,\n');
+fprintf(fid, '# lib/@cadastruct, lib) — their instrumented-line set shifts with which\n');
+fprintf(fid, '# overloads a run touches. Regenerate with: ci_coverage_folders(''write'').\n');
+fprintf(fid, '# Correctness-path rates are RAISED as the #38/#103 value oracles land.\n');
 for i = 1:numel(order)
     k = order{i};
     if ~isfield(measured, k); continue; end
-    % Round the floor DOWN to 2 decimals: a floor must sit at/below the
-    % measured rate so ordinary run-to-run instrumentation jitter never trips
-    % the ratchet; only a real backslide should.
-    floorRate = floor(measured.(k).rate * 100) / 100;
-    fprintf(fid, '%-18s %.4f\n', bucketLabel2key(k), floorRate);
+    fprintf(fid, '%-18s %.4f\n', bucketLabel2key(k), measured.(k).rate);
 end
 end
 

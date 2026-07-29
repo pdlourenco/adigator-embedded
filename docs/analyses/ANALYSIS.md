@@ -608,6 +608,38 @@ rolled loop, F3 folded constant, and a horzcat control guarding the asymmetry),
 each generated through embed `'i'`, run, and matched to finite differences.
 B28 is a late sibling of the B17/B22 embedded-field-report family; ROADMAP R26.
 
+### 1.3g `@cadastruct` fallback-naming branch defects found via the V&V surface inventory (B29–B31)
+
+**B29–B31 — undefined variables / a typo on the rarely-taken `@cadastruct`
+derivative-naming branch (low; open, fail-loud).** Building the shipped-surface
+overload inventory (`docs/vv/cada-surface-inventory.md`) for the coverage-floor
+work (ADR-0032) surfaced three defects on the `RUNFLAG==2 && nameloc==0`
+fallback-naming branch of the `@cadastruct` concatenation / transpose overloads —
+the path taken when a struct-valued differentiated variable is
+concatenated/transposed at a print site that has no user-assigned name and must
+synthesise one. All three **fail loud** (they throw on an undefined variable, or
+never enter the guard); none is a silent wrong derivative, so principle 1 is not
+in play. They are 0%-covered because no current test drives that branch.
+
+- **B29 — `@cadastruct/vertcat.m:18`.** The `else` (nameloc≤0) arm builds the
+  fallback name with `sprintf(['cada',NDstr,'s%1.0f'],…NAMELOCS(yid,2))`, but
+  **`NDstr` is never assigned** in the function (the `@cada` overloads define
+  `NDstr = sprintf('%1.0f',ADIGATOR.DERNUMBER)`; this one does not) and **`yid`
+  is not in scope** (the variable is `y.id`; `yid` is only a `parseinput`-local
+  in a different workspace) → throws `Undefined variable` if reached.
+- **B30 — `@cadastruct/ctranspose.m:18`.** The identical fallback-name line with
+  the same undefined `NDstr`/`yid`; this file has no subfunctions at all.
+- **B31 — `@cadastruct/repmat.m:30`.** `EMTPYFLAG` typo for `EMPTYFLAG` — the
+  correct spelling appears two branches above, and `EMTPYFLAG` occurs exactly
+  once repo-wide.
+
+**Disposition.** Not fixed in the coverage-floor PR, which changes no `lib/`
+source (correct scope). Tracked as an open follow-up (spawned task); the fix is
+coupled to the #103 struct-op oracle fixtures, which will actually drive the
+branch and decide fix-vs-guard (if the branch proves unreachable from user code,
+a guard + comment is preferable to resurrecting it). Sibling of the B17/B22
+embedded-field-report struct-layer family. See §1.5.
+
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
 - `cadaunarymath.m` derivative-rule corrections (`asec`, `acsc`, `asecd`,
@@ -664,6 +696,9 @@ B28 is a late sibling of the B17/B22 embedded-field-report family; ROADMAP R26.
 | B27 (loopbound inner-loop exit derivative zeroed) | **Fixed** — the exit-variable union now extends to INNER runtime-bound loops. `lib/adigatorAssignOvermapScheme.m` records each inner loop's exit set (`INNEREXITCOUNTS` — assignments whose last use is after the loop, computed there because `LASTOCC` is final post-empty-eval but only partial in the overmap run), and `lib/adigatorForIterEnd.m` drops the `~PARENTLOC` gate and unions those exits (return-only; the outermost-only saved-object overwrite and `SAVE.FOR` slot numbering are untouched, so outermost generation stays byte-identical). Was: an inner runtime-bound loop's counter-indexed exit derivative was baked to a constant `y.dx = y.dx(Nmax)` gather reading a structurally-zero slot at `n<Nmax`, silently zeroing the gradient (§1.3e). Closes #120 as reading 2. Pinned by `ILoopboundTest` — `nestedRuntimeBoundInnerExitDerivative` (self-healed from the `KnownIssue` tripwire, swept over 4 truncation points) plus three hardening variants: `innerRuntimeBoundUnderFixedOuter`, `innerExitReadAfterEnclosingLoop` (the exit-also-outermost-save-target path), and `tripleNestedRuntimeBoundInnerExit` (depth-3). **Second order:** re-differentiating a loopbound file is now supported ([#173](https://github.com/pdlourenco/adigator-embedded/issues/173), [ADR-0028](../decisions/ADR-0028-second-order-loopbound.md)) — PR A (#176) made it fail-loud + slim-whitelisted the guard; PR B made the runtime-header/assert re-emission + exit-union derivative-level-agnostic, so a loopbound Hessian at n<Nmax matches the n-sized program (§1.3e). [#162](https://github.com/pdlourenco/adigator-embedded/issues/162). ROADMAP R28. |
 | B28 (numeric literal in a rolled-loop concat printed `.f`) | **Fixed** — `@cada/vertcat.m`'s loop-print (`ForVertcat`) remapped a `Num2Overloaded` literal (valid name, `id=[]`) through `cadaPrintReMap`, whose `~varID` rescue misfired for `[]` (`~[]` is an empty logical), so `cadafuncname([])` returned the spurious `'.f'` (`NAMES{[]}` is a zero-element CSL); `@cada/horzcat.m`'s `else` (skip the remap for numerics) is why row-concats never surfaced it — a latent upstream asymmetry (§1.3f). Fixed by porting the `else` into vertcat's two loop-print sites, repairing the `cadaPrintReMap` rescue (`isempty(varID) || ~varID`), and a `cadafuncname` chokepoint (`adigator:cadafuncname:emptyVarID`) that fails loud on an empty id (never fires across the 288-test `ci_local`). Pinned by `tests/integration/IConcatLoopLiteralTest.m` (F2 minimal loop + F3 folded constant + horzcat control, generated through embed `'i'`, run, FD-matched) ([#168](https://github.com/pdlourenco/adigator-embedded/issues/168)). A late sibling of the B17/B22 embedded-field-report family; ROADMAP R26. |
 | §1.3 math-doc conventions (D1) | **Fixed** — `adigatorDerivativeConventions.m` (the binding conventions file, CLAUDE.md §3) contradicted contract C-1: Hessian section `f: Rn -> Rm` (→ `R`), the Jacobian/Hessian size captions mislabeled `size(Gradient(f)) = [length(x) length(f)]` (Jacobian read n×m, contradicting C-1's m×n), and the `dfn`/`dfm` row typo. Corrected to match C-1, plus the same defects copied into `adigatorGenJacFile`/`adigatorGenHesFile` — text-only, no behavioural change. The §1.3 "summary block inconsistent" claim was **retracted** (it is a valid generalization of the table). ([#118](https://github.com/pdlourenco/adigator-embedded/issues/118)) ROADMAP R28. |
+| B29 (`@cadastruct/vertcat.m:18` undefined `NDstr`/`yid`) | **Open (fail-loud)** — the `nameloc≤0` fallback-name arm references `NDstr` (never assigned in the function) and `yid` (out of scope; `y.id` is the variable) → throws if reached (§1.3g). Not fixed in the coverage-floor PR (no `lib/` change); follow-up coupled to the #103 struct-op oracle fixtures that drive the branch (fix-vs-guard TBD). |
+| B30 (`@cadastruct/ctranspose.m:18` undefined `NDstr`/`yid`) | **Open (fail-loud)** — identical fallback-name defect, same undefined `NDstr`/`yid` (file has no subfunctions) (§1.3g). Follow-up with B29. |
+| B31 (`@cadastruct/repmat.m:30` `EMTPYFLAG` typo) | **Open (fail-loud)** — `EMTPYFLAG` misspelling of `EMPTYFLAG` (correct spelling two branches above; the typo occurs once repo-wide) (§1.3g). Follow-up with B29. |
 
 ---
 

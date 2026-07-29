@@ -1,14 +1,15 @@
 # Per-folder full-suite line-coverage FLOOR (ci_coverage_folders.m).
-# No-regression ratchet: each folder must hold its floor (tol in the script).
-# Values are the measured rate rounded DOWN to 2 decimals: the correctness-
-# path buckets (lib/@cada, lib/@cadastruct, lib) have ~0.3-0.6pp run-to-run
-# jitter (their instrumented-line set shifts with which overloads a run
-# touches), so the floor sits at/below the observed minimum, not the peak.
-# Regenerate with: ci_coverage_folders('write'). Correctness-path floors are
-# RAISED as the #38/#103 value oracles land (re-run write to re-floor).
-embedding          0.9100
-util               0.7400
-lib/cadaUtils      0.8600
-lib                0.5900
-lib/@cada          0.4000
-lib/@cadastruct    0.1600
+# No-regression ratchet: each folder must hold its baselined rate within a
+# single tolerance TOL (in the script). Values are the exact measured rate on
+# the pinned release; one TOL (not a rounded floor *and* a tolerance) absorbs
+# the ~0.3-0.6pp run-to-run jitter on the correctness-path buckets (lib/@cada,
+# lib/@cadastruct, lib) — their instrumented-line set shifts with which
+# overloads a run touches. Regenerate with: ci_coverage_folders('write').
+# Correctness-path rates are RAISED as the #38/#103 value oracles land.
+# Measured on ubuntu-latest / MATLAB latest (Extended full-products job).
+embedding          0.9182
+util               0.7491
+lib/cadaUtils      0.8667
+lib                0.5933
+lib/@cada          0.4030
+lib/@cadastruct    0.1675

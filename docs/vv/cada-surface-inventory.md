@@ -96,7 +96,9 @@ corrupt a derivative):
 These are exactly the class of defect a coverage hole hides. They are out of
 scope for the coverage-floor PR (which changes no `lib/` source); captured here
 so the #103 struct-op fixtures — which will drive these branches — either fix or
-guard them. Filed as follow-up.
+guard them. Logged in the canonical bug catalog as **B29–B31**
+(`docs/analyses/ANALYSIS.md` §1.3g, disposition §1.5) and filed as a follow-up
+task, so the catalog stays the single source of truth.
 
 ## Full classification
 

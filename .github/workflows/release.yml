@@ -50,7 +50,7 @@ env:
   # `docs/analyses` is also excluded outright belt-and-suspenders. Tune as needed.
   ARCHIVE_EXCLUDES: >-
     tests bench CLAUDE.md .github .claude
-    docs/analyses docs/decisions docs/papers docs/thesis
+    docs/analyses docs/decisions docs/papers docs/thesis docs/vv
     docs/CI_PLAN.md docs/REVIEW_CONTEXT.md docs/ROADMAP.md docs/CONTRIBUTING.md
 
 jobs:
