@@ -1,0 +1,75 @@
+# ADR-0033 — A single strict Embedded Coder config (`adigatorCoderConfig`)
+
+## Status
+
+Accepted — 2026-07-29. Extends the V&V-for-release effort from *correctness*
+(ADR-0032 coverage floor + the value oracles) to *embeddability*. Realizes the
+first half of issue #80's "compile everything through Embedded Coder (ERT)"
+objective as a shared, strict, drift-proof config; the stack-ceiling gate that
+completes it is #80a-2 (see Consequences).
+
+## Context
+
+The fork's purpose is ERT-capable embedded code, and the V&V gate must prove the
+generated derivatives *are* ERT-capable — not merely assume it. Two problems:
+
+- **Config drift.** Five sites code-generated embedded derivatives, each with its
+  own inline `coder.config('lib','ecoder',true)`: `SCodegenTest`,
+  `SRolledErtCodegenTest`, the Monte-Carlo `oracleCodegenEquivalence`,
+  `bench/derivShowcaseC`, and `bench/loopboundPaddingPenalty`. A "strict
+  everywhere" policy spread across five literal copies is one edit away from
+  being strict in four places — exactly how a gate quietly weakens (and the
+  fifth copy was already *laxer* than the others, so its footprint was measured
+  under a weaker config than the gate demands).
+- **The config wasn't actually strict.** Every copy set only the ERT target and
+  turned the HTML report off. None set `EnableDynamicMemoryAllocation=false`, so
+  an *unbounded* `coder.varsize` derivative would still code-generate (needing
+  `malloc` on an MCU that has none) and pass the gate.
+
+Both feed the deeper lesson from #80's Gap-B analysis: **ERT exit-success is
+necessary but not sufficient for embeddability.** A *bounded-but-large*
+derivative (the "hollow milestone": ERT-clean yet O(n²) stack — 16.9 KB at
+n=64, ~67 KB at n=128) code-generates and would ship a stack-overflow. This is
+the codegen twin of ADR-0032's "coverage is necessary, not sufficient".
+
+## Decision
+
+Introduce **`util/adigatorCoderConfig.m`** — the single definition of the strict
+Embedded Coder config — and route every codegen site through it.
+
+- Returns `coder.config('lib','ecoder',true)` **+ `EnableDynamicMemoryAllocation
+  = false`** (no `malloc`; an unbounded-varsize derivative now fails codegen as a
+  *test failure*) + `GenerateReport=false`; a `GenCodeOnly` name/value for sites
+  that assert ERT *acceptance* without a C toolchain (`SRolledErtCodegenTest`).
+- All five sites consume it, so the strict policy has one source of truth and
+  cannot drift. It is also **user-facing** (shipped in `util/`): the config an
+  end user should hand `codegen` when embedding a generated derivative.
+- **Scope is exactly the config.** Adding `EnableDynamicMemoryAllocation=false`
+  was verified to leave every exercised ERT codegen consumer green
+  (`SCodegenTest`, `SRolledErtCodegenTest`, `MCSmokeTest`'s codegen oracle,
+  `SCodegenShowcaseTest`) — the current cases were already dynamic-alloc free,
+  so this tightens the gate without breaking it. `SLoopboundPaddingTest` (the
+  fifth site) is the identical config-substitution but filters locally on the
+  absent standalone `gcc`/`-fstack-usage` toolchain; it runs on the CI extended
+  job.
+
+## Consequences
+
+- One strict config, four consumers, zero drift; `REQ-T-10` now names the shared
+  helper and the `EnableDynamicMemoryAllocation=false` flag.
+- **The gate is tightened, not yet complete.** `EnableDynamicMemoryAllocation
+  =false` rejects only *unbounded* varsize; the *bounded* O(n²)-stack case still
+  passes. The completion is a **stack ceiling** on the compiled `-fstack-usage`
+  footprint — reusing the existing `measureErtFootprint` helper (R17c/ADR-0027),
+  gating by the *property* (stack is O(n), caught via an n-vs-2n scaling check or
+  an absolute bound) — tracked as **#80a-2**. That is what turns "codegens" into
+  "embeddable".
+- **The `× slim_embed` axis is transitional.** Several consumers still sweep
+  `slim=false`/`true` (`SCodegenTest` `FullData`/`SlimData`, the CI_PLAN two-point
+  rows). #80b removes `slim_embed` as a user option (always-on + automatic
+  internal fallback), collapsing that axis — at which point the `FullData` case
+  becomes the *forced-internal-fallback* test. This ADR deliberately does **not**
+  deepen the slim axis; the config helper is surface-stable and survives #80b.
+- **User-facing surface.** Shipping `adigatorCoderConfig()` adds one public
+  function to `util/`. It composes with the #199 single-entry-point direction
+  (the blessed embed config a user pairs with the one generator entry).

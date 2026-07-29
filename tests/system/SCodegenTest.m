@@ -120,8 +120,7 @@ classdef SCodegenTest < matlab.unittest.TestCase
                 'REQ-T-10 ERT lib build requires Embedded Coder - skipping (Filtered).');
             for der = {'matrix','csc'}
                 n = tc.generateInlineZeroHessian(der{1});
-                cfg = coder.config('lib', 'ecoder', true);
-                cfg.GenerateReport = false;
+                cfg = adigatorCoderConfig();   % strict ERT (shared, #80)
                 d = ['codegen_lib_' der{1}];
                 codegen('zh_Hes', '-config', cfg, '-args', {zeros(n,1)}, '-d', d);
                 tc.verifyTrue(isfolder(d), sprintf( ...
@@ -175,8 +174,7 @@ classdef SCodegenTest < matlab.unittest.TestCase
             tc.assumeTrue(tc.ErtAvailable, ...
                 'REQ-T-10 ERT lib build requires Embedded Coder - skipping (Filtered).');
             tc.generateInlineGradient(slim);
-            cfg = coder.config('lib', 'ecoder', true);
-            cfg.GenerateReport = false;
+            cfg = adigatorCoderConfig();   % strict ERT (shared, #80)
             codegen('gapfun_Grd', '-config', cfg, ...
                 '-args', {zeros(2,1), zeros(2,1)}, '-d', 'codegen_lib');
             tc.verifyTrue(isfolder('codegen_lib'), ...

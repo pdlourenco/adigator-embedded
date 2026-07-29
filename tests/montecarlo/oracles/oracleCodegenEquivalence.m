@@ -58,8 +58,7 @@ args = {zeros(c.xsize)};
 % skip must not go unnoticed.
 if license('checkout','RTW_Embedded_Coder')
     try
-        cfg = coder.config('lib','ecoder',true);
-        cfg.GenerateReport = false;
+        cfg = adigatorCoderConfig();   % strict ERT (shared, #80)
         codegen(wrapperName, '-config', cfg, '-args', args, '-d', 'cg_ert');
     catch e
         r.pass = false;

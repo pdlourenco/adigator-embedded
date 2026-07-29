@@ -42,8 +42,7 @@ classdef SRolledErtCodegenTest < AdigatorTestCase
             % the regime where the read-then-add alias used to break ERT (n=8 did
             % not trigger it).
             n   = 32;
-            cfg = coder.config('lib', 'ecoder', true);
-            cfg.GenCodeOnly = true;
+            cfg = adigatorCoderConfig('GenCodeOnly', true);   % strict ERT (shared, #80)
             for spec = {{'gradient','_Grd'}, {'hessian','_Hes'}}
                 dt  = spec{1}{1};
                 w   = ['scostfun' spec{1}{2}];
