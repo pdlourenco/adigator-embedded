@@ -640,6 +640,41 @@ branch and decide fix-vs-guard (if the branch proves unreachable from user code,
 a guard + comment is preferable to resurrecting it). Sibling of the B17/B22
 embedded-field-report struct-layer family. See §1.5.
 
+### 1.3h Hessian generation crashes on a structurally-zero (linear-objective) Hessian (B32)
+
+**B32 — `adigatorGenHesFile` crashes generating the Hessian of a locally-linear
+scalar objective (low; fixed).** The Hessian of a linear objective is
+well-defined and zero (`∂²/∂x² (a.'x) = 0`), but generating it threw
+`Index in position 2 exceeds array bounds` in `util/adigatorGenHesFile.m` at
+`HesLocs1 = dydxlocs(dydxdxlocs(:,1),:)`. Minimal reproducer: `y = x(2)` (also
+`y = sum(x)`, `y = a.'*x`). It is a **broken-generation** bug (loud at generation
+time), not a silent wrong derivative. Found by the #38 Phase C expression-tree
+fuzzer (`mcGenExprTree`) on its first campaign — a locally-linear scalar case is
+a natural draw the existing generators (quadratic-only Hessians) never produced.
+
+**Root cause.** For a structurally-zero Hessian the second-derivative object has
+no nonzeros, and `adiout2.(…).deriv.nzlocs` is `[]` (0×0), so `dydxdxlocs(:,1)`
+indexes a nonexistent second column. Even past that point the value emission
+scatters from the runtime `<deriv>dxdx_location` field (`Hes(idx) = y.…dxdx`) —
+a field the generated struct does **not** carry when there is no second
+derivative, so the *generated* file would then fail at run time with
+`Unrecognized field name "…dxdx_location"`.
+
+**Fix (two parts, `util/adigatorGenHesFile.m`).** (1) Normalize the empty
+second-derivative locations to the canonical `0×2` shape at the read site, so the
+Hessian CSC pattern (`adigatorBuildCSC`, which accepts a structurally empty
+`0×2`) builds an empty (zero-`Nnz`) `output.HessianCSC` instead of crashing. (2)
+Short-circuit the value emission when `dydxdxnnz == 0`: emit a literal
+`Hes = zeros(<returned shape>)` (or the empty `0×1` value stream for
+`der_output='csc'`) and skip the scatter entirely, so the generated file never
+references the absent `…dxdx_location` field. Shapes mirror the non-zero
+branches (n==1 → the output shape; else the `[m*n × n]` fold). Pinned by
+`tests/integration/IZeroHessianTest.m`: linear objectives generate + run to an
+exact zero Hessian (classic), the file uses the literal-zero short-circuit (no
+`dxdx_location` scatter), a mixed quadratic+linear and a `v.'*v` dot still give
+the correct non-zero Hessian, `der_output='csc'` returns an empty stream with
+`HessianCSC.Nnz == 0`, and both embed modes generate without error. See §1.5.
+
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
 - `cadaunarymath.m` derivative-rule corrections (`asec`, `acsc`, `asecd`,
@@ -699,6 +734,7 @@ embedded-field-report struct-layer family. See §1.5.
 | B29 (`@cadastruct/vertcat.m:18` undefined `NDstr`/`yid`) | **Open (fail-loud)** — the `nameloc≤0` fallback-name arm references `NDstr` (never assigned in the function) and `yid` (out of scope; `y.id` is the variable) → throws if reached (§1.3g). Not fixed in the coverage-floor PR (no `lib/` change); follow-up coupled to the #103 struct-op oracle fixtures that drive the branch (fix-vs-guard TBD). |
 | B30 (`@cadastruct/ctranspose.m:18` undefined `NDstr`/`yid`) | **Open (fail-loud)** — identical fallback-name defect, same undefined `NDstr`/`yid` (file has no subfunctions) (§1.3g). Follow-up with B29. |
 | B31 (`@cadastruct/repmat.m:30` `EMTPYFLAG` typo) | **Open (fail-loud)** — `EMTPYFLAG` misspelling of `EMPTYFLAG` (correct spelling two branches above; the typo occurs once repo-wide) (§1.3g). Follow-up with B29. |
+| B32 (Hessian generation crashes on a zero/linear-objective Hessian) | **Fixed** — `util/adigatorGenHesFile.m` crashed at `HesLocs1 = dydxlocs(dydxdxlocs(:,1),:)` when the second-derivative `nzlocs` was `[]` (a structurally-zero Hessian, e.g. `y = x(k)`), and the value emission then scattered from an absent runtime `…dxdx_location` field. Fixed by normalizing the empty locs to `0×2` (so the empty CSC pattern builds) and short-circuiting the value emission to a literal `Hes = zeros(shape)` (empty `0×1` for `der_output='csc'`), skipping the scatter. Found by the #38 Phase C `mcGenExprTree` fuzzer; pinned by `tests/integration/IZeroHessianTest.m` (§1.3h). |
 
 ---
 

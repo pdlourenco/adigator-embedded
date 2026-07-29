@@ -435,6 +435,16 @@ ysize = adiout.func.size;
 dydxdxlocs = adiout2.(['d',vodname]).deriv.nzlocs; % v2.0 - hoisted, also used for the Hessian CSC pattern
 dydxlocs   = adiout.deriv.nzlocs;
 dydxdxnnz  = size(dydxdxlocs,1);
+% B32: a structurally-zero Hessian (a locally-linear objective — the Hessian of
+% e.g. y = x(k), y = sum(x) or y = a.'*x is all zeros) has no second-derivative
+% nonzeros, and the derivative object stores nzlocs as [] (0x0). Normalize it to
+% the canonical 0x2 shape so the pattern + scatter code below (which indexes
+% columns 1 and 2 of dydxdxlocs) emits a correct all-zero Hessian instead of
+% crashing on dydxdxlocs(:,1) ("Index in position 2 exceeds array bounds").
+% adigatorBuildCSC accepts 0x2 locations (a structurally empty derivative).
+if dydxdxnnz == 0
+    dydxdxlocs = zeros(0,2);
+end
 n = prod(xsize);
 m = prod(ysize);
 dydxdx = [ystr,'.d',vodname,'d',vodname];
@@ -459,7 +469,23 @@ end
 % as output.HessianCSC. The native stream (dydxdx order) is already CSC order
 % for every current shape (asserted via the identity flag); a future ordering
 % change emits a constant gather instead - never a runtime sort.
-if strcmp(opts.der_output,'csc')
+if dydxdxnnz == 0
+  % B32: structurally-zero Hessian (a locally-linear objective). Emit a literal
+  % zero of the RETURNED shape and skip the value scatter entirely: the runtime
+  % derivative struct carries no dxdx value / _location field for a zero second
+  % derivative, so the scatter emission below would reference a nonexistent
+  % field at run time ("Unrecognized field name ..._location"). HessianCSC above
+  % already holds the (empty) zero pattern; der_output='csc' returns the empty
+  % 0x1 value stream (Nnz==0). Shapes mirror the non-zero branches: n==1 -> the
+  % output shape ysize; else the documented [m*n x n] fold (m*n x n covers m==1).
+  if strcmp(opts.der_output,'csc')
+    fprintf(Hfid,'Hes = zeros(0,1);\n');
+  elseif n == 1
+    fprintf(Hfid,'Hes = zeros(%1.0f,%1.0f);\n',ysize);
+  else
+    fprintf(Hfid,'Hes = zeros(%1.0f,%1.0f);\n',m*n,n);
+  end
+elseif strcmp(opts.der_output,'csc')
   if hesisid
     fprintf(Hfid,['Hes = ',dydxdx,'(:);\n']);
   else
