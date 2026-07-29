@@ -84,6 +84,19 @@ jobs:
         with:
           select-by-folder: tests/montecarlo
           test-results-junit: results/montecarlo.xml
+      # V&V per-folder coverage floor (ADR-0032). Re-runs the full suite under
+      # coverage instrumentation and enforces the per-folder no-regression
+      # ratchet in tests/coverage_baseline_folders.txt. Deliberately a fresh
+      # run (not reusing the steps above): CodeCoveragePlugin needs to own the
+      # execution, and this job is post-merge so the extra pass is affordable.
+      # This measures coverage only; the run-tests steps above own pass/fail.
+      # Enforced here, not the PR gate: the full suite needs the licensed
+      # products installed in this job (see docs/CI_PLAN.md §Coverage floor).
+      - name: Per-folder coverage floor (V&V gate, ADR-0032)
+        if: success()
+        uses: matlab-actions/run-command@v2
+        with:
+          command: addpath('tests'); ci_coverage_folders
       - uses: actions/upload-artifact@v4
         if: always()
         with:
