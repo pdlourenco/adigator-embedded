@@ -9,7 +9,10 @@ classdef SCodegenTest < matlab.unittest.TestCase
     % plain Coder was masking ERT-only gaps). Run for both the
     % full embedded data and the slim_embed=true slice-before-prune shrunk data
     % (issue #21), to prove the dropped Index7 leaves the compiled result
-    % unchanged.
+    % unchanged. Also carries the B32 zero-Hessian codegen guards: a
+    % structurally-zero (linear-objective) inline Hessian must compile + run to
+    % zeros (Coder floor) and build under ERT in both matrix and csc (zero-sized)
+    % modes (REQ-T-10) — "generates" must mean "ships".
     %
     % Skips via assumption when MATLAB Coder is not licensed/installed (PR-gate
     % runners). The ERT lib build is separately guarded on Embedded Coder, so a
@@ -87,6 +90,44 @@ classdef SCodegenTest < matlab.unittest.TestCase
         function ertLibBuildsFromSlimData(tc)
             tc.ertLibBuild(true);
         end
+
+        function zeroHessianInlineCompilesAndMatches(tc)
+            % B32 (REQ-T-05): a structurally-zero (linear-objective) Hessian
+            % generated inline must compile through Coder and the MEX must run
+            % to an exact zero Hessian — "generates" must mean "ships", not just
+            % "the generator did not crash". Guards the literal-zero emission
+            % (Hes = zeros(n,n)) through the compiled path.
+            n = tc.generateInlineZeroHessian('matrix');
+            codegen('zh_Hes', '-args', {zeros(n,1)});
+            rehash;
+            xv = 0.5*ones(n,1);
+            [Hm, ~, ~] = zh_Hes(xv);        % MATLAB
+            [Hx, ~, ~] = zh_Hes_mex(xv);    % compiled
+            tc.verifyEqual(full(Hx), full(Hm), 'AbsTol', 1e-14, ...
+                'MEX zero-Hessian differs from MATLAB');
+            tc.verifyLessThan(max(abs(full(Hx(:)))), 1e-12, ...
+                'compiled zero Hessian is not all zeros');
+            clear zh_Hes_mex   % release the MEX before folder teardown
+        end
+
+        function zeroHessianErtLibBuilds(tc)
+            % B32 (REQ-T-10): the zero-Hessian inline artifact must build under
+            % the strict ERT target in BOTH matrix mode (Hes = zeros(n,n)) and
+            % csc mode (Hes = zeros(0,1), a zero-SIZED array — the shape ERT is
+            % strictest about). Own test, assumeTrue on Embedded Coder (Filtered,
+            % not a false pass, on a Coder-only runner).
+            tc.assumeTrue(tc.ErtAvailable, ...
+                'REQ-T-10 ERT lib build requires Embedded Coder - skipping (Filtered).');
+            for der = {'matrix','csc'}
+                n = tc.generateInlineZeroHessian(der{1});
+                cfg = coder.config('lib', 'ecoder', true);
+                cfg.GenerateReport = false;
+                d = ['codegen_lib_' der{1}];
+                codegen('zh_Hes', '-config', cfg, '-args', {zeros(n,1)}, '-d', d);
+                tc.verifyTrue(isfolder(d), sprintf( ...
+                    'ERT lib codegen (%s mode) produced no output folder', der{1}));
+            end
+        end
     end
 
     methods (Access = private)
@@ -140,6 +181,23 @@ classdef SCodegenTest < matlab.unittest.TestCase
                 '-args', {zeros(2,1), zeros(2,1)}, '-d', 'codegen_lib');
             tc.verifyTrue(isfolder('codegen_lib'), ...
                 'lib codegen did not produce an output folder');
+        end
+
+        function n = generateInlineZeroHessian(~, der)
+            % Write a linear scalar objective (y = sum(x) -> all-zero Hessian)
+            % and generate its inline ('i') Hessian file in the requested
+            % der_output mode ('matrix' -> Hes = zeros(n,n); 'csc' -> the empty
+            % 0x1 value stream). Returns n so the caller can size the codegen
+            % -args. (B32 regression: the zero-Hessian artifact must codegen.)
+            n = 3;
+            fid = fopen('zh.m', 'w');
+            fprintf(fid, 'function y = zh(x)\ny = sum(x);\nend\n');
+            fclose(fid);
+            rehash;
+            ax = adigatorCreateDerivInput([n 1], 'x');
+            adigatorGenHesFile('zh', {ax}, struct('overwrite',1, 'echo',0, ...
+                'embed_mode','i', 'der_output',der));
+            rehash;
         end
     end
 end
