@@ -13,12 +13,18 @@ function r = oracleFiniteDiff(c)
 % (the historical B7/B10 class) would pass the campaign silently. This oracle
 % closes that gap.
 %
-% Skips cleanly when:
-%   - a closed form exists (oracleKnownDeriv is the authoritative, tolerance-free
-%     value check there -- no need to also FD it), or
-%   - the case is a hessian (an FD-Hessian value oracle is future work; no
-%     closed-form-free hessian generator exists in the campaign today, so this
-%     skip covers no live case -- it is a guard against a future one).
+% For a closed-form-free HESSIAN case (e.g. mcGenExprTree, #38 Phase C) it runs
+% two tight first-order central-FD checks that together validate the Hessian
+% against the raw function (principle 1 -- no reference is trusted blindly):
+%   (1) generated gradient G  ~=  central-FD of the user function f
+%   (2) generated Hessian  H  ~=  central-FD of the generated gradient G
+% If G is wrong, (1) fails independently; if G is right, (2)'s FD-of-G reference
+% is trustworthy and validates H. Chained, they check H against f transitively
+% with first-order (tight) FD accuracy, which is why this beats a single loose
+% second-order FD of f directly.
+%
+% Skips cleanly when a closed form exists (oracleKnownDeriv is the authoritative,
+% tolerance-free value check there -- no need to also FD it).
 r = struct('name','finiteDiff','pass',true,'skipped',false,'message','');
 
 needsHess = strcmp(c.deriv,'hessian');
@@ -29,14 +35,19 @@ if hasClosed
     r.message = 'closed form present (oracleKnownDeriv is the value check)';
     return;
 end
+
+% generate the classic derivative
+g = mcGenClassic(c);
+
+% central FD tolerances (h=1e-6 on the campaign's smooth, well-scaled fixtures)
+atol = 1e-5; rtol = 1e-4;
+
 if needsHess
-    r.skipped = true;
-    r.message = 'FD-Hessian value oracle not yet implemented (#145)';
+    [r.pass, r.message, r.skipped] = fdHessianCheck(c, g, atol, rtol);
     return;
 end
 
-% generate the classic derivative and evaluate it at c.x0
-g = mcGenClassic(c);
+% ---- first-derivative (jacobian/gradient) FD value check ---- %
 out = mcEval(g.wrapper, 2, c.x0);
 D = out{1};
 
@@ -53,9 +64,66 @@ else
     Dex = Jfd;
 end
 
-% central FD at h=1e-6 on the campaign's smooth, well-scaled fixtures
-atol = 1e-5; rtol = 1e-4;
 [r.pass, r.message] = closeEnoughFD(D, Dex, atol, rtol, c.deriv);
+end
+
+%% ------------------------------------------------------------------- %%
+function [pass, msg, skipped] = fdHessianCheck(c, g, atol, rtol)
+% FD-Hessian value oracle (#38 Phase C). Two first-order central-FD checks for
+% a closed-form-free scalar-objective hessian case:
+%   (1) generated gradient G ~= central-FD of the user function f
+%   (2) generated Hessian  H ~= central-FD of the generated gradient G
+% See the header for why the pair is principle-1-sound. h=1e-6 first-order
+% central FD is ~1e-10 accurate on the campaign's smooth well-scaled fixtures,
+% so the atol/rtol here are comfortably loose relative to the truncation error.
+skipped = false; msg = ''; pass = true;
+h = 1e-6;
+x0 = c.x0(:);
+n  = numel(x0);
+
+% generated H, G at x0
+out0 = mcEval(g.wrapper, 3, x0);
+H = out0{1}; G = out0{2};
+f0 = feval(c.name, x0);
+
+% guard (principle 1: never assert on a degenerate case). A hessian case must
+% be a scalar objective with finite output; if not, skip loudly in the message
+% rather than FD a garbage reference.
+if ~isscalar(f0) || ~all(isfinite(H(:))) || ~all(isfinite(G(:)))
+    skipped = true;
+    msg = 'non-scalar or non-finite generated H/G/f; FD-Hessian skipped';
+    return;
+end
+
+% (1) gradient vs central-FD of f
+Gfd = zeros(n, 1);
+for j = 1:n
+    e = zeros(n, 1); e(j) = h;
+    Gfd(j) = (feval(c.name, x0 + e) - feval(c.name, x0 - e)) / (2*h);
+end
+[ok1, m1] = closeEnoughFD(G(:), Gfd, atol, rtol, 'gradient (vs f)');
+
+% (2) Hessian vs central-FD of the generated gradient G(x)
+Hfd = zeros(n, n);
+for j = 1:n
+    e = zeros(n, 1); e(j) = h;
+    op = mcEval(g.wrapper, 3, x0 + e); Gp = op{2};
+    om = mcEval(g.wrapper, 3, x0 - e); Gm = om{2};
+    Hfd(:, j) = (Gp(:) - Gm(:)) / (2*h);
+end
+% Guard the FD reference itself: a non-finite Hfd (e.g. an overflow at a
+% perturbed point) would make closeEnoughFD's `Inf <= Inf` compare pass
+% vacuously -- a false pass on a principle-1 oracle. Skip such a (degenerate,
+% ill-conditioned) case rather than trust the reference.
+if ~all(isfinite(Hfd(:)))
+    skipped = true;
+    msg = 'non-finite FD-Hessian reference (ill-conditioned); skipped';
+    return;
+end
+[ok2, m2] = closeEnoughFD(H, Hfd, atol, rtol, 'hessian (vs grad)');
+
+pass = ok1 && ok2;
+if ~ok1, msg = m1; elseif ~ok2, msg = m2; end
 end
 
 %% ------------------------------------------------------------------- %%
