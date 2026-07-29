@@ -438,10 +438,11 @@ dydxdxnnz  = size(dydxdxlocs,1);
 % B32: a structurally-zero Hessian (a locally-linear objective — the Hessian of
 % e.g. y = x(k), y = sum(x) or y = a.'*x is all zeros) has no second-derivative
 % nonzeros, and the derivative object stores nzlocs as [] (0x0). Normalize it to
-% the canonical 0x2 shape so the pattern + scatter code below (which indexes
-% columns 1 and 2 of dydxdxlocs) emits a correct all-zero Hessian instead of
-% crashing on dydxdxlocs(:,1) ("Index in position 2 exceeds array bounds").
-% adigatorBuildCSC accepts 0x2 locations (a structurally empty derivative).
+% the canonical 0x2 shape so the intervening dydxdxlocs(:,1)/(:,2) indexing
+% below succeeds (a 0x0 [] has no column 1 -> "Index in position 2 exceeds array
+% bounds"); the value emission is then short-circuited to a literal zeros below.
+% (adigatorBuildCSC itself already accepts a bare [] — the 0x2 form is for the
+% indexing here, not for its benefit.)
 if dydxdxnnz == 0
     dydxdxlocs = zeros(0,2);
 end

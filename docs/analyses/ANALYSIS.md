@@ -673,7 +673,12 @@ branches (n==1 → the output shape; else the `[m*n × n]` fold). Pinned by
 exact zero Hessian (classic), the file uses the literal-zero short-circuit (no
 `dxdx_location` scatter), a mixed quadratic+linear and a `v.'*v` dot still give
 the correct non-zero Hessian, `der_output='csc'` returns an empty stream with
-`HessianCSC.Nnz == 0`, and both embed modes generate without error. See §1.5.
+`HessianCSC.Nnz == 0`, and both embed modes generate without error. The
+generated artifact is also codegen-guarded (`tests/system/SCodegenTest.m`,
+license-gated): the inline zero-Hessian compiles + runs to zeros via MEX
+(REQ-T-05) and builds under the strict ERT target in both matrix
+(`Hes = zeros(n,n)`) and csc (`Hes = zeros(0,1)`, zero-sized) modes (REQ-T-10),
+so "generates" is verified to mean "ships". See §1.5.
 
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
