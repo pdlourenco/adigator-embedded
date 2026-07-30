@@ -168,8 +168,10 @@ merges; license-gated jobs skip cleanly when products are unavailable.
 
 > **On hosted CI the Coder-gated rows below never actually run** — Coder and
 > Embedded Coder are unlicensed there, so TS-S-02 / TS-S-06 and the codegen
-> halves of TS-S-03/04/05 are *Filtered* inside a green job. They are verified by
-> a **local** run only; see §3.2 "CI cannot verify codegen".
+> halves of TS-S-03/04 are *Filtered* inside a green job. They are verified by a
+> **local** run only; see §3.2 "CI cannot verify codegen". (TS-S-05 is *not*
+> affected: `SCasadiOracleTest` uses classic `'c'` mode deliberately so it needs
+> no Coder — it runs fully wherever CasADi is present.)
 
 | ID | Test | Validates | Gate |
 |----|------|-----------|------|
