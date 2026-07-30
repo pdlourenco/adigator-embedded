@@ -27,7 +27,10 @@ elseif nargin == 2
       if ~isempty(varargin{1}.func.value)
         repMrow = varargin{1}.func.value(1);
         repNcol = varargin{1}.func.value(2);
-      elseif ~ADIGATOR.EMTPYFLAG
+      elseif ~ADIGATOR.EMPTYFLAG   % v2.0 (B31): was EMTPYFLAG (typo) - the
+        % misspelled field made this reference throw instead of testing the
+        % empty-eval flag, so the symbolic-dimension guard below could not be
+        % reached correctly. Spelled as everywhere else in this file.
         error('Cannot REPMAT a purely symbolic dimension.')
       else
         repMrow = [];

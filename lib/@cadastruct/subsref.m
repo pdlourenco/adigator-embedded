@@ -196,7 +196,14 @@ else
       if nameloc > 0
         yname = ADIGATOR.VARINFO.NAMES{nameloc};
       else
-        yname = sprintf(['cada',NDstr,'s%1.0f'],ADIGATOR.VARINFO.NAMELOCS(yid,2));
+        % v2.0 (B34): same defect class as B29/B30/B33. The only NDstr
+        % assignment in this FILE is inside the ForSubsRef subfunction below —
+        % a different scope — so this arm threw on an unnamed intermediate.
+        % Rebuilt with DERNUMBER, which is both what NDstr stood for and what
+        % ForSubsRef's own name sites still use, so the two scopes of this file
+        % now agree; see @cadastruct/vertcat.m for why not NVAROFDIFF. `yid`
+        % IS in scope here (assigned just above), unlike in the other three.
+        yname = sprintf('cada%1.0ds%1.0f',ADIGATOR.DERNUMBER,ADIGATOR.VARINFO.NAMELOCS(yid,2));
       end
       
     else

@@ -608,36 +608,93 @@ rolled loop, F3 folded constant, and a horzcat control guarding the asymmetry),
 each generated through embed `'i'`, run, and matched to finite differences.
 B28 is a late sibling of the B17/B22 embedded-field-report family; ROADMAP R26.
 
-### 1.3g `@cadastruct` fallback-naming branch defects found via the V&V surface inventory (B29–B31)
+### 1.3g `@cadastruct` fallback-naming branch defects found via the V&V surface inventory (B29-B31, B33-B34)
 
-**B29–B31 — undefined variables / a typo on the rarely-taken `@cadastruct`
-derivative-naming branch (low; open, fail-loud).** Building the shipped-surface
-overload inventory (`docs/vv/cada-surface-inventory.md`) for the coverage-floor
-work (ADR-0032) surfaced three defects on the `RUNFLAG==2 && nameloc==0`
-fallback-naming branch of the `@cadastruct` concatenation / transpose overloads —
-the path taken when a struct-valued differentiated variable is
-concatenated/transposed at a print site that has no user-assigned name and must
-synthesise one. All three **fail loud** (they throw on an undefined variable, or
-never enter the guard); none is a silent wrong derivative, so principle 1 is not
-in play. They are 0%-covered because no current test drives that branch.
+**B29-B31, B33-B34 - undefined variables / a typo on the rarely-taken
+`@cadastruct` derivative-naming branch (low; fixed).** Building the
+shipped-surface overload inventory (`docs/vv/cada-surface-inventory.md`) for the
+coverage-floor work (ADR-0032) surfaced three defects on the
+`RUNFLAG==2 && nameloc<=0` fallback-naming branch of the `@cadastruct`
+concatenation / transpose overloads - the path taken when a struct-valued
+differentiated variable is concatenated/transposed at a print site that has no
+user-assigned name and must synthesise one. Fixing them surfaced **two more**
+(B33, B34), for five in total. As found, all five **fail loud** (they throw on an
+undefined variable); none was a silent wrong derivative. They were 0%-covered
+because no test drove that branch - TS-I-27 now does. *(Line numbers below are
+pre-fix.)*
 
-- **B29 — `@cadastruct/vertcat.m:18`.** The `else` (nameloc≤0) arm builds the
-  fallback name with `sprintf(['cada',NDstr,'s%1.0f'],…NAMELOCS(yid,2))`, but
-  **`NDstr` is never assigned** in the function (the `@cada` overloads define
-  `NDstr = sprintf('%1.0f',ADIGATOR.DERNUMBER)`; this one does not) and **`yid`
-  is not in scope** (the variable is `y.id`; `yid` is only a `parseinput`-local
-  in a different workspace) → throws `Undefined variable` if reached.
-- **B30 — `@cadastruct/ctranspose.m:18`.** The identical fallback-name line with
-  the same undefined `NDstr`/`yid`; this file has no subfunctions at all.
-- **B31 — `@cadastruct/repmat.m:30`.** `EMTPYFLAG` typo for `EMPTYFLAG` — the
-  correct spelling appears two branches above, and `EMTPYFLAG` occurs exactly
-  once repo-wide.
+- **B29 - `@cadastruct/vertcat.m:18`.** The `else` (nameloc<=0) arm builds the
+  fallback name with `sprintf(['cada',NDstr,'s%1.0f'],...NAMELOCS(yid,2))`, but
+  **`NDstr` is never assigned** in the function and **`yid` is not in that
+  workspace at all** (it is a `parseinput` subfunction local) -> throws.
+- **B30 - `@cadastruct/ctranspose.m:18`.** The identical line; this file has no
+  subfunctions at all.
+- **B31 - `@cadastruct/repmat.m:30`.** `EMTPYFLAG` typo for `EMPTYFLAG` - the
+  correct spelling appears three times in the same file, and the misspelling
+  occurred exactly once repo-wide. Pre-fix the reference would throw
+  *"Reference to non-existent field"* in both the empty-eval and the real case
+  (static spelling guard only - no test drives that branch).
+- **B33 - `@cadastruct/horzcat.m:38`.** Byte-identical broken line to B29/B30;
+  not flagged by the inventory, found by the fix sweep.
+- **B34 - `@cadastruct/subsref.m:199`.** The same line in the *main* `subsref`
+  body - the most-used overload of the class. Subtler: this file **does** assign
+  `NDstr`, but at line 489 inside the `ForSubsRef` **subfunction** - a different
+  scope - so the use at 199 is still undefined. (The uses at 569/632 *are* inside
+  `ForSubsRef` and were always fine, which is why a per-file "is it assigned?"
+  check misses it.) `@cadastruct/subsasgn.m` was checked and is **clean** (its
+  assignment at 767 and use at 844 are both inside `ForSubsAsgn`).
 
-**Disposition.** Not fixed in the coverage-floor PR, which changes no `lib/`
-source (correct scope). Tracked as an open follow-up (spawned task); the fix is
-coupled to the #103 struct-op oracle fixtures, which will actually drive the
-branch and decide fix-vs-guard (if the branch proves unreachable from user code,
-a guard + comment is preferable to resurrecting it). Sibling of the B17/B22
+**Reachability - proven, not assumed.** The branch is **live user-reachable**: a
+struct-array concat whose ctranspose is passed straight to a function,
+`y = hlp([s; s]')`, drives it and throws `Unrecognized function or variable
+'NDstr'`. (Note the `'` - `.'` would route to `transpose`, which never had the
+defect.) That settles fix-vs-guard in favour of **fix**. Precisely, it is the
+**`[s; s]` concat** result that is the unnamed intermediate, so the reproducer
+drives **`vertcat`**'s arm; the `ctranspose` result becomes the function-call
+input `cadainput2_1`, which has a NAMES entry and takes the *named* arm. So B29
+is the one **dynamically** pinned (reverting it alone re-breaks TS-I-27 -
+verified); B30, B33 and B34 are pinned by the static `NDstr`-scope guard, which
+does fail on the pre-fix shape.
+
+**The replacement expression: `DERNUMBER`, not `NVAROFDIFF` (principle 1).** The
+class contains *two* naming conventions, and the sibling form is the wrong one to
+copy. `transpose`/`reshape`/`repmat` build the name from `ADIGATOR.NVAROFDIFF`;
+the deleted `NDstr` stood for `ADIGATOR.DERNUMBER` (that is its definition
+wherever it *is* assigned, e.g. `subsref.m:489`), which is also what
+`vertcat`/`horzcat` already compute as `numder` for their sibling temp names and
+what every other name emitter in the tool uses. The prefix's job is **cross-pass**
+disambiguation: a Hessian re-differentiates pass 1's *output file*, in which
+pass-1 names are literal variables. `DERNUMBER` changes across those passes
+(1 -> 2); **`NVAROFDIFF` does not** (same inputs), so choosing it could emit a
+pass-2 name that aliases a live pass-1 variable - a duplicate assignment in the
+generated file, where the later write silently wins. That would convert a loud
+throw into a **silently wrong derivative**, which is precisely the trade
+principle 1 forbids. All five sites therefore use `DERNUMBER`. Note the two
+conventions coincide when `NVAROFDIFF == DERNUMBER` (any first derivative of a
+single variable), which is why a value check alone cannot discriminate them -
+TS-I-27 pins it with a **two-variable-of-differentiation** fixture, where
+`nvod == 2` and `DERNUMBER == 1`: it asserts `cada1s...` is present *and*
+`cada2s...` is absent, the negative half being what actually discriminates.
+
+**Open follow-up (live hazard, not tidy-up).** `transpose.m`, `reshape.m` and
+`repmat.m` still build the name from `NVAROFDIFF`. Leaving the class with two
+conventions carries the same aliasing hazard in those three sites *and* creates a
+cross-convention one the mixture alone produces (a pass-1 `NVAROFDIFF` name can
+equal a pass-2 `DERNUMBER` name when `nvod == 2`). Harmonizing all seven is
+deliberately **not** done here: it changes emitted identifiers whenever
+`nvod ~= DERNUMBER` (i.e. any Hessian), so it is a change to shipped output that
+deserves its own diff, ADR and regeneration pass rather than riding along with a
+throw-fixing PR. Grouped with the loopbound `1:N` unbounded-emission defect as
+one "generated-code emission hygiene" workstream.
+
+**Disposition - fixed.** Verified to produce a **correct derivative**, not merely
+to stop throwing: the reproducer evaluates to `2*sum(x)` with gradient `[2 2 2]`,
+matching the analytic value exactly and finite differences to 2.8e-10. Pinned by
+`tests/integration/IStructArrayNamingTest.m` (TS-I-27), which drives the
+unnamed-intermediate arm end-to-end, asserts the emitted name prefix, and adds a
+static guard stating the real invariant - *no `@cadastruct` function scope may
+use `NDstr` without assigning it* (comment-stripped, so a comment naming the old
+pattern cannot trip it; this guard is what caught B34). Sibling of the B17/B22
 embedded-field-report struct-layer family. See §1.5.
 
 ### 1.3h Hessian generation crashes on a structurally-zero (linear-objective) Hessian (B32)
@@ -736,9 +793,7 @@ so "generates" is verified to mean "ships". See §1.5.
 | B27 (loopbound inner-loop exit derivative zeroed) | **Fixed** — the exit-variable union now extends to INNER runtime-bound loops. `lib/adigatorAssignOvermapScheme.m` records each inner loop's exit set (`INNEREXITCOUNTS` — assignments whose last use is after the loop, computed there because `LASTOCC` is final post-empty-eval but only partial in the overmap run), and `lib/adigatorForIterEnd.m` drops the `~PARENTLOC` gate and unions those exits (return-only; the outermost-only saved-object overwrite and `SAVE.FOR` slot numbering are untouched, so outermost generation stays byte-identical). Was: an inner runtime-bound loop's counter-indexed exit derivative was baked to a constant `y.dx = y.dx(Nmax)` gather reading a structurally-zero slot at `n<Nmax`, silently zeroing the gradient (§1.3e). Closes #120 as reading 2. Pinned by `ILoopboundTest` — `nestedRuntimeBoundInnerExitDerivative` (self-healed from the `KnownIssue` tripwire, swept over 4 truncation points) plus three hardening variants: `innerRuntimeBoundUnderFixedOuter`, `innerExitReadAfterEnclosingLoop` (the exit-also-outermost-save-target path), and `tripleNestedRuntimeBoundInnerExit` (depth-3). **Second order:** re-differentiating a loopbound file is now supported ([#173](https://github.com/pdlourenco/adigator-embedded/issues/173), [ADR-0028](../decisions/ADR-0028-second-order-loopbound.md)) — PR A (#176) made it fail-loud + slim-whitelisted the guard; PR B made the runtime-header/assert re-emission + exit-union derivative-level-agnostic, so a loopbound Hessian at n<Nmax matches the n-sized program (§1.3e). [#162](https://github.com/pdlourenco/adigator-embedded/issues/162). ROADMAP R28. |
 | B28 (numeric literal in a rolled-loop concat printed `.f`) | **Fixed** — `@cada/vertcat.m`'s loop-print (`ForVertcat`) remapped a `Num2Overloaded` literal (valid name, `id=[]`) through `cadaPrintReMap`, whose `~varID` rescue misfired for `[]` (`~[]` is an empty logical), so `cadafuncname([])` returned the spurious `'.f'` (`NAMES{[]}` is a zero-element CSL); `@cada/horzcat.m`'s `else` (skip the remap for numerics) is why row-concats never surfaced it — a latent upstream asymmetry (§1.3f). Fixed by porting the `else` into vertcat's two loop-print sites, repairing the `cadaPrintReMap` rescue (`isempty(varID) || ~varID`), and a `cadafuncname` chokepoint (`adigator:cadafuncname:emptyVarID`) that fails loud on an empty id (never fires across the 288-test `ci_local`). Pinned by `tests/integration/IConcatLoopLiteralTest.m` (F2 minimal loop + F3 folded constant + horzcat control, generated through embed `'i'`, run, FD-matched) ([#168](https://github.com/pdlourenco/adigator-embedded/issues/168)). A late sibling of the B17/B22 embedded-field-report family; ROADMAP R26. |
 | §1.3 math-doc conventions (D1) | **Fixed** — `adigatorDerivativeConventions.m` (the binding conventions file, CLAUDE.md §3) contradicted contract C-1: Hessian section `f: Rn -> Rm` (→ `R`), the Jacobian/Hessian size captions mislabeled `size(Gradient(f)) = [length(x) length(f)]` (Jacobian read n×m, contradicting C-1's m×n), and the `dfn`/`dfm` row typo. Corrected to match C-1, plus the same defects copied into `adigatorGenJacFile`/`adigatorGenHesFile` — text-only, no behavioural change. The §1.3 "summary block inconsistent" claim was **retracted** (it is a valid generalization of the table). ([#118](https://github.com/pdlourenco/adigator-embedded/issues/118)) ROADMAP R28. |
-| B29 (`@cadastruct/vertcat.m:18` undefined `NDstr`/`yid`) | **Open (fail-loud)** — the `nameloc≤0` fallback-name arm references `NDstr` (never assigned in the function) and `yid` (out of scope; `y.id` is the variable) → throws if reached (§1.3g). Not fixed in the coverage-floor PR (no `lib/` change); follow-up coupled to the #103 struct-op oracle fixtures that drive the branch (fix-vs-guard TBD). |
-| B30 (`@cadastruct/ctranspose.m:18` undefined `NDstr`/`yid`) | **Open (fail-loud)** — identical fallback-name defect, same undefined `NDstr`/`yid` (file has no subfunctions) (§1.3g). Follow-up with B29. |
-| B31 (`@cadastruct/repmat.m:30` `EMTPYFLAG` typo) | **Open (fail-loud)** — `EMTPYFLAG` misspelling of `EMPTYFLAG` (correct spelling two branches above; the typo occurs once repo-wide) (§1.3g). Follow-up with B29. |
+| B29-B31, B33-B34 (`@cadastruct` fallback-naming branch: undefined `NDstr`/`yid`, misspelled empty-eval flag) | **Fixed** - five sites in the `RUNFLAG==2 && nameloc<=0` fallback-name arm (`vertcat`/B29, `ctranspose`/B30, `repmat`/B31, `horzcat`/B33, `subsref`/B34 - the last two found by the fix sweep, not the inventory) used `NDstr` in a scope that never assigns it; for `subsref` the file's only assignment is inside the `ForSubsRef` **subfunction**, which is why a per-file check misses it. The arm is **user-reachable** (`hlp([s; s]')` throws pre-fix, and drives both `vertcat` and `ctranspose`), so it is fixed, not guarded. Rebuilt with **`DERNUMBER`** - what the deleted `NDstr` stood for - and deliberately **not** the `NVAROFDIFF` used by the `transpose`/`reshape`/`repmat` siblings: `NVAROFDIFF` is invariant across the two Hessian passes, so it could alias a live pass-1 variable and silently win the assignment, converting a loud throw into a wrong derivative (principle 1). Verified correct, not merely non-throwing (`2*sum(x)` -> `[2 2 2]`, analytic-exact, FD 2.8e-10). `subsasgn.m` checked and clean. Harmonizing the three remaining `NVAROFDIFF` siblings is an **open follow-up** (changes shipped emitted identifiers; own ADR). Pinned by `tests/integration/IStructArrayNamingTest.m` / TS-I-27 (§1.3g). |
 | B32 (Hessian generation crashes on a zero/linear-objective Hessian) | **Fixed** — `util/adigatorGenHesFile.m` crashed at `HesLocs1 = dydxlocs(dydxdxlocs(:,1),:)` when the second-derivative `nzlocs` was `[]` (a structurally-zero Hessian, e.g. `y = x(k)`), and the value emission then scattered from an absent runtime `…dxdx_location` field. Fixed by normalizing the empty locs to `0×2` (so the empty CSC pattern builds) and short-circuiting the value emission to a literal `Hes = zeros(shape)` (empty `0×1` for `der_output='csc'`), skipping the scatter. Found by the #38 Phase C `mcGenExprTree` fuzzer; pinned by `tests/integration/IZeroHessianTest.m` (§1.3h). |
 
 ---

@@ -15,7 +15,12 @@ if ADIGATOR.RUNFLAG == 2
   if nameloc > 0
     yname = ADIGATOR.VARINFO.NAMES{nameloc};
   else
-    yname = sprintf(['cada',NDstr,'s%1.0f'],ADIGATOR.VARINFO.NAMELOCS(yid,2));
+    % v2.0 (B30): NDstr is never assigned in this function and the variable in
+    % scope is y.id, not yid, so this arm threw "Unrecognized function or
+    % variable 'NDstr'" whenever the result was an unnamed intermediate.
+    % Rebuilt with DERNUMBER (what NDstr stood for); see the note in
+    % @cadastruct/vertcat.m for why DERNUMBER and not NVAROFDIFF.
+    yname = sprintf('cada%1.0ds%1.0f',ADIGATOR.DERNUMBER,ADIGATOR.VARINFO.NAMELOCS(y.id,2));
   end
 else
   yname = 'cadadummystruct';

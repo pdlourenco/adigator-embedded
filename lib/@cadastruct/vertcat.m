@@ -15,7 +15,19 @@ if ADIGATOR.RUNFLAG == 2
   if nameloc > 0
     yname = ADIGATOR.VARINFO.NAMES{nameloc};
   else
-    yname = sprintf(['cada',NDstr,'s%1.0f'],ADIGATOR.VARINFO.NAMELOCS(yid,2));
+    % v2.0 (B29): this arm threw — it used NDstr, never assigned in this scope,
+    % and indexed NAMELOCS with `yid`, which is not in this workspace at all (it
+    % is a parseinput-local below). Rebuilt with DERNUMBER — which is exactly
+    % what the deleted NDstr stood for (NDstr = sprintf('%1.0f',DERNUMBER)
+    % wherever it IS defined), what this function already computes as `numder`
+    % for the sibling temp name below, and what every other name emitter in the
+    % tool uses. Deliberately NOT NVAROFDIFF (which transpose/reshape/repmat
+    % happen to use): the prefix exists to keep pass-N names out of pass-N+1's
+    % namespace when a generated file is re-differentiated (Hessian), and
+    % NVAROFDIFF is invariant across those passes while DERNUMBER is not — so
+    % NVAROFDIFF could alias a live pass-1 variable, i.e. a silently wrong
+    % derivative (principle 1) instead of the loud throw this replaces.
+    yname = sprintf('cada%1.0ds%1.0f',numder,ADIGATOR.VARINFO.NAMELOCS(y.id,2));
   end
 else
   yname = 'cadadummystruct';

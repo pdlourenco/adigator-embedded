@@ -80,25 +80,33 @@ construction). Every private kernel and `cada*` helper has an identified caller
 zeros/ones/eye/…; the `@cadastruct` private printers ← subsref/subsasgn). The 0%
 figures reflect untriggered test paths, not vestigial code.
 
-## Latent defects found while classifying (follow-up, not this PR)
+## Latent defects found while classifying (now fixed)
 
-Reading the rarely-taken `RUNFLAG==2 && nameloc==0` derivative-naming branch of
-the `@cadastruct` concat/transpose ops surfaced three real defects on
-**fail-loud edge paths** (they throw on undefined names, they do not silently
-corrupt a derivative):
+Reading the rarely-taken `RUNFLAG==2 && nameloc<=0` derivative-naming branch of
+the `@cadastruct` concat/transpose ops surfaced real defects on **fail-loud edge
+paths** (they throw on undefined names, they do not silently corrupt a
+derivative). The inventory found three; the fix sweep found **two more** by
+comparing against the sibling overloads:
 
-- `@cadastruct/vertcat.m:18` and `@cadastruct/ctranspose.m:18` — the
-  `nameloc<=0` branch references `NDstr` (never assigned in the function) and
-  `yid` (the variable is `y.id`); both throw `Undefined variable` if reached.
-  Verified against the source.
-- `@cadastruct/repmat.m:30` — `EMTPYFLAG` typo (for `EMPTYFLAG`).
+- `@cadastruct/vertcat.m`, `ctranspose.m`, and — not caught by the inventory —
+  `horzcat.m`: the `nameloc<=0` arm references `NDstr` (never assigned in the
+  function) and `yid` (not in scope there).
+- `@cadastruct/subsref.m` — the same line in the **main** `subsref` body, the
+  most-used overload of the class. Subtler: the file *does* assign `NDstr`, but
+  inside the `ForSubsRef` **subfunction**, so a per-file "is it assigned?" check
+  misses it. (`subsasgn.m` was checked and is clean.)
+- `@cadastruct/repmat.m` — a misspelled empty-eval flag field.
 
-These are exactly the class of defect a coverage hole hides. They are out of
-scope for the coverage-floor PR (which changes no `lib/` source); captured here
-so the #103 struct-op fixtures — which will drive these branches — either fix or
-guard them. Logged in the canonical bug catalog as **B29–B31**
-(`docs/analyses/ANALYSIS.md` §1.3g, disposition §1.5) and filed as a follow-up
-task, so the catalog stays the single source of truth.
+These are exactly the class of defect a coverage hole hides — and the branch is
+**user-reachable** (`hlp([s; s]')` throws pre-fix - it is the concat result
+that is the unnamed intermediate), so they were fixed, not guarded, using
+`DERNUMBER` - the value the deleted `NDstr` stood for - and deliberately *not*
+the `NVAROFDIFF` spelling three siblings in the class use (see ANALYSIS §1.3g for
+why that distinction is principle-1 relevant, and for the open follow-up to
+harmonize those three). Logged in the canonical bug catalog as
+**B29–B31, B33–B34** (`docs/analyses/ANALYSIS.md` §1.3g, disposition §1.5) and
+pinned by `tests/integration/IStructArrayNamingTest.m`, so the catalog stays the
+single source of truth.
 
 ## Full classification
 
