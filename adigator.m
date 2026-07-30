@@ -225,6 +225,16 @@ NUMvod = ADIGATOR.NVAROFDIFF;
 if ~NUMvod
   error('No derivative inputs defined')
 end
+% B36 (issue #210): if the file being differentiated is one WE generated and
+% specialized to a trip count, re-differentiating it at a different one cannot
+% produce a valid file - its loop headers and index tables are built for the
+% original value. The specialization guard in the source makes this loud all by
+% itself (it fires in the test evaluation below), but as a bare
+% "Assertion failed" with no hint of the cause. Say what actually happened,
+% matching the actionable-rediff pattern established for the loopbound guard
+% (#173 PR A).
+adigatorCheckTripCountRediff(UserFunName,UserFunInputs);
+
 % Test users function file to make sure it works
 TestEvalStr = cell2mat(TestEvalStr);
 TestEvalStr = [UserFunName,'(',TestEvalStr(1:end-1),');'];
@@ -515,6 +525,13 @@ for Fcount = 1:FunCount
 end
 
 %% ~~~~~~~~~~~~~~ CREATE INTERMEDIATE PROGRAM FILES ~~~~~~~~~~~~~~~~~~~~ %%
+% Names appearing in a main-function loop range, harvested as the temp files are
+% printed and resolved into TRIPCOUNTGUARD below (B36, issue #210).
+ADIGATOR.TRIPCOUNTCANDIDATES = cell(1,0);
+ADIGATOR.TRIPCOUNTSCAN       = false;
+% Main-function input names, so adigatorPrintTempFiles can tell OUR equality
+% guard from a user's own `assert(x == 5)` without carrying FunctionInfo.
+ADIGATOR.MAININPUTNAMES      = FunctionInfo(1).Input.Names;
 for Fcount = 1:FunCount
   ADIGATOR.SVACOUNT = 0; ADIGATOR.SVRCOUNT = 0;
   DerNumber  = FunctionInfo(Fcount).DERNUMBER;
@@ -553,6 +570,12 @@ for Fcount = 1:FunCount
     ForCount = 0;
   end
   % Print the body of the file with adigatorPrintTempFiles
+  % Collect specialized-trip-count candidates from the MAIN function only (B36,
+  % issue #210): a name is only guardable if it is an input of the function the
+  % guard will be emitted into, and a subfunction parameter can shadow a
+  % same-named main input with a different value - guarding on that would fire a
+  % false assertion at runtime.
+  ADIGATOR.TRIPCOUNTSCAN = (Fcount == 1);
   [ForCount,IfCount] = adigatorPrintTempFiles(FunctionInfo(Fcount).File.fid,Tfid,...
     FunFlowInfo{Fcount},DerNumber,ForCount,FunStrChecks);
   % Assign outputs to adigatorOutputs
@@ -586,6 +609,43 @@ for Fcount = 1:FunCount
   fclose(Tfid);
 end
 rehash
+
+%% ~~~~~~~ RESOLVE SPECIALIZED TRIP COUNTS (B36, issue #210) ~~~~~~~~~~~ %%
+% A loop whose range NAMES a main-function input - `for k = 1:N` - keeps that
+% name in the generated file's `cadaforvar<k> = 1:N`, while the loop HEADER is
+% specialized to the analyzed literal. The two then disagree: called with a
+% larger N the file silently computes the analyzed problem (principle 1), and
+% called with a smaller one it indexes out of bounds. It is also unbounded for
+% Embedded Coder, the same way B35's loopbound case was.
+%
+% So state the specialization: one `assert(<name> == <value>);` per such input,
+% emitted with B35's guards at the top of the body (adigatorFunctionInitialize).
+% Restricted to plain numeric real INTEGER scalars - a non-integer would need a
+% floating-point equality assert, which is never the right shape - and to names
+% not already carrying a 'loopbound' <= guard, whose padded semantics are the
+% deliberate opposite of a specialization.
+ADIGATOR.OPTIONS.TRIPCOUNTGUARD = struct('name',cell(1,0),'value',cell(1,0));
+if ~isempty(ADIGATOR.TRIPCOUNTCANDIDATES)
+  MainInNames = FunctionInfo(1).Input.Names;
+  lbNames     = {};
+  if ~isempty(ADIGATOR.OPTIONS.LOOPBOUND)
+    lbNames = {ADIGATOR.OPTIONS.LOOPBOUND.name};
+  end
+  cands = unique(ADIGATOR.TRIPCOUNTCANDIDATES,'stable');
+  for Ccount = 1:length(cands)
+    cname = cands{Ccount};
+    if ismember(cname,lbNames); continue; end
+    InLoc = find(strcmp(MainInNames,cname),1);
+    if isempty(InLoc) || InLoc > length(UserFunInputs); continue; end
+    cval = UserFunInputs{InLoc};
+    if ~isnumeric(cval) || ~isscalar(cval) || ~isreal(cval) || ...
+        ~isfinite(cval) || cval ~= floor(cval)
+      continue
+    end
+    ADIGATOR.OPTIONS.TRIPCOUNTGUARD(end+1) = ...
+      struct('name',cname,'value',double(cval));
+  end
+end
 
 %% ~~~~~~~~~~~~~~~~~~~~~~ ECHO PRE-PRINTING ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ %%
 if ADIGATOR.OPTIONS.ECHO

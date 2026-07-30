@@ -93,7 +93,10 @@ for k = 1:n
   % (writes nothing, reads the bound name) so the slicer never drops the
   % n <= Nmax check from a slimmed loopbound file. (Only TOP-LEVEL guards reach
   % here; an inner loop's assert is absorbed by analyzeBlock as a phantom write.)
-  if ~isempty(regexp(strtrim(char(S(k).text)),lbg.match,'once'))
+  % anyMatch, not match: since B36/#210 a generated file can also carry the
+  % specialized-trip-count guard `assert(name == value)`, which must be kept
+  % just as unconditionally - its '==' would mis-split at the '=' below too.
+  if ~isempty(regexp(strtrim(char(S(k).text)),lbg.anyMatch,'once'))
     % Opaque keep-always: it writes nothing and has no parseable lhs/rhs, so the
     % slicer keeps it unconditionally (its bound name is a function input, always
     % in scope) - no deps need recording.

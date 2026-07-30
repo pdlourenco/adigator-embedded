@@ -173,6 +173,20 @@ for FlowCount = 1:FlowSize
       if ~isempty(EqLoc)
         LoopStrLHS = strtrim(LoopStr(1:EqLoc(1)-1));
         LoopStrRHS = strtrim(LoopStr(EqLoc(1)+1:end));
+        % B36 (issue #210): harvest every identifier in the loop RANGE. The
+        % generated file keeps these names in `cadaforvar<k> = <range>` while
+        % specializing the loop HEADER to the analyzed literal, so any of them
+        % that turns out to be a main-function input needs an
+        % `assert(name == value)` stating the specialization. Over-collecting is
+        % safe: adigator.m keeps only names that ARE main inputs bound to a plain
+        % integer scalar, so callee names ('numel'), derivative inputs and
+        % locals all drop out there. Gated on TRIPCOUNTSCAN so a subfunction's
+        % loop never contributes a name that could shadow a same-named main
+        % input and produce a guard with the wrong value.
+        if ADIGATOR.TRIPCOUNTSCAN
+          ADIGATOR.TRIPCOUNTCANDIDATES = ...
+            [ADIGATOR.TRIPCOUNTCANDIDATES, TripCountNames(LoopStrRHS)];
+        end
         if DerNumber == 1
           LoopVarStr = [LoopVar,' = ',LoopStrRHS,';'];
           fprintf(Tfid,[indent,LoopVarStr,'\n']);
@@ -491,25 +505,57 @@ while MajorLineCount <= EndLocation(1) && ~isnumeric(FunStrFULL)
       elseif StrLength > 5 && strcmp(FunStri(1:6),'pause(')
         % PAUSE
       elseif StrLength > 6 && strcmp(FunStri(1:7),'assert(') && ...
-          ~isempty(regexp(FunStri,adigatorLoopboundGuardMatch,'once'))
-        % LOOPBOUND runtime-bound guard (#173). `assert(name <= max)` is the exact
-        % shape adigatorForInitialize emits for a runtime-bound loop (the shared
-        % shape lives in util/adigatorLoopboundGuard, #181), so as a
-        % source statement it appears only when RE-differentiating a
-        % 'loopbound'-generated file (a Hessian or nth derivative of a loopbound
-        % derivative).
-        assertName = regexp(FunStri,adigatorLoopboundGuardMatch,'once','tokens');
-        if DerNumber >= 2 && ~isempty(ADIGATOR.OPTIONS.LOOPBOUND) && ...
-            ~isempty(assertName) && ismember(assertName{1},{ADIGATOR.OPTIONS.LOOPBOUND.name})
-          % PR B: this is a RE-differentiation (DERNUMBER>=2) of a loopbound file
-          % and the guard names a loopbound parameter, so it is a machine-emitted
-          % guard re-synthesized by the loop machinery (adigatorForInitialize
-          % re-emits the assert at every derivative level). DROP the source copy
-          % here to avoid a duplicate guard. The DERNUMBER>=2 gate matters: on the
-          % FIRST pass the loopbound guard is synthesized, never read from source,
-          % so a guard-shaped assert at DERNUMBER==1 is the USER's own - it must
-          % NOT be silently dropped even if it happens to name a loopbound
-          % parameter (falls through to the fail-loud branch below).
+          ~isempty(regexp(FunStri,adigatorGuardAnyMatch,'once'))
+        % A machine-emitted precondition guard (#173, and B36/#210 for the
+        % equality form). Two shapes, both from util/adigatorLoopboundGuard
+        % (#181): `assert(name <= max)` for a runtime-bound ('loopbound') loop,
+        % `assert(name == value)` for a specialized trip count. As a SOURCE
+        % statement either appears only when RE-differentiating a generated file
+        % (a Hessian or nth derivative of a derivative).
+        gshape     = adigatorLoopboundGuard();
+        assertName = regexp(FunStri,adigatorGuardAnyMatch,'once','tokens');
+        isEqGuard  = ~isempty(regexp(FunStri,gshape.eqMatch,'once'));
+        lbNames = {};
+        if ~isempty(ADIGATOR.OPTIONS.LOOPBOUND)
+          lbNames = {ADIGATOR.OPTIONS.LOOPBOUND.name};
+        end
+        % An equality guard is OURS only if it could have been emitted by our
+        % emitter: main function (TRIPCOUNTSCAN) and naming a main-function
+        % input. Without both, a user's own `assert(nSteps == 5)` would be
+        % silently deleted from the generated file at DerNumber>=2 - a
+        % fail-loudness regression, and precisely what the comment below says
+        % must not happen. Note the emitter only ever writes '==' guards into
+        % FunID == 1, so a guard-shaped '==' inside a SUBFUNCTION is provably
+        % the user's.
+        isOurEqGuard = isEqGuard && ADIGATOR.TRIPCOUNTSCAN && ...
+          ~isempty(assertName) && ismember(assertName{1},ADIGATOR.MAININPUTNAMES);
+        isKnownGuard = DerNumber >= 2 && ~isempty(assertName) && ...
+          (ismember(assertName{1},lbNames) || isOurEqGuard);
+        if isKnownGuard
+          % PR B: this is a RE-differentiation (DERNUMBER>=2) of a generated file
+          % and the guard is machine-emitted, re-synthesized on this pass - the
+          % loopbound `<=` by the loop machinery (adigatorForInitialize re-emits
+          % it at every derivative level), the specialized `==` by the body
+          % prologue. DROP the source copy here to avoid a duplicate guard. The
+          % DERNUMBER>=2 gate matters: on the FIRST pass both guards are
+          % synthesized, never read from source, so a guard-shaped assert at
+          % DERNUMBER==1 is the USER's own - it must NOT be silently dropped even
+          % if it happens to name a bound parameter (falls through to the
+          % fail-loud branch below).
+          %
+          % B36: record the name so the prologue re-emits the equality guard on
+          % this level too. Without this a Hessian would silently LOSE the
+          % specialization statement its gradient carried - the loop header in
+          % the source is already a literal, so nothing else would re-derive it.
+          %
+          % Re-differentiating at a DIFFERENT trip count than the source was
+          % specialized to is rejected before we get here, by
+          % adigatorCheckTripCountRediff - so the value this pass derives from
+          % its own inputs is guaranteed to equal the one in the source guard,
+          % and only the name needs carrying forward.
+          if isOurEqGuard
+            ADIGATOR.TRIPCOUNTCANDIDATES{end+1} = assertName{1};
+          end
         else
           % PR A: not a loopbound pass (or an assert the user wrote themselves) -
           % re-differentiation of a loopbound file without the option, or a
@@ -817,11 +863,24 @@ if ~isempty(commentlocs)
 end
 end
 
-function m = adigatorLoopboundGuardMatch()
-% Shared loopbound-guard recognizer (#181): fetches the single-source-of-truth
-% match regex from util/adigatorLoopboundGuard so this file's two uses (the
-% classifier condition and the name/bound token extraction) cannot drift from
-% the emitter's template. Tokens = {name, bound}; callers use token 1 (name).
+function m = adigatorGuardAnyMatch()
+% Shared guard recognizer (#181, extended for B36/#210): fetches the
+% single-source-of-truth match regex from util/adigatorLoopboundGuard so this
+% file's two uses (the classifier condition and the name token extraction)
+% cannot drift from the emitters' templates. Matches EITHER machine-emitted
+% guard shape - `assert(name <= max)` (loopbound) or `assert(name == value)`
+% (specialized trip count). Tokens = {name, value}; callers use token 1 (name)
+% and re-test against g.eqMatch when the two must be told apart.
 g = adigatorLoopboundGuard();
-m = g.match;
+m = g.anyMatch;
+end
+
+function names = TripCountNames(RangeStr)
+% B36 (issue #210): every bare identifier appearing in a loop RANGE, as
+% specialized-trip-count candidates. Deliberately over-collects - `numel(x)`
+% contributes both 'numel' and 'x' - because adigator.m keeps only candidates
+% that are main-function inputs bound to a plain integer scalar, which is a far
+% more reliable filter than parsing the range expression here. Pure by design:
+% the caller owns the accumulator, so this adds no `global` to the file.
+names = regexp(RangeStr,'[A-Za-z]\w*','match');
 end

@@ -71,5 +71,63 @@ classdef ULoopboundGuardTest < matlab.unittest.TestCase
             tc.verifyEmpty(regexp('assert(N <= 8)',g.match,'once'), ...
                 'missing semicolon is not the emitted shape');
         end
+
+        function eqTemplateMatchesEqRecognizer(tc)
+            % B36 (#210): the same lockstep for the SPECIALIZED-trip-count
+            % guard. A specialized file states an equality, not an inequality -
+            % the two claims are opposites and must not be interchangeable.
+            g = adigatorLoopboundGuard();
+            line = sprintf(g.eqTemplate,'N',5);
+            tc.verifyEqual(line,'assert(N == 5);', ...
+                'emitted specialization guard text changed - dialect break');
+            tok = regexp(line,g.eqMatch,'once','tokens');
+            tc.verifyEqual(tok,{'N','5'}, ...
+                'eq recognizer must extract {name,value} from the emitted shape');
+
+            % the two recognizers are mutually exclusive: neither shape may be
+            % mistaken for the other, or padded semantics could be read as a
+            % specialization (or vice versa)
+            tc.verifyEmpty(regexp(sprintf(g.template,'N',8),g.eqMatch,'once'), ...
+                'a <= bound must not read as a specialization');
+            tc.verifyEmpty(regexp(line,g.match,'once'), ...
+                'an == specialization must not read as a padded bound');
+        end
+
+        function eqRecognizerAcceptsNegativeValues(tc)
+            % a specialized parameter can be any endpoint of a range
+            % (`for k = a:b`), not only a count, so it may be <= 0. The padded
+            % bound is a trip count and stays unsigned.
+            g = adigatorLoopboundGuard();
+            line = sprintf(g.eqTemplate,'a',-2);
+            tc.verifyEqual(line,'assert(a == -2);');
+            tc.verifyEqual(regexp(line,g.eqMatch,'once','tokens'),{'a','-2'});
+            tc.verifyEmpty(regexp('assert(N <= -3);',g.match,'once'), ...
+                'a negative padded bound is not an emitted shape');
+        end
+
+        function anyMatchAcceptsBothEmittedShapes(tc)
+            % anyMatch is what the consumers key on when they only need "is
+            % this one of ours?" - adigatorParseTape's keep-always whitelist and
+            % adigatorPrintTempFiles' re-differentiation classifier. It must
+            % accept BOTH emitted shapes, or a guard is silently mis-parsed.
+            g = adigatorLoopboundGuard();
+            tc.verifyEqual(regexp(sprintf(g.template,'N',8),g.anyMatch,'once','tokens'), ...
+                {'N','8'}, 'anyMatch must accept the padded bound');
+            tc.verifyEqual(regexp(sprintf(g.eqTemplate,'N',5),g.anyMatch,'once','tokens'), ...
+                {'N','5'}, 'anyMatch must accept the specialization');
+        end
+
+        function nonGuardShapesRejectedByAnyMatch(tc)
+            % anyMatch is deliberately the LOOSER union, so its negative cases
+            % are the ones that matter: a user statement it wrongly accepted
+            % would be dropped by the classifier or mis-kept by the slicer.
+            g = adigatorLoopboundGuard();
+            for bad = {'assert(N == Nmax);', 'assert(N ~= 5);', 'assert(N === 5);', ...
+                       'myassert(N == 5);',  'assert(N == 5)',  'x = 1; assert(N == 5);', ...
+                       'assert(N >= 5);',    'assert(f(N) == 5);'}
+                tc.verifyEmpty(regexp(bad{1},g.anyMatch,'once'), ...
+                    sprintf('"%s" must not read as a machine-emitted guard',bad{1}));
+            end
+        end
     end
 end

@@ -248,32 +248,41 @@ is **n-independent**: ROM 4400, RAM 0, stack 352 bytes.
 
 | n | exact ROM | exact RAM | exact stack | ROM penalty (padded/exact) |
 |---:|---:|---:|---:|---:|
-| 4 | 640 | 0 | 240 | 6.9x |
-| 8 | 560 | 0 | 160 | 7.9x |
-| 16 | 736 | 0 | 176 | 6.0x |
-| 32 | 1504 | 0 | 192 | 2.9x |
-| 64 | 4592 | 0 | 224 | 1.0x |
+| 4 | 400 | 0 | 192 | 11.0x |
+| 8 | 240 | 0 | 80 | 18.3x |
+| 16 | 448 | 0 | 80 | 9.8x |
+| 32 | 1216 | 0 | 80 | 3.6x |
+| 64 | 4288 | 0 | 80 | 1.0x |
 
-> Re-measured after the runtime-bound guard moved to the top of the generated
-> body (see `CHANGELOG.md`). Before that, the bound-dependent expressions ahead
-> of the loop — the user's `zeros(N,1)` and the loop-variable range — reached
-> Coder unbounded, so a `loopbound` artifact **required the heap** and was
-> rejected outright under static memory allocation. It is now heap-free: padded
-> ROM 4624 → 4400 B, stack 240 → 352 B (the range is stack-resident rather than
-> heap-allocated). The shape of the penalty is unchanged.
+> **Both columns are now measured heap-free**, which they were not before. A
+> trip-count parameter used to reach Coder with no stated bound, so every cell
+> here quietly compiled to heap `emxArray`s; under an embedded target's static
+> memory allocation the files were simply rejected. Generated files now state
+> their envelope up front — `assert(N <= Nmax)` for a `loopbound` (padded) file,
+> `assert(N == n)` for one specialized to a single trip count — and both build
+> with the heap off.
+>
+> This **raised the measured penalty substantially**, because it is the *exact-n*
+> column that improved: with `N` pinned to a constant those files become fully
+> fixed-size (ROM 640→400 at n=4, 560→240 at n=8; stack 160→80), while the padded
+> file keeps a genuinely runtime `N` and stays variable-size at `:Nmax`. (Padded
+> ROM is unchanged here at 4400 B; its earlier move from 4624 B belongs to the
+> guard-hoisting change, not this one.) Previously-published ratios for this
+> table (6.9x/7.9x/6.0x/2.9x/1.0x) were measured with the heap enabled and
+> understate the cost of padding by 1.6x at `n = 4` and 2.3x at `n = 8`.
 
 - **The penalty is real and it is in ROM.** A *subscripted* (allocation-shaped)
   derivative carries a per-iteration nonzero-location table that scales with the
   trip count; the padded file keeps the full `Nmax`-sized `static const` tables
-  regardless of `n`, so at `n = 4` you pay **~7×** the ROM of an exact-`n` file.
+  regardless of `n`, so at `n = 4` you pay **~11×** the ROM of an exact-`n` file.
   RAM stays 0 (tables are `.rdata`, not RAM); the padded file's stack carries the
-  `Nmax`-bounded loop-variable range (352 B vs 224 B exact at `Nmax = 64`).
+  `Nmax`-bounded loop-variable range (352 B vs 80 B exact).
 - **It converges at `n = Nmax`** (1.0×) — padded and exact do the same work
   there — and grows with `Nmax/n`, so it is largest exactly where a runtime bound
   is most useful (a big `Nmax` seldom hit). They are not byte-identical files:
-  the padded one keeps a runtime trip count, which Coder specializes differently,
-  so the ratio lands near 1 from either side — 0.96× at `Nmax = 64`, 0.88× at
-  `Nmax = 32`.
+  the padded one keeps a runtime trip count while the exact one has it as a
+  compile-time constant, so a few percent of scaffolding remains — 1.0× at
+  `Nmax = 64`, 1.09× at `Nmax = 32`.
 - **It quantifies the cost of the runtime bound.** The padding penalty is exactly
   what a symbolic-`N` bound (sizing the tables to the runtime `n` instead of
   `Nmax`) would remove: for subscripted forms run at `n ≪ Nmax` the ROM penalty is
