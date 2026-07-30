@@ -39,6 +39,22 @@ in a MATLAB session. Two entry points:
 - `tests/ci_local.m` — the **full local gate** (adds the Coder-gated system
   suite).
 
+> **CI cannot verify codegen — your local run is the only gate for it.**
+> On GitHub-hosted runners MATLAB Coder and Embedded Coder **install but are not
+> licensed**, so *every* test that compiles (`SCodegenTest` including the ERT
+> builds, `SCodegenShowcaseTest`, `SLoopboundPaddingTest`, the Monte-Carlo
+> codegen-equivalence oracle) is silently *Filtered by assumption* — **inside a
+> green job**. See [`CI_PLAN.md`](CI_PLAN.md) §3.2 "CI cannot verify codegen" for
+> the measured evidence.
+>
+> So if your change touches the **generators**, the **embed pipeline**, the
+> **shared codegen configuration**, or anything whose output is compiled: run the
+> Coder-gated tests **locally** on a machine with licensed Coder + Embedded Coder
+> and a configured C compiler (`mex -setup`; footprint/stack additionally need a
+> standalone `gcc`/`size` toolchain), and **record what you ran and its result in
+> the PR description**. A green `Extended` run is not evidence for those cells;
+> treat "Filtered" in the job log as "not tested".
+
 **Run them on a clean path** — in a fresh `matlab -batch`, not against a dirty
 interactive session and never via `addpath(genpath(...))`. CI uses a clean path
 (`matlab-actions/run-tests`, no `genpath`), so a dirty-path run can pass locally
@@ -76,7 +92,8 @@ review diffs, and edit docs.
 The codegen system tests (`SCodegenTest`, TS-S-02) additionally need a MATLAB
 Coder license and a configured C compiler (`mex -setup`); they self-skip via
 assumption otherwise (so a "skipped/incomplete" result there is expected without
-Coder, not a failure). On R2024a with MinGW + ninja, codegen also needs `.` (the
+Coder, not a failure — but per the note above, *expected* is not *verified*: on
+hosted CI they always skip, so only your local run establishes them). On R2024a with MinGW + ninja, codegen also needs `.` (the
 current directory) on the **system** PATH so `cmd.exe` finds the generated
 `.bat` build script, plus `MW_MINGW64_LOC` and `MinGW\bin` on the persistent
 PATH — an R2024a environment quirk, not a toolbox bug.

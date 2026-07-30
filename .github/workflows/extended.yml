@@ -77,8 +77,11 @@ jobs:
           test-results-junit: results/system.xml
       - name: Monte-Carlo smoke (TS-S-04)
         # Selected here, not in the PR gate or the ci_local sweep: the
-        # random-seed harness must never gate a PR (ADR-0007). This job has
-        # MATLAB Coder, so MCSmokeTest's cross-mode numeric oracle runs fully.
+        # random-seed harness must never gate a PR (ADR-0007). NOTE: this job
+        # INSTALLS MATLAB Coder but the hosted runner does not LICENSE it, so
+        # MCSmokeTest's codegen-equivalence oracle filters out here; only the
+        # base-MATLAB oracles actually run (docs/CI_PLAN.md §3.2 "CI cannot
+        # verify codegen").
         if: success()
         uses: matlab-actions/run-tests@v2
         with:
