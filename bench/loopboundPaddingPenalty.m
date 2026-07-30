@@ -15,9 +15,10 @@ function report = loopboundPaddingPenalty(varargin)
 % Options (defaults in brackets):
 %   Nmax    [64]                 generation-time max trip count.
 %   nSweep  [[4 8 16 32 64]]     runtime sizes to compare against (<= Nmax).
-%   DerType ['gradient']         'gradient' (loopbound Hessian errors at
-%                                generation - the 2nd-derivative pass can't
-%                                process the loopbound assert guard, #173).
+%   DerType ['gradient']         'gradient'. A loopbound Hessian is supported
+%                                since #173 PR B / ADR-0028, so extending the
+%                                measurement to it is a natural add; the
+%                                published figures are the gradient's.
 %   reportPath ['']             write the markdown table here.
 %   verbose [true]
 %
@@ -106,7 +107,7 @@ try
     % byte identical with static memory allocation (ROM 4400 / stack 352 at
     % Nmax=64), and the no-heap acceptance gate proper lives in
     % tests/system/SRolledErtCodegenTest (loopboundGradientErtCodegenStaticMemory).
-    % Tighten this to EnableDynamicMemoryAllocation=false once B36 lands.
+    % Tighten this to EnableDynamicMemoryAllocation=false once B36 (issue #210) lands.
     %
     % x is a fixed-size vector; N is a RUNTIME scalar bound (the padded artifact
     % is called with any n at runtime).
