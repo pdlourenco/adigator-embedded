@@ -73,6 +73,25 @@ Concretely, three commitments:
    regeneration pass over committed artifacts), not a drive-by fix. It is
    **open** under this ADR, not decided by it.
 
+4. **A guard shape is a re-differentiation surface, not just an emission.** Every
+   generated file is the *source* of the next derivative pass, so anything the
+   emitter adds must be recognized by `adigatorPrintTempFiles`'s classifier and
+   `adigatorParseTape`'s keep-always whitelist — both reading the same shared
+   shape (`util/adigatorLoopboundGuard`). B36 is the proof: adding `==` without
+   teaching the classifier would have sent every Hessian of a named-trip-count
+   function into the generic `Cannot process statement:` error. Adding an emitted
+   construct means extending the recognizers **and their lockstep test** in the
+   same change, and pinning the behaviour at **3rd** order — 2nd order is where
+   the recognize-drop-re-record path first runs, 3rd is where it runs twice,
+   which is what separates a one-shot bug from a cumulative one.
+
+   The recognizer must also be **gated**, not just widened. A shape we emit is
+   also a shape a user may write: the equality arm accepts a source guard only
+   when it sits in the main function and names a main-function input, so a user's
+   own `assert(nSteps == 5)` keeps failing loudly instead of being silently
+   deleted from their derivative. A recognizer with no gate converts someone
+   else's safety check into nothing.
+
 ## Consequences
 
 - **`loopbound` derivatives are embeddable.** Measured on the `scostfun_lb`
@@ -95,14 +114,20 @@ Concretely, three commitments:
   ever extended to `loopbound`, the guard would be silently dropped from the
   value tape and decision 1 would not hold there. Not a defect today; a
   precondition on any future reverse-mode `loopbound` work.
-- **Decision 2 is not yet enforced in the padding bench (B36).**
-  `bench/loopboundPaddingPenalty` still measures with the heap enabled, because
-  its *exact-`n`* baseline half cannot build without it: a file generated
-  **without** `loopbound` still emits `cadaforvar<k> = 1:N` by name and has no
-  declared maximum to hoist (`ANALYSIS.md` §1.3j). The padded half is unaffected —
-  since this change it measures byte-identical under static memory allocation —
-  and the no-heap gate proper is the Coder-gated system test, which *is* strict.
-  Tighten the bench when B36 lands.
+- **Decision 2 is enforced everywhere (B36 landed).** `bench/loopboundPaddingPenalty`
+  now measures with `EnableDynamicMemoryAllocation = false`. It could not before:
+  its *exact-`n`* baseline half is generated **without** `loopbound`, so it still
+  emitted `cadaforvar<k> = 1:N` by name with no declared maximum to hoist
+  (`ANALYSIS.md` §1.3j). B36 gives that case its own guard —
+  `assert(N == n);`, an **equality**, because such a file is *specialized* to one
+  trip count rather than *padded* to a maximum.
+- **Enforcing decision 2 changed a published measurement, which is the point.**
+  Every padding-penalty figure this project had published was taken with the heap
+  on. Measured honestly, the exact-`n` files shed the `emxArray` machinery they
+  had been carrying and the penalty roughly **doubled** at small `n`
+  (11.0×/18.3×/3.6× at n=4/8/32, was 6.9×/7.9×/2.9×). A benchmark run under a
+  configuration the target never uses had been understating the cost of padding
+  by ~2×. That is the concrete argument for the decision, not an aside.
 - **Benchmarks that quoted the old footprint were re-measured.** The R6 go/no-go
   evidence (`docs/ROADMAP.md`) and `bench/SHOWCASE.md` carry the new figures. The
   *shape* of the `Nmax`-padding penalty is unchanged, so the R6 decision basis is
@@ -125,6 +150,14 @@ Concretely, three commitments:
   establishes) even where the compiler that punishes violating it cannot run.
   That pairing — a cheap invariant runnable everywhere plus the expensive proof
   runnable locally — is the intended shape for target-acceptance properties.
+
+**A guard that protects itself.** A generated file's own precondition executes
+during adigator's initial test evaluation when that file is re-differentiated, so
+re-differentiating a specialized file at the wrong trip count cannot silently
+produce a mis-stamped guard — it throws first. `adigatorCheckTripCountRediff`
+adds a diagnosis, not the safety. Worth knowing when reasoning about future
+emitted constructs: anything executable we emit into a generated file also runs
+on the next derivative pass.
 
 **Revisit when:** a target other than strict ERT/no-heap becomes a supported
 output (then "bounded at generation" may be over-strict); or if #6 Tier 2

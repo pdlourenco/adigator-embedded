@@ -1058,12 +1058,29 @@ fprintf(fid,'%% ADiGator Start Derivative Computations\n');
 % The per-loop guards stay: they are the ones the re-differentiation path keys
 % on (adigatorPrintTempFiles, #173) and a redundant assert costs nothing in the
 % generated C.
-if FunID == 1 && ~isempty(ADIGATOR.OPTIONS.LOOPBOUND)
-  lbg = adigatorLoopboundGuard();  % shared guard shape (#181)
+%
+% The same placement carries the SPECIALIZED-trip-count guard (B36, issue #210):
+% `assert(N == n);` where a loop range names a main-function input but no
+% 'loopbound' was declared. There the generated file is not padded, it is
+% specialized - the loop header is already the analyzed literal while the range
+% still says `1:N` - so the honest statement is an equality, and without it a
+% call with a larger N silently computes the analyzed problem. Same reason for
+% the same position: the parameter sizes user expressions ahead of the loop.
+if FunID == 1
+  lbg = adigatorLoopboundGuard();  % shared guard shapes (#181)
   for LBcount = 1:length(ADIGATOR.OPTIONS.LOOPBOUND)
     fprintf(fid,'%s\n',sprintf(lbg.template,...
       ADIGATOR.OPTIONS.LOOPBOUND(LBcount).name,...
       ADIGATOR.OPTIONS.LOOPBOUND(LBcount).value));
+  end
+  % Read unguarded, exactly like LOOPBOUND above: adigator.m resolves
+  % TRIPCOUNTGUARD before any print phase runs. An `isfield` here would convert
+  % a would-be loud failure into a silently UNguarded artifact, which is the
+  % failure mode this whole change exists to remove.
+  for TCcount = 1:length(ADIGATOR.OPTIONS.TRIPCOUNTGUARD)
+    fprintf(fid,'%s\n',sprintf(lbg.eqTemplate,...
+      ADIGATOR.OPTIONS.TRIPCOUNTGUARD(TCcount).name,...
+      ADIGATOR.OPTIONS.TRIPCOUNTGUARD(TCcount).value));
   end
 end
 if ~ADIGATOR.OPTIONS.UNROLL && length(FunctionInfo(FunID).Iteration.DepFlag) == 2 &&...

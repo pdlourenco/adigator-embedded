@@ -809,7 +809,7 @@ one level down — loud at codegen, never a wrong derivative.
 ### 1.3j A loop range over a runtime-named scalar is unbounded even *without* `loopbound` (B36)
 
 **B36 — a non-`loopbound` file whose loop range names a runtime input emits an
-unguarded `1:N` (medium; open,
+unguarded `1:N` (medium; fixed,
 [#210](https://github.com/pdlourenco/adigator-embedded/issues/210)).** Found by
 the B35 fix sweep, when the padding
 benchmark's *exact-`n`* baseline — generated **without** the `loopbound` option —
@@ -827,32 +827,105 @@ generated function, so the loop-variable range still prints as `cadaforvar1.f =
 1:N`. Without the `loopbound` option there is no declared maximum, so B35's
 hoisted guard does not fire and nothing bounds it.
 
-**Why this is the wider defect.** The generated file's index tables are sized for
-the analyzed `n`, so calling it with any other `N` is already outside its
-envelope — and, unlike a `loopbound` file, **nothing says so**. B35 gives the
-`loopbound` case a guard; this case has neither a guard nor a fold. Two candidate
-resolutions, both changing emitted output:
+**Why this is the wider defect — measured, and principle-1 in one direction.**
+The emitted range and the emitted loop header **disagree**: the header is a
+literal (`for cadaforcount1 = 1:5`, the analyzed count) while the range is
+`cadaforvar1.f = 1:N` (runtime). Generating `lb_fun` at `n = 5` and calling the
+result at other `N`:
 
-1. **Fold the range** when the analysis value is known and the file does not
-   declare the name as a runtime bound — emit `1:<n>` and stop referencing `N`.
-   Bounded, smaller, and honest about the specialization. Risk: silently ignores
-   a caller-supplied `N`.
-2. **Emit a guard anyway** (`assert(N == <n>);`, an equality rather than B35's
-   inequality — the trip count was specialized, not padded). Loud, preserves the
-   reference, costs a line.
+| call | result |
+|---|---|
+| `N = 5` (the analyzed value) | `J.f = 70` — correct |
+| `N = 3` (below) | `Index in position 2 exceeds array bounds` — **loud** |
+| `N = 8` (above) | `J.f = 70`, `numel(v.f) = 8` — **runs silently**; the true 8-term value is 240 |
 
-Recommendation is (2) then (1): make the envelope violation loud first, optimize
-second. **Not decided** — it changes emitted output for every generated file
-whose loop bound names an input, so it needs its own decision under ADR-0034
-decision 3.
+The `N > n` direction is the serious one: the file computes the *analyzed*
+problem while the caller asked for a bigger one, returns an output vector of the
+requested length with the tail never written, and reports nothing. That is a
+wrong derivative delivered quietly — `REVIEW_CONTEXT.md` principle 1 — not the
+loud failure B35 was.
 
-**Consequence today:** `bench/loopboundPaddingPenalty` cannot run with
-`EnableDynamicMemoryAllocation = false`, because its exact-`n` baseline half will
-not build. The bench therefore keeps the default config, with the asymmetry noted
-at the call site. The **padded** half is unaffected — since B35 it measures
-byte-identical with static memory allocation — and the no-heap acceptance gate
-proper is `SRolledErtCodegenTest::loopboundGradientErtCodegenStaticMemory`, which
-*is* strict. Tighten the bench once B36 lands.
+The generated file's index tables are sized for the analyzed `n`, so calling it
+with any other `N` is outside its envelope, and unlike a `loopbound` file
+**nothing says so**. B35 gives the `loopbound` case a guard; this case has
+neither a guard nor a fold.
+
+**Fix — state the specialization.** The generated file now opens with
+`assert(N == n);`, one per main-function input that a loop range names, at the
+same position and for the same reason as B35's `assert(N <= Nmax)`: the
+parameter also sizes user expressions ahead of the first loop. An **equality**,
+not an inequality — the file was specialized to a single trip count, not padded
+to a maximum, and the two claims are opposites. Four pieces:
+
+- `adigatorPrintTempFiles` harvests every identifier in a main-function loop
+  range as the temp files are printed. It deliberately over-collects; the useful
+  filter is downstream.
+- `adigator.m` keeps only candidates that are main-function inputs bound to a
+  plain **integer** scalar and are not already declared `loopbound` (whose padded
+  `<=` semantics are the deliberate opposite), yielding `OPTIONS.TRIPCOUNTGUARD`.
+- `adigatorFunctionInitialize` emits them in the body prologue beside B35's.
+- `util/adigatorLoopboundGuard` gains the equality shape (`eqTemplate`/`eqMatch`)
+  and a loose `anyMatch`; `adigatorPrintTempFiles`'s re-differentiation
+  classifier and `adigatorParseTape`'s slim keep-always whitelist both switch to
+  it. **This half is the load-bearing one.** A generated file carrying
+  `assert(N == n);` is the *source* of the next derivative pass, and the
+  classifier only recognized `<=` — an unrecognized `assert(...)` falls past that
+  branch into the generic `Cannot process statement:` error, so without this
+  every Hessian of a named-trip-count function would have stopped generating.
+  (Loud, but with the least actionable message in the file.)
+
+**Order matters at 2nd order and beyond.** At level 1 the parameter name comes
+from the loop range. From level 2 the source file's loop header is already a
+literal, so nothing can re-derive it; the name survives only because the previous
+level's guard is recognized, dropped, and re-recorded for re-emission. Verified
+to **3rd order** on `sum(x_k^3)`: exactly one guard per level, and
+`f`/`dx`/`dxdx`/`dxdxdx` = `100`/`3k²`/`6k`/`6` analytically exact.
+
+**Consequences.**
+
+- The `N > n` silent-wrong call now errors. This is a **user-visible break** in
+  the correct direction: code that relied on the old silence gets an assertion
+  failure instead of a wrong derivative.
+- The exact-`n` artifact builds under static memory allocation, so
+  `bench/loopboundPaddingPenalty` finally runs with
+  `EnableDynamicMemoryAllocation = false` — ADR-0034 decision 2 is now enforced
+  where it was written rather than deferred.
+- **The padding-penalty numbers moved a lot.** With `N` pinned to a constant the
+  exact-`n` files become fully fixed-size and shed the `emxArray` machinery they
+  had been carrying (ROM 640→400 at n=4, 560→240 at n=8; stack 160→80), while the
+  padded file keeps a genuinely runtime `N`. The measured penalty roughly
+  **doubled** at small `n` (11.0×/18.3×/3.6× at n=4/8/32, was 6.9×/7.9×/2.9×) —
+  every earlier figure was taken with the heap on. See `bench/SHOWCASE.md` and
+  the R6/R17 rows in `docs/ROADMAP.md`; this strengthens the case for #6 Tier 2.
+
+Pinned by `tests/integration/ISpecializedTripCountTest.m` and the shape lockstep
+in `tests/unit/ULoopboundGuardTest.m`.
+
+**Re-differentiating at a *different* trip count** cannot be made to work — the
+source file's headers and tables serve the value it was generated at — and is
+rejected before generation by `util/adigatorCheckTripCountRediff`. Note this is
+a **diagnosis**, not a new safety property: the emitted guard is self-protecting,
+because it executes during adigator's own initial test evaluation of the source
+and throws there anyway. The check exists so the user sees *why* instead of a
+bare `Assertion failed`, matching the actionable-rediff pattern of #173 PR A.
+
+**Residual scope — three shapes are still specialized and still unguarded.**
+"Fixed" above means the direct form (a main-function input named in a
+main-function loop range), not every route to a specialized trip count:
+
+1. **Pass-through into a subfunction** — `main(x,N)` calling `sub(x,N)` whose
+   loop is `for k = 1:N`. The harvest is gated to the main function so a
+   subfunction's parameter cannot shadow a same-named main input with a
+   different value and forge a false guard; the cost is that a genuine
+   pass-through is missed. This is the most likely real-world shape of the three.
+2. **A bound reached through a struct field** — `for k = 1:p.N` with `p` a struct
+   input. `p` is not numeric and `N` is not a top-level input name, so neither
+   qualifies.
+3. **A non-integer scalar input in the range** — `for k = 1:round(1/h)`. Excluded
+   deliberately: a floating-point equality assert is not a shape worth emitting.
+
+All three keep the original silent-wrong behaviour above the analyzed count. The
+guard's *absence* is the tell, so they are detectable, but they are not fixed.
 
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
@@ -913,10 +986,7 @@ proper is `SRolledErtCodegenTest::loopboundGradientErtCodegenStaticMemory`, whic
 | B29-B31, B33-B34 (`@cadastruct` fallback-naming branch: undefined `NDstr`/`yid`, misspelled empty-eval flag) | **Fixed** - five sites in the `RUNFLAG==2 && nameloc<=0` fallback-name arm (`vertcat`/B29, `ctranspose`/B30, `repmat`/B31, `horzcat`/B33, `subsref`/B34 - the last two found by the fix sweep, not the inventory) used `NDstr` in a scope that never assigns it; for `subsref` the file's only assignment is inside the `ForSubsRef` **subfunction**, which is why a per-file check misses it. The arm is **user-reachable** (`hlp([s; s]')` throws pre-fix), so it is fixed, not guarded. That fixture drives **`vertcat`**'s arm - the `[s; s]` concat result is the unnamed intermediate, while the `ctranspose` result is a function-call input that gets a NAMES entry and takes the *named* arm - so B29 is the one pinned dynamically; B30/B33/B34 are pinned by the static scope guard. Rebuilt with **`DERNUMBER`** - what the deleted `NDstr` stood for - and deliberately **not** the `NVAROFDIFF` used by the `transpose`/`reshape`/`repmat` siblings: `NVAROFDIFF` is invariant across the two Hessian passes, so it could alias a live pass-1 variable and silently win the assignment, converting a loud throw into a wrong derivative (principle 1). Verified correct, not merely non-throwing (`2*sum(x)` -> `[2 2 2]`, analytic-exact, FD 2.8e-10). `subsasgn.m` checked and clean. Harmonizing the three remaining `NVAROFDIFF` siblings is an **open follow-up** (changes shipped emitted identifiers; own ADR). Pinned by `tests/integration/IStructArrayNamingTest.m` / TS-I-27 (§1.3g). |
 | B32 (Hessian generation crashes on a zero/linear-objective Hessian) | **Fixed** — `util/adigatorGenHesFile.m` crashed at `HesLocs1 = dydxlocs(dydxdxlocs(:,1),:)` when the second-derivative `nzlocs` was `[]` (a structurally-zero Hessian, e.g. `y = x(k)`), and the value emission then scattered from an absent runtime `…dxdx_location` field. Fixed by normalizing the empty locs to `0×2` (so the empty CSC pattern builds) and short-circuiting the value emission to a literal `Hes = zeros(shape)` (empty `0×1` for `der_output='csc'`), skipping the scatter. Found by the #38 Phase C `mcGenExprTree` fuzzer; pinned by `tests/integration/IZeroHessianTest.m` (§1.3h). |
 | B35 (a `loopbound` derivative is not embeddable — runtime bound guarded too late) | **Fixed** — `adigatorForInitialize` emitted `assert(N <= Nmax)` at the loop header only, so every bound-dependent size *ahead* of the loop (the user's `zeros(N,1)`; the `cadaforvar<k> = 1:N` loop-variable range the machinery materializes) reached Coder unbounded: heap `emxArray`s with dynamic memory allocation on, outright rejection with it off. Fixed in `lib/adigatorFunctionInitialize.m` by hoisting one guard per declared bound to the first statement of the main function body (all `loopbound` names are validated main-function inputs, so they are in scope there); the per-loop guards stay for the re-differentiation path. Padded ROM −224 B, stack +112 B, heap requirement gone. Pinned by `ILoopboundTest::guardPrecedesEveryBoundDependentSize` (license-free) and `SRolledErtCodegenTest::loopboundGradientErtCodegenStaticMemory` (Coder-gated, local-only) (§1.3i). |
-| B36 (a loop range over a runtime-named scalar is unbounded even without `loopbound`) | **Open (silent envelope violation)** — a file generated *without* the option still prints `cadaforvar1.f = 1:N` when the trip count names a function input (passing a plain numeric to `adigator` fixes the analysis count, not the input), so nothing bounds it and, unlike a `loopbound` file, nothing declares the envelope either. Two candidate fixes (fold the range to the analyzed literal; or emit an `assert(N == n)` equality guard), both changing emitted output → own decision under ADR-0034 decision 3. Blocks tightening `bench/loopboundPaddingPenalty` to static memory allocation (§1.3j; issue #210). |
-
-*(B33 and B34 are not missing above: they are reserved by the in-flight
-`@cadastruct` fallback-naming work, §1.3g.)*
+| B36 (a loop range over a runtime-named scalar is unbounded even without `loopbound`) | **Fixed** — a file generated *without* the option still prints `cadaforvar1.f = 1:N` when the trip count names a function input (passing a plain numeric to `adigator` fixes the analysis count, not the input), so nothing bounds it and, unlike a `loopbound` file, nothing declares the envelope either. The emitted range and the emitted loop header disagree (literal header, runtime range): measured at `n=5`, calling with `N=3` is loud (index out of bounds) but `N=8` **runs silently** and returns the 5-term answer (70 vs a true 240) — a quietly wrong derivative, principle 1. Fixed by emitting `assert(N == n);` in the body prologue (an equality - the file is specialized, not padded), plus extending the shared guard shape and BOTH recognizers so re-differentiation still works: without the recognizer half every Hessian of a named-trip-count function would have stopped generating. Verified to 3rd order. Unblocked `bench/loopboundPaddingPenalty` under static memory allocation, which raised the measured padding penalty ~2x at small n (every earlier figure was heap-enabled). Fixed for the **direct** form (a main-function input named in a main-function loop range); three routes to a specialized trip count remain unguarded and are recorded as residual scope in §1.3j. Pinned by `tests/integration/ISpecializedTripCountTest.m` (§1.3j; issue #210). |
 
 ---
 

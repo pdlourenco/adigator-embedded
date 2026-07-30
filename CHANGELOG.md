@@ -35,6 +35,28 @@ below); it is not a patch of upstream 1.x.
   values above the generation-time maximum — which is the correct reading of the
   option, but it can turn a previously-silent call into an assertion failure.
 
+- **A derivative specialized to one trip count now says so — and stops computing
+  the wrong answer when called with another.** If a loop bound names an input of
+  your function (`for k = 1:N`) and you do *not* use `loopbound`, the generated
+  file is specialized to the `N` you generated at. It previously accepted any
+  `N`: a smaller one raised an index error, but a **larger one ran and quietly
+  returned the answer for the generated size**, with an output vector of the
+  requested length whose tail was never written. Such files now open with
+  `assert(N == <n>);` and reject the mismatch.
+
+  This is a **behaviour break in the correct direction**, but read it precisely:
+  the guard fires whenever the bound *names* an input, which is not quite the
+  same as the trip count depending on it. For `for k = 1:N` a mismatched call was
+  already returning a wrong derivative and now fails instead. For a bound like
+  `for k = 1:min(N,K)`, where the trip count may not actually vary with `N`, a
+  call that used to be correct can now hit the assertion. If you need one file to
+  serve several trip counts, that is what the `loopbound` option is for.
+
+  The guard also makes these files code-generate with static memory allocation
+  (no heap), which they previously could not. Note the check is a MATLAB-level
+  precondition on the generated `.m`; generated C is fixed-size by construction,
+  and `assert` does not generally survive into it with runtime checks off.
+
 ## [2.0] — 2026-07-26
 
 First release of the embedded fork. Everything below is new relative to the

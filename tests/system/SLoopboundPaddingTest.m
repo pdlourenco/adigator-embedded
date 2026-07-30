@@ -58,18 +58,20 @@ classdef SLoopboundPaddingTest < matlab.unittest.TestCase
             % the analyzed maximum there is no padding left to pay for.
             %
             % Two-sided band, both edges loose on purpose. The padded file is
-            % NOT the exact file plus scaffolding: its trip count is a runtime
-            % bound, so Coder specializes the two loops differently, and since
-            % B35 the hoisted guard bounds the loop-variable range statically
-            % (it used to be an unbounded emxArray). Both effects move the ratio
-            % either way by a few percent - measured 1.0x at Nmax=64 and 0.88x
-            % at Nmax=32 - so the band asserts "no penalty remains", not a
-            % byte-level relation. A one-sided >= 0.95 floor encoded the older,
-            % now-false assumption that the scaffolding makes padded strictly
-            % bigger.
-            % floor at 0.75, not 0.8: measured is 0.88 here, and this is a
-            % Coder-version-sensitive figure - the extra headroom costs nothing
-            % (a real regression is a multiple-x move, not a few percent).
+            % not simply the exact file plus scaffolding: since B36 the exact
+            % file's trip count is a compile-time CONSTANT (assert(N == n)) and
+            % so it is fully fixed-size, while the padded file's is genuinely
+            % runtime (variable-size at :Nmax). Coder specializes the two
+            % differently, leaving a few percent of residual scaffolding -
+            % measured 1.0x at Nmax=64, 1.09x at Nmax=32. The band asserts "no
+            % padding penalty remains at n=Nmax", not a byte-level relation.
+            %
+            % Both edges stay loose: this is a Coder-version-sensitive figure,
+            % and the ratio has already crossed 1 in BOTH directions across
+            % B35/B36 (0.88x while the exact file still carried heap machinery,
+            % 1.09x now that it does not). A real regression here is a
+            % multiple-x move, not a few percent. The earlier one-sided >= 0.95
+            % floor encoded a structural assumption that turned out false.
             tc.verifyGreaterThan(rN.romPenalty, 0.75, ...
                 'padded and exact must converge (~1x) at n=Nmax');
             tc.verifyLessThan(rN.romPenalty, 1.2, ...
