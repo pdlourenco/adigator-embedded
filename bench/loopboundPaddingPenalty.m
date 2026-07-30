@@ -96,6 +96,18 @@ try
     adigatorGenDerFile_embedded(DerType, 'scostfun_lb', {gx, n}, opts);
     clear(wrapper); rehash;
     cfg = coder.config('lib','ecoder',true); cfg.GenerateReport = false;
+    % NOTE (ADR-0034 decision 2 / B35): this deliberately leaves
+    % EnableDynamicMemoryAllocation at its default, which is NOT what an
+    % embeddability claim may rest on. The reason is the EXACT-n baseline half:
+    % `scostfun_lb` takes N as a runtime input, so a file generated WITHOUT
+    % 'loopbound' still emits `cadaforvar1.f = 1:N` by name and has no guard to
+    % bound it (B36) - it cannot build no-heap, and the penalty ratio needs it.
+    % The PADDED half is unaffected either way: since B35 it measures byte-for-
+    % byte identical with static memory allocation (ROM 4400 / stack 352 at
+    % Nmax=64), and the no-heap acceptance gate proper lives in
+    % tests/system/SRolledErtCodegenTest (loopboundGradientErtCodegenStaticMemory).
+    % Tighten this to EnableDynamicMemoryAllocation=false once B36 lands.
+    %
     % x is a fixed-size vector; N is a RUNTIME scalar bound (the padded artifact
     % is called with any n at runtime).
     codegen(wrapper,'-config',cfg,'-args',{zeros(n,1), coder.typeof(0)},'-d','clib');

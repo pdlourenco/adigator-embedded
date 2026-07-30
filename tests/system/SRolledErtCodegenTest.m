@@ -60,5 +60,43 @@ classdef SRolledErtCodegenTest < AdigatorTestCase
                     'rolled %s must ERT-codegen at n=%d (#80 Path A): %s', dt, n, msg));
             end
         end
+
+        function loopboundGradientErtCodegenStaticMemory(tc)
+            % B35: a 'loopbound' derivative must codegen with dynamic memory
+            % allocation DISABLED - the no-heap regime an embedded target
+            % actually runs in.
+            %
+            % It did not: the runtime-bound guard was emitted at the loop
+            % header only, so the bound-dependent expressions ahead of the loop
+            % (the user's own `zeros(N,1)`, and the `cadaforvar<k> = 1:N` loop
+            % variable the machinery materializes) reached Coder with no upper
+            % bound and it refused the file - "computed maximum size of the
+            % output of function 'colon' is not bounded". Hoisting the guard to
+            % the top of the body (adigatorFunctionInitialize) bounds them.
+            %
+            % Static memory allocation is the whole point of the assertion, so
+            % this test sets EnableDynamicMemoryAllocation explicitly rather
+            % than relying on the config default: with the heap enabled the
+            % file generates either way and the test proves nothing.
+            n   = 8;
+            cfg = coder.config('lib', 'ecoder', true);
+            cfg.EnableDynamicMemoryAllocation = false;
+            cfg.GenCodeOnly = true;
+            cfg.GenerateReport = false;
+            adigatorGenDerFile_embedded('gradient', 'scostfun_lb', ...
+                {adigatorCreateDerivInput([n 1], 'x'), n}, ...
+                adigatorOptions('overwrite',1,'echo',0,'embed_mode','i', ...
+                                'unroll',0,'loopbound','N'));
+            ok = true; msg = '';
+            try
+                % x fixed-size; N is the RUNTIME bound the padded file is called with
+                codegen('scostfun_lb_Grd', '-config', cfg, ...
+                    '-args', {zeros(n,1), coder.typeof(0)}, '-d', 'clib_lb');
+            catch e
+                ok = false; msg = e.message;
+            end
+            tc.verifyTrue(ok, sprintf( ...
+                'loopbound gradient must ERT-codegen with static memory allocation (B35): %s', msg));
+        end
     end
 end

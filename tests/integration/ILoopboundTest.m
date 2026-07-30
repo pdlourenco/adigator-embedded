@@ -121,6 +121,56 @@ classdef ILoopboundTest < matlab.unittest.TestCase
             tc.verifyError(@() lb_guard_dx(x,Nmax+1), ?MException);
         end
 
+        function guardPrecedesEveryBoundDependentSize(tc)
+            % B35: the runtime-bound guard must be the FIRST body statement,
+            % ahead of every expression whose size depends on the bound.
+            %
+            % It used to be emitted only at the loop header, which left the
+            % N-dependent expressions that run BEFORE the loop unbounded - the
+            % user's own `v = zeros(N,1)` and the `cadaforvar<k> = 1:N` loop
+            % variable the machinery itself materializes. The interpreter does
+            % not care; Embedded Coder under static memory allocation rejects
+            % the file at the first such line ("computed maximum size is not
+            % bounded"), so no 'loopbound' derivative was embeddable. The
+            % end-to-end proof is tests/system/SRolledErtCodegenTest (Coder
+            % gated); this is the license-free text pin of the ordering.
+            writeFcn('lb_pre', { ...
+                'function J = lb_pre(x,N)', ...
+                'v = zeros(N,1);', ...   % N-dependent, BEFORE the loop
+                'for a = 1:N', ...
+                '  v(a) = x(a)^2;', ...
+                'end', ...
+                'J = sum(v);', ...
+                'end'});
+            Nmax = 7;
+            gx = adigatorCreateDerivInput([Nmax 1],'x');
+            adigator('lb_pre',{gx,Nmax},'lb_pre_dx', ...
+                adigatorOptions('overwrite',1,'echo',0,'loopbound','N'));
+            rehash;
+
+            L = strtrim(string(splitlines(string(fileread('lb_pre_dx.m')))));
+            bodyStart = find(contains(L,'ADiGator Start Derivative Computations'),1);
+            tc.assertNotEmpty(bodyStart,'generated file must carry the body marker');
+            tc.verifyEqual(char(L(bodyStart+1)), sprintf('assert(N <= %d);',Nmax), ...
+                'the runtime-bound guard must be the first statement of the body');
+
+            % and no code line may reference the bound before it - the guard is
+            % what bounds them, so an earlier use is exactly the defect. Match
+            % the bare identifier (\<N\>) so 'Index1'/'Gator1Data' do not count,
+            % and skip the '%User Line:' echo comments.
+            %
+            % Assert the CONTENT of the first bound-referencing line, not its
+            % index: `usesN(1) == 1` would hold on a reverted tree too, since
+            % the user's own `v.f = zeros(N,1);` is then code line 1 and also
+            % references N. Only the content discriminates.
+            body  = L(bodyStart+1:end);
+            code  = body(~startsWith(body,'%'));
+            usesN = find(~cellfun(@isempty, regexp(cellstr(code),'\<N\>','once')));
+            tc.assertNotEmpty(usesN,'generated file should reference the runtime bound');
+            tc.verifyEqual(char(code(usesN(1))), sprintf('assert(N <= %d);',Nmax), ...
+                'the first code line referencing the bound must be the guard itself');
+        end
+
         function paddingUnsafePostLoopOpPinned(tc)
             % the documented contract: a post-loop op that sees the padded
             % tail of a FIXED-size buffer (literal analyzed size, not

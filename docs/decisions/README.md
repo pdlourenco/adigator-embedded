@@ -194,3 +194,14 @@ Contracts section (binding conventions), or for purely mechanical choices
   `[X.Y]` section present, `[Unreleased]` empty), extracts that section as the
   release notes, and publishes a curated runtime-distribution archive. Enforces
   ADR-0029's release-versioning discipline; adapted from disciplined-project-seed.
+- [ADR-0032](ADR-0032-coverage-floor-correctness-path.md) — **Accepted**: a
+  per-folder coverage **floor on the derivative-correctness path**
+  (`lib/@cada`, `lib/@cadastruct`, `lib/cadaUtils`, `lib` orchestration) rather
+  than a single repo-wide number, enforced as a no-regression ratchet
+  (`tests/ci_coverage_folders.m`) over the **full** suite in the extended job.
+- [ADR-0034](ADR-0034-generated-code-emission-hygiene.md) — **Accepted**:
+  **generated-code emission hygiene** — the strict-ERT / no-heap target is a
+  generation-time obligation. A runtime `loopbound` is guarded once at the top of
+  the function it bounds (B35); a test may only claim embeddability with
+  `EnableDynamicMemoryAllocation = false`; emitted identifiers are a surface, so
+  the `NVAROFDIFF`→`DERNUMBER` name harmonization is sequenced separately (open).

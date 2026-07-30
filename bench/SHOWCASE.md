@@ -244,24 +244,36 @@ rp = loopboundPaddingPenalty('Nmax',64,'nSweep',[4 8 16 32 64]);
 ```
 
 Snapshot (gradient, `Nmax = 64`, MATLAB R2024a + MinGW). Padded(Nmax) footprint
-is **n-independent**: ROM 4624, RAM 0, stack 240 bytes.
+is **n-independent**: ROM 4400, RAM 0, stack 352 bytes.
 
 | n | exact ROM | exact RAM | exact stack | ROM penalty (padded/exact) |
 |---:|---:|---:|---:|---:|
-| 4 | 640 | 0 | 240 | 7.2x |
-| 8 | 560 | 0 | 160 | 8.3x |
-| 16 | 736 | 0 | 176 | 6.3x |
-| 32 | 1504 | 0 | 192 | 3.1x |
+| 4 | 640 | 0 | 240 | 6.9x |
+| 8 | 560 | 0 | 160 | 7.9x |
+| 16 | 736 | 0 | 176 | 6.0x |
+| 32 | 1504 | 0 | 192 | 2.9x |
 | 64 | 4592 | 0 | 224 | 1.0x |
+
+> Re-measured after the runtime-bound guard moved to the top of the generated
+> body (see `CHANGELOG.md`). Before that, the bound-dependent expressions ahead
+> of the loop — the user's `zeros(N,1)` and the loop-variable range — reached
+> Coder unbounded, so a `loopbound` artifact **required the heap** and was
+> rejected outright under static memory allocation. It is now heap-free: padded
+> ROM 4624 → 4400 B, stack 240 → 352 B (the range is stack-resident rather than
+> heap-allocated). The shape of the penalty is unchanged.
 
 - **The penalty is real and it is in ROM.** A *subscripted* (allocation-shaped)
   derivative carries a per-iteration nonzero-location table that scales with the
   trip count; the padded file keeps the full `Nmax`-sized `static const` tables
   regardless of `n`, so at `n = 4` you pay **~7×** the ROM of an exact-`n` file.
-  RAM stays 0 (tables are `.rdata`, not RAM) and stack is comparable.
-- **It converges at `n = Nmax`** (1.0×) — padded and exact are the same file
+  RAM stays 0 (tables are `.rdata`, not RAM); the padded file's stack carries the
+  `Nmax`-bounded loop-variable range (352 B vs 224 B exact at `Nmax = 64`).
+- **It converges at `n = Nmax`** (1.0×) — padded and exact do the same work
   there — and grows with `Nmax/n`, so it is largest exactly where a runtime bound
-  is most useful (a big `Nmax` seldom hit).
+  is most useful (a big `Nmax` seldom hit). They are not byte-identical files:
+  the padded one keeps a runtime trip count, which Coder specializes differently,
+  so the ratio lands near 1 from either side — 0.96× at `Nmax = 64`, 0.88× at
+  `Nmax = 32`.
 - **It quantifies the cost of the runtime bound.** The padding penalty is exactly
   what a symbolic-`N` bound (sizing the tables to the runtime `n` instead of
   `Nmax`) would remove: for subscripted forms run at `n ≪ Nmax` the ROM penalty is
