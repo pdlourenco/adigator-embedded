@@ -114,6 +114,36 @@ classdef MCSmokeTest < matlab.unittest.TestCase
                 'knownDeriv should skip the shape-fuzz cases (no closed form) — FD is why they are now checked');
         end
 
+        function fdHessianValueOracleIsClean(tc)
+            % #38 Phase C: mcGenExprTree emits the first closed-form-free
+            % HESSIAN cases (nested typed AST, scalar objective), and
+            % oracleFiniteDiff gained an FD-Hessian path (two 1st-order central
+            % FD checks: gradient vs FD-of-f, Hessian vs FD-of-gradient). Run the
+            % exprtree generator (even uids -> hessian, odd -> jacobian) and
+            % assert: no wrong values; the FD oracle actually value-checked every
+            % case (no closed form -> it must never skip); and hessian cases were
+            % present (hessSymmetry ran) so the FD-Hessian path was exercised.
+            report = mcCampaign('nIters', 16, 'seed', 90210, ...
+                'generators', {'mcGenExprTree'}, ...
+                'oracles', {'oracleFiniteDiff','oracleKnownDeriv', ...
+                            'oracleHessSymmetry','oracleCrossMode'}, ...
+                'promote', false, 'verbose', false);
+
+            tc.verifyEqual(report.nFail, 0, ...
+                sprintf('exprtree FD smoke found %d failing case(s); see report.failures', ...
+                report.nFail));
+            fd = report.oracleStats.oracleFiniteDiff;
+            tc.verifyGreaterThan(fd.pass, 0, ...
+                'finiteDiff never value-checked an exprtree case');
+            tc.verifyEqual(fd.fail, 0, 'finiteDiff reported a wrong-value exprtree case');
+            tc.verifyEqual(fd.skip, 0, ...
+                'finiteDiff skipped an exprtree case — the FD-Hessian path fell through to a skip');
+            tc.verifyGreaterThan(report.oracleStats.oracleHessSymmetry.pass, 0, ...
+                'no hessian cases generated — the FD-Hessian path was not exercised');
+            tc.verifyGreaterThan(report.oracleStats.oracleKnownDeriv.skip, 0, ...
+                'knownDeriv should skip the exprtree cases (no closed form)');
+        end
+
         function negativeHygieneIsClean(tc)
             % Malformed fixtures must fail generation cleanly and leave the
             % session hygienic — no stray transformation globals, path
