@@ -35,7 +35,11 @@ if ADIGATOR.RUNFLAG == 2
   if nameloc > 0
     yname = ADIGATOR.VARINFO.NAMES{nameloc};
   else
-    yname = sprintf(['cada',NDstr,'s%1.0f'],ADIGATOR.VARINFO.NAMELOCS(yid,2));
+    % v2.0 (B33): the same defect as B29/B30 (@cadastruct vertcat/ctranspose),
+    % found by comparison while fixing those — NDstr never assigned here, `yid`
+    % a parseinput-local. Rebuilt with DERNUMBER (already in scope as `numder`);
+    % see the note in @cadastruct/vertcat.m for why DERNUMBER and not NVAROFDIFF.
+    yname = sprintf('cada%1.0ds%1.0f',numder,ADIGATOR.VARINFO.NAMELOCS(y.id,2));
   end
 else
   yname = 'cadadummystruct';

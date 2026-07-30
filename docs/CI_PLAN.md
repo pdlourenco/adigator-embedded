@@ -160,6 +160,7 @@ and compare. Run on every pull request (slower, still base MATLAB).
 | TS-I-24 | `IConcatLoopLiteralTest` — regression guard for **B28** (ANALYSIS §1.3f, #168): a numeric literal in a `vertcat` inside a **rolled-loop print context** (an `unroll=0` `for`, or a subfunction printed as a loop) must generate without a spurious `.f` and match FD — a formerly broken-file bug; a horzcat control guards the vertcat-vs-horzcat asymmetry the fix relies on. | REQ-T-01 |
 | TS-I-25 | `ICscOutputTest` (#192, ADR-0030, R31) — the CSC contract end-to-end: `der_output='csc'` returns the `Nnz×1` value vector whose CSC-metadata reconstruction exactly equals the matrix-mode derivative; classic/inline cross-mode CSC values identical; FD/analytic agreement; shape coverage per the #192 acceptance (sparse+dense Jacobians, `[n,1]` gradients, scalar + vector-fold Hessians, remap cases, empty columns + partially-constant/structural-zero derivatives, single-row/column, loopbound at `n<Nmax` with padded structural zeros); asserts the `adigatorBuildCSC` permutation is **identity** (`isIdentity == true`) on representative Jacobian/gradient/Hessian cases — a tripwire so a future `nzlocs` ordering change cannot silently introduce the constant gather; generated-code checks (no `sparse(`, no dense scatter, no runtime sort/search; metadata not returned per call). | REQ-T-03, REQ-T-11, REQ-T-01 |
 | TS-I-26 | `IZeroHessianTest` — regression guard for **B32** (ANALYSIS §1.3h): a structurally-zero (locally-linear-objective) Hessian must **generate and run to an exact all-zero Hessian**, not crash. Scalar objectives (`n=1..4`: `y=x(k)`, `sum(x)`, affine) and a linear vector function generate + run to zeros of the correct returned shape (`n×n` / `[m*n×n]`); the file uses the literal-zero short-circuit (no `dxdx_location` scatter) while the **companion gradient still emits and is nonzero**; a mixed quadratic+linear and a `v.'*v` dot still yield the correct **non-zero** Hessian (the anti-mis-zero check — asserts values, not just shapes); `der_output='csc'` returns an empty stream with `HessianCSC.Nnz==0`; both embed modes generate and the inline artifact runs to zeros. Found by the #38 Phase C `mcGenExprTree` fuzzer. | REQ-T-01, REQ-T-02 |
+| TS-I-27 | `IStructArrayNamingTest` — regression guard for **B29–B31, B33–B34** (ANALYSIS §1.3g): the `@cadastruct` fallback-naming arm taken when a struct-array op's result is an **unnamed intermediate**. A struct-array concat whose result is an unnamed intermediate (`hlp([s; s]')`) drives the arm end-to-end and must generate, run, and yield the **correct** derivative (`2*sum(x)` → `[2 2 2]`, analytic-exact) — it previously threw `Unrecognized function or variable 'NDstr'`; the named struct-array concat shapes must keep generating; plus two static guards — the empty-eval flag is spelled correctly in `repmat.m`, and **no `@cadastruct` function scope uses `NDstr` without assigning it** (comment-stripped; this guard is what found B34 in `subsref.m`, whose only assignment lives in the `ForSubsRef` subfunction). Found via the shipped-surface inventory (`docs/vv/cada-surface-inventory.md`). | REQ-T-01, REQ-C-03 |
 
 ### 2.3 System / validation tests — `tests/system` (TS-S)
 
@@ -186,7 +187,7 @@ merges; license-gated jobs skip cleanly when products are unavailable.
 
 | Requirement | Verified / validated by |
 |-------------|-------------------------|
-| REQ-T-01 | TS-I-01, TS-S-01, TS-I-13, TS-I-14, TS-I-15, TS-I-26 (zero/linear-objective Hessian, B32); TS-I-04 *(planned)*, TS-I-10 *(planned, R22)*, TS-I-25 |
+| REQ-T-01 | TS-I-01, TS-S-01, TS-I-13, TS-I-14, TS-I-15, TS-I-26 (zero/linear-objective Hessian, B32), TS-I-27 (@cadastruct fallback naming, B29-B31/B33-B34); TS-I-04 *(planned)*, TS-I-10 *(planned, R22)*, TS-I-25 |
 | REQ-T-02 | TS-I-01, TS-I-05, TS-I-12, TS-I-20, TS-I-26 (zero-Hessian returned shape), TS-U-19 (loopbound); TS-I-10 *(planned, R22)* |
 | REQ-T-03 | TS-I-01, TS-U-20; TS-I-25, TS-S-08 |
 | REQ-T-04 | TS-I-02, TS-I-06, TS-I-08, TS-I-09, TS-I-17; TS-I-11 *(planned, R24)* |
@@ -199,7 +200,7 @@ merges; license-gated jobs skip cleanly when products are unavailable.
 | REQ-T-11 | TS-I-12 (Hessian CSC value-vector/`HessianCSC` + the `Grd` name fix, R25/#99 respelled by #192); TS-I-25 (CSC contract, ADR-0030); phase-2 support-matrix + per-level selection *(planned, R25)* |
 | REQ-C-01 | TS-U-01 |
 | REQ-C-02 | TS-U-02 |
-| REQ-C-03 | TS-U-03 |
+| REQ-C-03 | TS-U-03, TS-I-27 (`@cadastruct` fallback naming, B29-B31/B33-B34) |
 | REQ-C-04 | TS-I-01; TS-I-04 *(planned)* |
 | REQ-C-05 | TS-U-04, TS-I-02, TS-I-07 |
 | REQ-C-06 | TS-U-05, TS-I-02 |
