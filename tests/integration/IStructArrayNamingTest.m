@@ -92,6 +92,13 @@ classdef IStructArrayNamingTest < matlab.unittest.TestCase
             % and DERNUMBER == 1, so the correct prefix is 'cada1s' and the
             % NVAROFDIFF spelling would emit 'cada2s' — hence the negative
             % assertion, which is the half that actually discriminates.
+            %
+            % FIXTURE CONSTRAINT: the negative assertion is only valid while this
+            % fixture stays clear of the three overloads still on NVAROFDIFF
+            % (transpose/reshape/repmat — the deferred harmonization, ANALYSIS
+            % §1.3g). A struct transpose/reshape/repmat added here would emit a
+            % legitimate 'cada2s...' at nvod==2 and fail this test for the wrong
+            % reason. Harmonizing those three retires the constraint.
             writeFcn('sa_nvod', { ...
                 'function y = sa_nvod(s,p)', ...
                 'a = hlp([s; s]'');', ...
@@ -162,7 +169,11 @@ classdef IStructArrayNamingTest < matlab.unittest.TestCase
             % vertcat/horzcat/ctranspose, and subsref's main body — whose only
             % NDstr assignment lives in the ForSubsRef subfunction).
             % Comment lines are stripped so the fix's own explanation cannot
-            % trip the guard.
+            % trip the guard. The assignment pattern is line-anchored
+            % (`^\s*NDstr\s*=`), so a legitimate MID-STATEMENT assignment
+            % (`a = b; NDstr = ...`) would be missed and the guard would trip —
+            % a false failure, i.e. the loud direction, which is the acceptable
+            % way for a guard like this to be wrong.
             root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
             d = [dir(fullfile(root,'lib','@cadastruct','*.m')); ...
                  dir(fullfile(root,'lib','@cadastruct','private','*.m'))];
