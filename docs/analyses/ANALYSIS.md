@@ -738,6 +738,17 @@ license-free text pin that the guard precedes every reference to the bound) and
 `tests/system/SRolledErtCodegenTest.m::loopboundGradientErtCodegenStaticMemory`
 (the end-to-end proof, Coder-gated, so **local-only** — see `CI_PLAN.md` §3.2).
 
+**Subfunction reach (a real dependency, not a hypothetical).** The hoisted guard
+is gated on `FunID == 1`, so it lives in the main function only. A user
+*subfunction* that does its own pre-loop `N`-dependent sizing therefore relies on
+Coder carrying the caller-established bound across the call — nothing in this
+fork emits a second guard there. It does carry: probed directly on R2024a, a
+callee's `zeros(N,1)` and `1:N` both build under static memory allocation given a
+caller-side `assert(N <= 8)`. Recorded here rather than only in a test comment
+because it is a standing assumption about a third-party tool, not about this
+code; if a future Coder release stops propagating, the symptom is the B35 failure
+one level down — loud at codegen, never a wrong derivative.
+
 ### 1.3j A loop range over a runtime-named scalar is unbounded even *without* `loopbound` (B36)
 
 **B36 — a non-`loopbound` file whose loop range names a runtime input emits an

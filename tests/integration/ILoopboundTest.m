@@ -159,12 +159,19 @@ classdef ILoopboundTest < matlab.unittest.TestCase
             % the bare identifier (\<N\>) so 'Index1'/'Gator1Data' do not count,
             % and skip the '%User Line:' echo comments.
             %
+            % Sweep the WHOLE file, not just from the body marker: anything the
+            % emitter ever puts above the marker would otherwise sit outside the
+            % assertion. Nothing N-dependent precedes it today, so this is
+            % free future-proofing. The `function ... (x,N)` signatures name the
+            % bound by definition, so drop those lines (and blanks) as well.
+            %
             % Assert the CONTENT of the first bound-referencing line, not its
             % index: `usesN(1) == 1` would hold on a reverted tree too, since
             % the user's own `v.f = zeros(N,1);` is then code line 1 and also
             % references N. Only the content discriminates.
-            body  = L(bodyStart+1:end);
-            code  = body(~startsWith(body,'%'));
+            % ('function ' with the trailing space: the printer always emits it,
+            % and the prefix form would also drop a hypothetical `functionFoo =`)
+            code  = L(~startsWith(L,'%') & ~startsWith(L,'function ') & strlength(L) > 0);
             usesN = find(~cellfun(@isempty, regexp(cellstr(code),'\<N\>','once')));
             tc.assertNotEmpty(usesN,'generated file should reference the runtime bound');
             tc.verifyEqual(char(code(usesN(1))), sprintf('assert(N <= %d);',Nmax), ...

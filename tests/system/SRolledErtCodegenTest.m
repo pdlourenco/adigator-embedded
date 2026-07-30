@@ -78,6 +78,15 @@ classdef SRolledErtCodegenTest < AdigatorTestCase
             % this test sets EnableDynamicMemoryAllocation explicitly rather
             % than relying on the config default: with the heap enabled the
             % file generates either way and the test proves nothing.
+            %
+            % Subfunction reach: the hoisted guard lives in the MAIN function
+            % only, so a subfunction doing its own pre-loop `zeros(N,1)` relies
+            % on Coder carrying the caller-established bound across the call.
+            % It does - probed directly on R2024a, a callee's `zeros(N,1)` and
+            % `1:N` both build no-heap under a caller-side `assert(N <= 8)`.
+            % Left as a note rather than a fixture here: an adigator-generated
+            % subfunction+loopbound artifact is a heavier build, and the failure
+            % direction is loud (codegen refusal), not a wrong derivative.
             n   = 8;
             cfg = coder.config('lib', 'ecoder', true);
             cfg.EnableDynamicMemoryAllocation = false;
