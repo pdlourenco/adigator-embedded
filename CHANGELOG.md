@@ -15,6 +15,26 @@ below); it is not a patch of upstream 1.x.
      workflow (.github/workflows/release.yml) requires this section to be empty
      and the new version to have its own dated section below. -->
 
+### Fixed
+
+- **`loopbound` derivatives are now embeddable without a heap.** The runtime-bound
+  guard (`assert(N <= Nmax);`) is emitted as the first statement of the generated
+  function instead of only at the loop header. Previously the sizes that depend on
+  the bound but run *before* the loop — your own `v = zeros(N,1)`, and the loop
+  variable the transformation materializes — reached MATLAB Coder with no upper
+  bound: with dynamic memory allocation enabled they became heap allocations, and
+  with it disabled (the usual embedded setting) code generation failed with
+  *"computed maximum size is not bounded"*. Derivative values are unchanged; the
+  generated artifact is smaller (−224 B ROM on the `Nmax = 64` benchmark) and no
+  longer requires a heap (+112 B stack). If you re-generate a `loopbound`
+  derivative, expect one extra `assert` line at the top of the file.
+
+  One behaviour change to be aware of: a guard is now emitted for **every**
+  declared `loopbound` parameter, including one whose value happened to match no
+  loop. Such a file previously ignored that parameter at runtime and now rejects
+  values above the generation-time maximum — which is the correct reading of the
+  option, but it can turn a previously-silent call into an assertion failure.
+
 ## [2.0] — 2026-07-26
 
 First release of the embedded fork. Everything below is new relative to the

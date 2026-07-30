@@ -1038,6 +1038,34 @@ end
 
 
 fprintf(fid,'%% ADiGator Start Derivative Computations\n');
+% A runtime loop bound (issue #6 Tier 1) is a WHOLE-FUNCTION precondition, not
+% a per-loop one: the same parameter also sizes user expressions that execute
+% BEFORE the first rolled loop - `v = zeros(N,1)` ahead of `for a = 1:N`, and
+% the `cadaforvar<k> = 1:N` loop-variable materialization the loop machinery
+% itself emits. Guarding only at the loop header (adigatorForInitialize) leaves
+% those earlier expressions with no upper bound. The interpreter does not care,
+% but Embedded Coder under static memory allocation rejects the file outright
+% ("computed maximum size is not bounded ... [:? x 1]") at the FIRST such line,
+% which made every 'loopbound' derivative non-embeddable. Hoisting one guard
+% per declared bound to the top of the main function bounds every N-dependent
+% expression in the file at its analyzed maximum.
+%
+% Emitted for every DECLARED bound, not only the ones a loop matched: adigator.m
+% validates each loopbound name to be an input of the main function, and the
+% envelope claim ("this file was analyzed at N = max") applies to N-dependent
+% sizing whether or not a rolled loop happened to match that trip count.
+%
+% The per-loop guards stay: they are the ones the re-differentiation path keys
+% on (adigatorPrintTempFiles, #173) and a redundant assert costs nothing in the
+% generated C.
+if FunID == 1 && ~isempty(ADIGATOR.OPTIONS.LOOPBOUND)
+  lbg = adigatorLoopboundGuard();  % shared guard shape (#181)
+  for LBcount = 1:length(ADIGATOR.OPTIONS.LOOPBOUND)
+    fprintf(fid,'%s\n',sprintf(lbg.template,...
+      ADIGATOR.OPTIONS.LOOPBOUND(LBcount).name,...
+      ADIGATOR.OPTIONS.LOOPBOUND(LBcount).value));
+  end
+end
 if ~ADIGATOR.OPTIONS.UNROLL && length(FunctionInfo(FunID).Iteration.DepFlag) == 2 &&...
     ~FunctionInfo(FunID).Iteration.DepFlag(2)
   fprintf(fid,'adigator%1.0dfuncount = adigator%1.0dfuncount;\n',...

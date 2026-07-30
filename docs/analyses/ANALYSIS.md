@@ -680,6 +680,123 @@ license-gated): the inline zero-Hessian compiles + runs to zeros via MEX
 (`Hes = zeros(n,n)`) and csc (`Hes = zeros(0,1)`, zero-sized) modes (REQ-T-10),
 so "generates" is verified to mean "ships". See §1.5.
 
+### 1.3i A `loopbound` derivative is not embeddable — the runtime bound is guarded too late (B35)
+
+**B35 — the runtime-bound guard is emitted at the loop header, leaving every
+earlier bound-dependent size unbounded (medium; fixed).** No `loopbound`
+derivative could be compiled with static memory allocation, i.e. under the
+no-heap regime an embedded target actually runs in. Embedded Coder rejected the
+generated file outright:
+
+```
+Computed maximum size of the output of function 'colon' is not bounded.
+Static memory allocation requires all sizes to be bounded.
+The computed size is [1 x :?].
+```
+
+It is a **broken-generation** bug in the embedded sense (loud at codegen time,
+never a wrong value): interpreted execution and MEX are unaffected, and the
+derivative values were always correct — which is why the whole `loopbound`
+family (§1.3f/§1.3g, `ILoopboundTest`) was green while the artifact it produced
+could not ship.
+
+**Root cause.** `adigatorForInitialize` emits `assert(N <= Nmax)` immediately
+before the runtime-bound loop header. But the bound is a **whole-function**
+precondition, not a per-loop one: the same parameter sizes expressions that
+execute *before* the loop. Two kinds, both present in the reproducer:
+
+- the user's own allocation — `v = zeros(N,1);` ahead of `for a = 1:N`;
+- the loop-variable range the machinery materializes for itself,
+  `cadaforvar1.f = 1:N;`, which exists only to be indexed at
+  `cadaforvar1.f(:,cadaforcount1)`.
+
+Reaching Coder with no upper bound on `N`, each is a variable-size array of
+unknown extent. With dynamic memory allocation enabled (the default, and what
+`bench/loopboundPaddingPenalty` had been using) they silently became heap
+`emxArray`s — so the padded artifact *appeared* to build while quietly requiring
+a heap; with it disabled, generation failed at the first such line.
+
+**Fix (`lib/adigatorFunctionInitialize.m`).** Hoist the guard: emit
+`assert(<name> <= <max>);` for every declared `loopbound` parameter as the first
+statement of the main function body, right after the
+`% ADiGator Start Derivative Computations` marker. `adigator.m` already validates
+each name to be an input of the main function, so all of them are in scope there.
+That bounds every `N`-dependent expression in the file at its analyzed maximum,
+and the artifact becomes heap-free. The per-loop guards stay: they are what the
+re-differentiation path keys on (§1.3g, `adigatorPrintTempFiles`), and a
+redundant `assert` costs nothing in the generated C.
+
+**Measured effect** (`scostfun_lb` gradient, inline `i`/ERT, `Nmax = 64`): padded
+ROM 4624 → 4400 B (−224), stack 240 → 352 B (+112 — the range is now
+stack-resident rather than heap-allocated; the delta is not a straight transfer,
+a `1:64` double range is 512 B, so Coder is also folding/aligning), heap
+requirement gone. The `Nmax`-padding penalty is otherwise
+unchanged in shape (`bench/SHOWCASE.md`; the R6 evidence line in
+`docs/ROADMAP.md` carries the re-measured figures). Pinned by
+`tests/integration/ILoopboundTest.m::guardPrecedesEveryBoundDependentSize` (a
+license-free text pin that the guard precedes every reference to the bound) and
+`tests/system/SRolledErtCodegenTest.m::loopboundGradientErtCodegenStaticMemory`
+(the end-to-end proof, Coder-gated, so **local-only** — see `CI_PLAN.md` §3.2).
+
+**Subfunction reach (a real dependency, not a hypothetical).** The hoisted guard
+is gated on `FunID == 1`, so it lives in the main function only. A user
+*subfunction* that does its own pre-loop `N`-dependent sizing therefore relies on
+Coder carrying the caller-established bound across the call — nothing in this
+fork emits a second guard there. It does carry: probed directly on R2024a, a
+callee's `zeros(N,1)` and `1:N` both build under static memory allocation given a
+caller-side `assert(N <= 8)`. Recorded here rather than only in a test comment
+because it is a standing assumption about a third-party tool, not about this
+code; if a future Coder release stops propagating, the symptom is the B35 failure
+one level down — loud at codegen, never a wrong derivative.
+
+### 1.3j A loop range over a runtime-named scalar is unbounded even *without* `loopbound` (B36)
+
+**B36 — a non-`loopbound` file whose loop range names a runtime input emits an
+unguarded `1:N` (medium; open,
+[#210](https://github.com/pdlourenco/adigator-embedded/issues/210)).** Found by
+the B35 fix sweep, when the padding
+benchmark's *exact-`n`* baseline — generated **without** the `loopbound` option —
+turned out to fail the same way under static memory allocation:
+
+```
+Computed maximum size of the output of function 'colon' is not bounded.
+The computed size is [1 x :?].
+```
+
+**Mechanism.** In `scostfun_lb(x,N)` the trip count `N` is an ordinary function
+input. Passing a plain numeric `n` to `adigator` fixes the *analysis* trip count
+but does **not** make `N` a compile-time constant: it stays a named input of the
+generated function, so the loop-variable range still prints as `cadaforvar1.f =
+1:N`. Without the `loopbound` option there is no declared maximum, so B35's
+hoisted guard does not fire and nothing bounds it.
+
+**Why this is the wider defect.** The generated file's index tables are sized for
+the analyzed `n`, so calling it with any other `N` is already outside its
+envelope — and, unlike a `loopbound` file, **nothing says so**. B35 gives the
+`loopbound` case a guard; this case has neither a guard nor a fold. Two candidate
+resolutions, both changing emitted output:
+
+1. **Fold the range** when the analysis value is known and the file does not
+   declare the name as a runtime bound — emit `1:<n>` and stop referencing `N`.
+   Bounded, smaller, and honest about the specialization. Risk: silently ignores
+   a caller-supplied `N`.
+2. **Emit a guard anyway** (`assert(N == <n>);`, an equality rather than B35's
+   inequality — the trip count was specialized, not padded). Loud, preserves the
+   reference, costs a line.
+
+Recommendation is (2) then (1): make the envelope violation loud first, optimize
+second. **Not decided** — it changes emitted output for every generated file
+whose loop bound names an input, so it needs its own decision under ADR-0034
+decision 3.
+
+**Consequence today:** `bench/loopboundPaddingPenalty` cannot run with
+`EnableDynamicMemoryAllocation = false`, because its exact-`n` baseline half will
+not build. The bench therefore keeps the default config, with the asymmetry noted
+at the call site. The **padded** half is unaffected — since B35 it measures
+byte-identical with static memory allocation — and the no-heap acceptance gate
+proper is `SRolledErtCodegenTest::loopboundGradientErtCodegenStaticMemory`, which
+*is* strict. Tighten the bench once B36 lands.
+
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
 - `cadaunarymath.m` derivative-rule corrections (`asec`, `acsc`, `asecd`,
@@ -740,6 +857,11 @@ so "generates" is verified to mean "ships". See §1.5.
 | B30 (`@cadastruct/ctranspose.m:18` undefined `NDstr`/`yid`) | **Open (fail-loud)** — identical fallback-name defect, same undefined `NDstr`/`yid` (file has no subfunctions) (§1.3g). Follow-up with B29. |
 | B31 (`@cadastruct/repmat.m:30` `EMTPYFLAG` typo) | **Open (fail-loud)** — `EMTPYFLAG` misspelling of `EMPTYFLAG` (correct spelling two branches above; the typo occurs once repo-wide) (§1.3g). Follow-up with B29. |
 | B32 (Hessian generation crashes on a zero/linear-objective Hessian) | **Fixed** — `util/adigatorGenHesFile.m` crashed at `HesLocs1 = dydxlocs(dydxdxlocs(:,1),:)` when the second-derivative `nzlocs` was `[]` (a structurally-zero Hessian, e.g. `y = x(k)`), and the value emission then scattered from an absent runtime `…dxdx_location` field. Fixed by normalizing the empty locs to `0×2` (so the empty CSC pattern builds) and short-circuiting the value emission to a literal `Hes = zeros(shape)` (empty `0×1` for `der_output='csc'`), skipping the scatter. Found by the #38 Phase C `mcGenExprTree` fuzzer; pinned by `tests/integration/IZeroHessianTest.m` (§1.3h). |
+| B35 (a `loopbound` derivative is not embeddable — runtime bound guarded too late) | **Fixed** — `adigatorForInitialize` emitted `assert(N <= Nmax)` at the loop header only, so every bound-dependent size *ahead* of the loop (the user's `zeros(N,1)`; the `cadaforvar<k> = 1:N` loop-variable range the machinery materializes) reached Coder unbounded: heap `emxArray`s with dynamic memory allocation on, outright rejection with it off. Fixed in `lib/adigatorFunctionInitialize.m` by hoisting one guard per declared bound to the first statement of the main function body (all `loopbound` names are validated main-function inputs, so they are in scope there); the per-loop guards stay for the re-differentiation path. Padded ROM −224 B, stack +112 B, heap requirement gone. Pinned by `ILoopboundTest::guardPrecedesEveryBoundDependentSize` (license-free) and `SRolledErtCodegenTest::loopboundGradientErtCodegenStaticMemory` (Coder-gated, local-only) (§1.3i). |
+| B36 (a loop range over a runtime-named scalar is unbounded even without `loopbound`) | **Open (silent envelope violation)** — a file generated *without* the option still prints `cadaforvar1.f = 1:N` when the trip count names a function input (passing a plain numeric to `adigator` fixes the analysis count, not the input), so nothing bounds it and, unlike a `loopbound` file, nothing declares the envelope either. Two candidate fixes (fold the range to the analyzed literal; or emit an `assert(N == n)` equality guard), both changing emitted output → own decision under ADR-0034 decision 3. Blocks tightening `bench/loopboundPaddingPenalty` to static memory allocation (§1.3j; issue #210). |
+
+*(B33 and B34 are not missing above: they are reserved by the in-flight
+`@cadastruct` fallback-naming work, §1.3g.)*
 
 ---
 
