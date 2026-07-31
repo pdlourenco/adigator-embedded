@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-07-29. **Context corrected 2026-07-31** (#216): the hollow-milestone evidence is now #217, not ADR-0019's non-reproducing unrolled figure.. Extends the V&V-for-release effort from *correctness*
+Accepted — 2026-07-29. **Context corrected 2026-07-31** (#216): the hollow-milestone evidence is now #217, not ADR-0019's non-reproducing unrolled figure. Extends the V&V-for-release effort from *correctness*
 (ADR-0032 coverage floor + the value oracles) to *embeddability*. Realizes the
 first half of issue #80's "compile everything through Embedded Coder (ERT)"
 objective as a shared, strict, drift-proof config; the stack-ceiling gate that
@@ -88,12 +88,16 @@ Embedded Coder config — and route every codegen site through it.
 
 - One strict config, five consumers, zero drift; `REQ-T-10` now names the shared
   helper and the `EnableDynamicMemoryAllocation=false` flag.
-- **The gate is tightened, not yet complete.** `EnableDynamicMemoryAllocation
-  =false` rejects only *unbounded* varsize; the *bounded* O(n²)-stack case still
-  passes. The completion is a **stack ceiling** on the compiled `-fstack-usage`
-  footprint — reusing the existing `measureErtFootprint` helper (R17c/ADR-0027),
-  gating by the *property* (stack is O(n), caught via an n-vs-2n scaling check or
-  an absolute bound) — tracked as **#80a-2**. That is what turns "codegens" into
+- **The gate was tightened, and is now complete.** `EnableDynamicMemoryAllocation
+  =false` rejects only *unbounded* varsize; the *bounded* large-stack case still
+  passed. The completion **landed as #80a-2 / [ADR-0035](ADR-0035-embeddability-gate-calibrated-to-hand-written.md)**,
+  and not in the form anticipated here: this ADR expected a **stack ceiling**, and
+  ADR-0035 rejects that formulation — no target device is declared, so a byte
+  ceiling would be invented and would become policy by accident. What shipped is a
+  **ratio against the stack a hand-written derivative of the same maths needs**
+  (`measureErtFootprint`, R17c/ADR-0027; `SStackScalingTest`/TS-S-09). It also
+  rejects the "stack is O(n)" property test floated here — measurement showed even
+  optimal hand-written code grows. That is what turns "codegens" into
   "embeddable".
 - **The bench baselines were measured under the *old* config.** `derivShowcaseC`
   and `loopboundPaddingPenalty` now build with the strict profile (`C99` pinned,
