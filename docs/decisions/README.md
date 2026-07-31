@@ -106,7 +106,10 @@ Contracts section (binding conventions), or for purely mechanical choices
 - [ADR-0019](ADR-0019-rolled-embeddable-path-scatter-deferred.md) — the **rolled**
   (`unroll=0`) form is the embeddable path (ERT-safe de-dup via a local temp in
   `structure_to_embed_mfile`); the O(n²) fixed-size-scatter efficiency rewrite is
-  deferred to R21 (issue #80 Gap B, Path A).
+  deferred to R21 (issue #80 Gap B, Path A). **Amended 2026-07-31**: its
+  flat-stack evidence is **gradient-only** — the rolled Hessian is 63× the
+  hand-written reference at n=64 (#217), and its unrolled 16.9 KB figure does not
+  reproduce (#216).
 - [ADR-0020](ADR-0020-nth-derivative-output-conventions.md) — **Accepted**:
   higher-order (n-th) derivative output conventions — native nonzeros/`*Locs`
   form (default for k≥3) + a dense `[M·Nᵏ⁻¹ × N]` fold generalizing the Hessian

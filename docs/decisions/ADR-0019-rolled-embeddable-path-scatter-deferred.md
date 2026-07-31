@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-06-30. Issue #80 (Gap B); realized by PR #89 (Path A). Records a
+Accepted — 2026-06-30. **Amended 2026-07-31** (#217/#216): the flat-stack evidence is gradient-only — see the Amendment below. Issue #80 (Gap B); realized by PR #89 (Path A). Records a
 *determination* (which path delivers embeddability), not a code change — kin to
 [ADR-0016](ADR-0016-matrix-free-products-efficiency-path.md).
 
@@ -18,11 +18,13 @@ embedded target.
 
 The #80 feasibility spike measured the alternative and changed the picture:
 
-- The **rolled** form (`unroll=0`) ERT-codegens with a **flat, n-independent
-  stack** (~96 B at n = 8/32/64). Its accumulator is pre-allocated at its final
-  size *before* the loop, so there is no field-add-after-read and the temps are
-  reused — bounded stack. The catastrophic O(n²) stack was the *unrolled* choice,
-  not inherent to subscripted derivatives.
+- The **rolled GRADIENT** (`unroll=0`) ERT-codegens with a **flat,
+  n-independent stack** (~96 B at n = 8/32/64). The rolled gradient's
+  accumulator is pre-allocated at its final size *before* the loop, so there is
+  no field-add-after-read and the temps are reused — bounded stack. The
+  catastrophic O(n²) stack was the *unrolled* choice, not inherent to
+  subscripted derivatives. **This bullet is the gradient's; it does not extend
+  to the rolled Hessian** — see the Amendment at the end of this ADR.
 - The rolled Hessian's only remaining ERT blocker was a contained **Gap-A-family
   static-data read-then-add** (the de-dup emitter aliased an index to a sibling
   struct field), fixed in PR #89 (route the shared copy through a local temp).
@@ -79,3 +81,46 @@ subscripted/loop derivatives, **prefer rolled**.
   approach D, no ADR). But the A-now/B-later split locks in a trade-off a future
   PR will revisit (§4), and the *rationale* — embeddability ≠ rewrite — is exactly
   what that PR will want; an ADR (cf. ADR-0016) records it durably.
+
+## Amendment — 2026-07-31: the flat-stack evidence is gradient-only
+
+This ADR's determination stands — rolled is the embeddable path, scatter stays
+deferred to R21. What narrows is the **evidence**, and since the figures here are
+quoted elsewhere the scope needs stating.
+
+1. **"Flat, n-independent stack."** Reproduced for the rolled **gradient**:
+   96 B at n = 8/16/32/64, measured 2026-07-31 via
+   `measureStackScaling('Anchor','scostfun','DerType','gradient')`. The rolled
+   **Hessian**, same anchor and pipeline, is 768 / 2560 / 9616 / 37552 B over
+   that sweep — against a hand-written reference of `80+8n`, **28.6× at n=32 and
+   63.4× at n=64** ([#217](https://github.com/pdlourenco/adigator-embedded/issues/217)).
+   Of the four series ADR-0035's gate measures, it is the only one not affine
+   in n.
+
+2. **"Embeddability does not require the engine rewrite."** The **bar was too
+   low**, rather than the evidence misattributed. This ADR's second bullet is
+   explicitly about the Hessian (its remaining ERT blocker was the Gap-A
+   read-then-add, fixed in PR #89) and it was right: the rolled Hessian *does*
+   ERT-codegen, and 37.5 KB *is* bounded. It met the bar as written. The bar was
+   ERT acceptance — and **bounded is not embeddable**, which is exactly the
+   necessary-but-not-sufficient point [ADR-0033](ADR-0033-strict-shared-coder-config.md)
+   and [ADR-0035](ADR-0035-embeddability-gate-calibrated-to-hand-written.md) make.
+   Whether closing #217 needs the rewrite deferred here is open.
+
+   The likely locus, **not yet confirmed**, is a gather through an n²-sized
+   second-derivative index table (`cadaPrintReMap`'s `nzover` path) — consistent
+   with this ADR's own choke-point analysis. #217 must diagnose it before that
+   is treated as established.
+
+Also for the record: this ADR's **unrolled** figure — an O(n²) stack, 16.9 KB at
+n=64 — **does not reproduce**. The unrolled form does not code-generate at all
+today, under strict ERT *or* plain `lib`
+([#216](https://github.com/pdlourenco/adigator-embedded/issues/216)). The
+hollow-milestone argument this ADR originates is unaffected in substance — it now
+rests on the reproducible #217 instead — but the figure should not be re-cited.
+It currently survives, un-attributed, in `CI_PLAN.md` REQ-T-10 and
+`ADR-0033` §Context (the latter also extrapolating ~67 KB at n=128 from it);
+both are #216 follow-ups.
+
+The measurement that separates gradient from Hessian is now a gate:
+`SStackScalingTest` / TS-S-09, ADR-0035.
