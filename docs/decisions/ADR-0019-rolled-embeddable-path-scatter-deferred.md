@@ -6,6 +6,12 @@ Accepted — 2026-06-30. **Amended 2026-07-31** (#217/#216): the flat-stack evid
 *determination* (which path delivers embeddability), not a code change — kin to
 [ADR-0016](ADR-0016-matrix-free-products-efficiency-path.md).
 
+> **Every *unrolled* O(n²)-stack figure in this document is subject to the #216
+> Amendment below**: that measurement does not reproduce — the unrolled form does
+> not code-generate at all today — so the epithet is unsupported. The
+> *determination* it supports (unrolled is not the embeddable path) is unaffected,
+> and if anything strengthened.
+
 ## Context
 
 The #80 mandate: **every generated derivative except the `classic`/`c` path must
@@ -118,9 +124,9 @@ today, under strict ERT *or* plain `lib`
 ([#216](https://github.com/pdlourenco/adigator-embedded/issues/216)). The
 hollow-milestone argument this ADR originates is unaffected in substance — it now
 rests on the reproducible #217 instead — but the figure should not be re-cited.
-It currently survives, un-attributed, in `CI_PLAN.md` REQ-T-10 and
-`ADR-0033` §Context (the latter also extrapolating ~67 KB at n=128 from it);
-both are #216 follow-ups.
+Both sites that carried it un-attributed — `CI_PLAN.md` REQ-T-10 and `ADR-0033`
+§Context (the latter also extrapolating ~67 KB at n=128 from it) — were corrected
+under #216, and now cite the reproducible #217 instance instead.
 
 The measurement that separates gradient from Hessian is now a gate:
 `SStackScalingTest` / TS-S-09, ADR-0035.

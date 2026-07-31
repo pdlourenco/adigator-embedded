@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-07-29. Extends the V&V-for-release effort from *correctness*
+Accepted — 2026-07-29. **Context corrected 2026-07-31** (#216): the hollow-milestone evidence is now #217, not ADR-0019's non-reproducing unrolled figure.. Extends the V&V-for-release effort from *correctness*
 (ADR-0032 coverage floor + the value oracles) to *embeddability*. Realizes the
 first half of issue #80's "compile everything through Embedded Coder (ERT)"
 objective as a shared, strict, drift-proof config; the stack-ceiling gate that
@@ -35,9 +35,21 @@ generated derivatives *are* ERT-capable — not merely assume it. Two problems:
 
 Both feed the deeper lesson from #80's Gap-B analysis: **ERT exit-success is
 necessary but not sufficient for embeddability.** A *bounded-but-large*
-derivative (the "hollow milestone": ERT-clean yet O(n²) stack — 16.9 KB at
-n=64; ~67 KB at n=128 by O(n²) extrapolation) code-generates and would ship a stack-overflow. This is
-the codegen twin of ADR-0032's "coverage is necessary, not sufficient".
+derivative (the "hollow milestone") code-generates and would ship a
+stack-overflow. This is the codegen twin of ADR-0032's "coverage is necessary,
+not sufficient".
+
+The worked instance is the **rolled/subscripted Hessian**: 37.5 KB of stack at n=64 — 63x
+the hand-written derivative of the same maths — while ERT-codegenning cleanly and
+passing every test that existed before ADR-0035's gate
+([#217](https://github.com/pdlourenco/adigator-embedded/issues/217)). As accepted (PR #204), this ADR cited ADR-0019's *unrolled* figure (16.9 KB at n=64, plus a
+~67 KB extrapolation to n=128) instead. That figure **does not reproduce** — the
+unrolled (`unroll=1`) loop form does not code-generate at all today, so nothing about its stack can
+be measured ([#216](https://github.com/pdlourenco/adigator-embedded/issues/216)).
+The argument is unchanged, and the substituted instance is the stronger one: it
+can be re-run, and it sits on the path ADR-0019 *recommends* rather than on a
+form already declared non-embeddable — so the necessary-but-not-sufficient point
+now bites on shipping code.
 
 ## Decision
 
