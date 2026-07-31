@@ -111,12 +111,18 @@ quoted elsewhere the scope needs stating.
    ERT acceptance — and **bounded is not embeddable**, which is exactly the
    necessary-but-not-sufficient point [ADR-0033](ADR-0033-strict-shared-coder-config.md)
    and [ADR-0035](ADR-0035-embeddability-gate-calibrated-to-hand-written.md) make.
-   Whether closing #217 needs the rewrite deferred here is open.
 
-   The likely locus, **not yet confirmed**, is a gather through an n²-sized
-   second-derivative index table (`cadaPrintReMap`'s `nzover` path) — consistent
-   with this ADR's own choke-point analysis. #217 must diagnose it before that
-   is treated as established.
+   **Resolved (#217, [ADR-0036](ADR-0036-overmap-directed-pruning-rolled-printing-run.md)):
+   it did not need the rewrite.** The locus guessed below was right — a gather
+   through an n²-sized second-derivative index table on `cadaPrintReMap`'s
+   `nzover` path — and the cause was one over-approximation: the printing run
+   composes loop overmaps as if independent, so a product of two n-wide unions
+   became the full n×n cross product and was then squeezed straight back into
+   the n-nonzero diagonal. Pruning to the overmap before the gather is emitted
+   leaves **160/352/608 B at n = 8/32/64 — `96+8n`, affine, 1.03× hand-written
+   at n=64**, the same series as the vectorized Hessian. So the rolled Hessian
+   is now embeddable on this ADR's own terms, and the deferred accumulation-engine
+   rewrite stays deferred for the reasons it was deferred, not for this one.
 
 Also for the record: this ADR's **unrolled** figure — an O(n²) stack, 16.9 KB at
 n=64 — **does not reproduce**. The unrolled form does not code-generate at all

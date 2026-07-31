@@ -180,13 +180,20 @@ z.deriv = struct('name',cell(NUMvod,1),'nzlocs',cell(NUMvod,1));
 for Vcount = 1:NUMvod;
   dxind = x.deriv(Vcount).nzlocs;
   dyind = y.deriv(Vcount).nzlocs;
-  % RepMat scalars if needed
+  % RepMat scalars if needed. The last argument is the loop overmap this result
+  % is about to be remapped into, or [] outside a rolled loop's printing run -
+  % see cadaOverMapTargetNz (#217): scalar expansion multiplies nonzero counts,
+  % and in the printing run both factors are loop overmaps, so it is where the
+  % independent composition of two unions turns quadratic. Fetched inside the
+  % branches so the common (non-scalar) path pays nothing for it.
   if ~isempty(dxind) && xscalarflag && ~yscalarflag
     [x.deriv(Vcount).name,dxind] =...
-        cadaRepDers(x.deriv(Vcount).name,dxind,yMrow*yNcol,Vcount,DPFLAG);
+        cadaRepDers(x.deriv(Vcount).name,dxind,yMrow*yNcol,Vcount,DPFLAG,...
+                    cadaOverMapTargetNz(z.id,Vcount,z.func.size));
   elseif ~isempty(dyind) && yscalarflag && ~xscalarflag
     [y.deriv(Vcount).name,dyind] =...
-        cadaRepDers(y.deriv(Vcount).name,dyind,xMrow*xNcol,Vcount,DPFLAG);
+        cadaRepDers(y.deriv(Vcount).name,dyind,xMrow*xNcol,Vcount,DPFLAG,...
+                    cadaOverMapTargetNz(z.id,Vcount,z.func.size));
   end
   % ---------------Use Function Sparsity to Cancel Derivatives----------- %
   spdyflag = 0;

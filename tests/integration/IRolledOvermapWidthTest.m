@@ -1,0 +1,170 @@
+classdef IRolledOvermapWidthTest < AdigatorTestCase
+    % IRolledOvermapWidthTest  #217 / ADR-0036: the printing run of a rolled
+    % loop must not carry a second-derivative pattern wider than the loop
+    % overmap it is about to be squeezed into.
+    %
+    % A rolled `for` is walked twice. The OVERMAP run sees each iteration's
+    % EXACT derivative pattern and unions them; the PRINTING run walks the body
+    % once, so every operand carries that union instead. Composing two unions as
+    % if they were independent loses the correlation between them: for
+    % `y = y + exp(x(k))` the per-iteration second-derivative pattern is the
+    % single entry (k,k) and the union is the n-nonzero DIAGONAL, but the
+    % printing run produced the full n-by-n cross product and gathered n^2
+    % doubles onto the stack - 37.5 KB at n=64, 63x hand-written - only for
+    % cadaPrintReMap to squeeze it back to n one statement later.
+    %
+    % This is the LICENSE-FREE half of that regression. The stack itself is
+    % measurable only with Coder + Embedded Coder + gcc, so the real gate
+    % (SStackScalingTest, ADR-0035) can never run on hosted CI (CI_PLAN.md
+    % §3.2). But the n^2 temporary was gathered THROUGH an n^2 static
+    % second-derivative index table, so `Gator2Data`'s size tracks the defect
+    % exactly: it is quadratic if and only if the stack temporary is. That needs
+    % no toolchain at all.
+    %
+    % Gator1Data is deliberately NOT asserted on: its per-iteration mask table is
+    % [nzover x niters] and therefore n^2 by construction in a rolled loop. That
+    % is the rolled form's own cost, not this defect, and it lives in ROM as
+    % int8 rather than on the stack as doubles.
+    %
+    %   Copyright 2026 Pedro Lourenço and GMV. Distributed under the GNU General
+    %   Public License version 3.0.
+
+    properties (Constant)
+        % Two sizes, because the question is a growth law and one point cannot
+        % answer it. Before ADR-0036 these tables were 64 and 256 entries.
+        Sizes = [8 16]
+        % Generous: the exact post-fix answer is n. A quadratic table is 8n at
+        % n=8 and 16n at n=16, so 4n separates the two regimes at BOTH sizes
+        % without pinning an incidental constant.
+        MaxPerN = 4
+    end
+
+    methods (TestClassSetup)
+        function addHelperPath(tc)
+            % writeFixtureFile / fdcheck live in tests/helpers, which the base
+            % class does not add. Distinct method name so the base setup still
+            % runs (see AdigatorTestCase).
+            import matlab.unittest.fixtures.PathFixture
+            root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
+            tc.applyFixture(PathFixture(fullfile(root,'tests','helpers')));
+        end
+    end
+
+    methods (TestMethodSetup)
+        function workInTempFolder(tc)
+            import matlab.unittest.fixtures.WorkingFolderFixture
+            tc.applyFixture(WorkingFolderFixture);
+        end
+    end
+
+    methods (Test)
+        function diagonalHessianKeepsLinearSecondDerivMetadata(tc)
+            % The #217 anchor, as a growth law. y = sum_k exp(x_k) + 2 x_k has a
+            % DIAGONAL Hessian, and the tool knows it - the exported pattern is
+            % n nonzeros (SCscMetadataTest/TS-S-08). Nothing interior may be
+            % quadratic either.
+            writeFixtureFile('rowRolledDiag', { ...
+                'n = size(x,1);', 'y = 0;', ...
+                'for k = 1:n', '    y = y + exp(x(k)) + 2*x(k);', 'end'});
+            widths = zeros(size(tc.Sizes));
+            for i = 1:numel(tc.Sizes)
+                n = tc.Sizes(i);
+                widths(i) = tc.gator2Width('rowRolledDiag', n);
+                tc.verifyLessThanOrEqual(widths(i), tc.MaxPerN*n, sprintf( ...
+                    ['#217: widest Gator2Data index table is %d at n=%d. The ', ...
+                     'Hessian of sum_k exp(x_k) is diagonal, so the interior ', ...
+                     'second-derivative pattern must be O(n), not O(n^2) - a ', ...
+                     'quadratic table is the n^2 stack gather ADR-0036 removed.'], ...
+                    widths(i), n));
+            end
+            % Growth law, not just magnitude: doubling n must roughly double the
+            % table (linear), not quadruple it (the defect).
+            tc.verifyLessThanOrEqual(widths(2), 2.5*widths(1), sprintf( ...
+                ['#217: Gator2Data width went %d -> %d over n = %d -> %d. ', ...
+                 'Doubling n must about double it; ~4x is the quadratic ', ...
+                 'signature.'], widths(1), widths(2), tc.Sizes(1), tc.Sizes(2)));
+        end
+
+        function prunedRolledHessianStillMatchesAnalytic(tc)
+            % Principle 1: a narrower pattern must not mean a different answer.
+            % Values, against the closed form AND against finite differences.
+            writeFixtureFile('rowRolledDiagV', { ...
+                'n = size(x,1);', 'y = 0;', ...
+                'for k = 1:n', '    y = y + exp(x(k)) + 2*x(k);', 'end'});
+            n = 8;
+            d = tc.genHes('rowRolledDiagV', n);
+            rng(4); xf = 0.4*randn(n,1);
+            [H,G,F] = tc.runIn(d, 'rowRolledDiagV_Hes', xf);
+            tc.verifyEqual(H, diag(exp(xf)), 'AbsTol', 1e-12, 'RelTol', 1e-12, ...
+                'rolled diagonal Hessian must equal diag(exp(x))');
+            tc.verifyEqual(G(:), exp(xf) + 2, 'AbsTol', 1e-12, 'RelTol', 1e-12, ...
+                'rolled gradient must equal exp(x)+2');
+            tc.verifyEqual(F, sum(exp(xf) + 2*xf), 'AbsTol', 1e-12, 'RelTol', 1e-12);
+            Hfd = squeeze(fdcheck('hess', @(v) rowRolledDiagV(v), xf));
+            tc.verifyEqual(H, Hfd, 'AbsTol', 1e-4, ...
+                'rolled diagonal Hessian must survive a finite-difference check');
+        end
+
+        function genuinelyDenseRolledHessianIsNotPruned(tc)
+            % The other side of the guard, and the one that matters: the prune
+            % must not fire when the answer really IS dense. Here every iteration
+            % couples x(k) to ALL of x through the sum, so the exact Hessian is
+            % full - if pruning were over-eager it would silently zero the
+            % off-diagonal, which is exactly the failure mode principle 1 is
+            % about. So no width assertion here (a quadratic pattern is the right
+            % answer for this shape) - only the values, against finite
+            % differences, plus a check that the Hessian really is dense so the
+            % guard cannot quietly degenerate into a second diagonal case.
+            writeFixtureFile('rowRolledDense', { ...
+                'n = size(x,1);', 'p = sum(x);', 'y = 0;', ...
+                'for k = 1:n', '    y = y + p*exp(x(k));', 'end'});
+            n = 6;
+            d = tc.genHes('rowRolledDense', n);
+            rng(11); xf = 0.3*randn(n,1);
+            [H,G,F] = tc.runIn(d, 'rowRolledDense_Hes', xf);
+            tc.verifyEqual(F, sum(sum(xf)*exp(xf)), 'AbsTol', 1e-12, 'RelTol', 1e-12);
+            tc.verifyEqual(G(:), fdcheck('jac', @(v) rowRolledDense(v), xf).', ...
+                'AbsTol', 1e-5, 'gradient of the dense rolled case');
+            Hfd = squeeze(fdcheck('hess', @(v) rowRolledDense(v), xf));
+            tc.verifyEqual(H, Hfd, 'AbsTol', 1e-4, ...
+                ['dense rolled Hessian must survive finite differences - if the ', ...
+                 'ADR-0036 prune fires here it drops real off-diagonal terms']);
+            tc.verifyGreaterThan(nnz(abs(H) > 1e-8), n, ...
+                'this fixture is only a guard if its Hessian is actually dense');
+        end
+    end
+
+    methods (Access = private)
+        function w = gator2Width(tc, fname, n)
+            % widest Gator2Data index table of the rolled Hessian at size n
+            d = tc.genHes(fname, n);
+            S = load(fullfile(d, [fname '_ADiGatorHes.mat']));
+            T = S.([fname '_ADiGatorHes']);
+            tc.assertTrue(isfield(T,'Gator2Data'), ...
+                'second-derivative static data missing - generation changed shape');
+            g = T.Gator2Data;
+            w = 0;
+            for f = fieldnames(g).'
+                if strncmp(f{1},'Index',5)
+                    w = max(w, numel(g.(f{1})));
+                end
+            end
+            tc.assertGreaterThan(w, 0, 'no Gator2Data.Index* tables found');
+        end
+
+        function d = genHes(~, fname, n)
+            % Rolled (unroll=0, the default) classic Hessian into its own folder,
+            % so the .mat with the static index tables survives for inspection.
+            d = fullfile(pwd, sprintf('%s_n%d', fname, n));
+            adigatorGenHesFile(fname, {adigatorCreateDerivInput([n 1],'x')}, ...
+                adigatorOptions('overwrite',1,'echo',0,'path',d));
+        end
+
+        function varargout = runIn(~, d, wrapper, xf)
+            old = cd(d);
+            restore = onCleanup(@() cd(old));
+            rehash;
+            [varargout{1:nargout}] = feval(wrapper, xf);
+        end
+    end
+end

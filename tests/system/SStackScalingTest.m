@@ -19,9 +19,10 @@ classdef SStackScalingTest < AdigatorTestCase
     % the overhead the GENERATOR adds over the derivative's own intrinsic cost,
     % which is the part this project controls.
     %
-    % Tolerances are PER CASE (see properties): at n=64 the measured spread is
-    % 1.00x / 1.05x / 2.64x passing against 63.4x failing, so one global number
-    % would be far looser than the parity cases deserve.
+    % Tolerances are PER CASE (see properties): the measured spread at n=64 is
+    % 1.00x / 1.03x / 1.05x / 2.64x, so one global number would be far looser
+    % than the parity cases deserve. (When this gate was written the spread also
+    % held a 63.4x failure, #217; ADR-0036 brought it to 1.03x.)
     %
     % Coder + Embedded Coder + a standalone gcc/size toolchain gated; skips
     % cleanly otherwise. LOCAL ONLY - hosted CI licenses neither Coder product,
@@ -43,7 +44,6 @@ classdef SStackScalingTest < AdigatorTestCase
         TolVector = 4       % vvecfun Jacobian: overhead = (112+24n)/(112+8n),
                             % bounded ABOVE by exactly 3.0 - so 3 leaves zero
                             % asymptotic margin and 4 leaves a real one
-        TolPin    = 4       % the #217 pin: fails at 28.6x (n=32) / 63.4x (n=64)
     end
 
     methods (TestClassSetup)
@@ -101,32 +101,30 @@ classdef SStackScalingTest < AdigatorTestCase
                      '- constant-factor, bounded above by 3.0 (see note).\n'], ...
                      mat2str(round(r.overhead,2)));
         end
-    end
 
-    %% --------------------- known-issue detection ---------------------- %%
-    methods (Test, TestTags = {'KnownIssue'})
-        function subscriptedHessianStackOverhead(tc)
-            % #217: the ROLLED/subscripted Hessian carries a super-linear stack
-            % temporary - measured 768/2560/9616 B at n=8/16/32, which unlike
-            % every other series here is NOT affine in n, against a hand-written
-            % reference of 80+8n. 28.6x at n=32, 63.4x at n=64 (37.5 KB).
-            % It ERT-codegens cleanly and passes SRolledErtCodegenTest today:
-            % this is the hollow milestone with numbers on it.
+        function subscriptedHessianMatchesVectorizedTwin(tc)
+            % #217, fixed by ADR-0036. This was the gate's first catch and shipped
+            % as a self-healing KnownIssue pin: the ROLLED/subscripted Hessian
+            % carried a super-linear stack temporary - 768/9616/37552 B at
+            % n=8/32/64, i.e. 5.33x/28.62x/63.43x hand-written, and the only
+            % series in this suite that was not affine in n.
             %
-            % scostfun and vcostfun compute the SAME function (sum(exp(x)+2x));
-            % only the formulation differs (subscripted loop vs vectorized), so
-            % vcostfun_hess_analytic is the correct reference for both and this
-            % is a like-for-like comparison. The vectorized form of the same
-            % maths is at 1.05x, which is why #217 is assessed fixable.
+            % The cause was one over-approximation, not the rolled form: in the
+            % printing run every loop-body operand carries its loop OVERMAP, so a
+            % product of two n-wide unions was computed as the full n-by-n cross
+            % product and then squeezed straight back into the n-nonzero diagonal
+            % the tool already knew the answer was. Pruning to the overmap before
+            % the gather is emitted (cadaOverMapTargetNz) leaves 160/352/608 B -
+            % exactly 96+8n, the SAME series as the vectorized Hessian.
             %
-            % Self-healing: when #217 lands, assumeFail stops firing and the
-            % verification below runs for real - remove the KnownIssue tag then.
-            r = tc.measure('scostfun','hessian','vcostfun_hess_analytic',tc.TolPin);
-            if r.maxOverhead > tc.TolPin
-                tc.assumeFail(sprintf( ...
-                    'Known issue #217 (rolled Hessian stack): %s', tc.verdict(r)));
-            end
-            tc.verifyLessThanOrEqual(r.maxOverhead, tc.TolPin, tc.verdict(r));
+            % So this is now a parity case, held to TolParity like its twin: the
+            % point of the assertion is that the subscripted formulation costs
+            % what the vectorized one costs. scostfun and vcostfun compute the
+            % same function (sum(exp(x)+2x)) and differ only in formulation, so
+            % vcostfun_hess_analytic is the right reference for both and this is
+            % like-for-like.
+            r = tc.measure('scostfun','hessian','vcostfun_hess_analytic',tc.TolParity);
+            tc.verifyLessThanOrEqual(r.maxOverhead, tc.TolParity, tc.verdict(r));
         end
     end
 

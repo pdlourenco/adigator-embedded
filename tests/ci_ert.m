@@ -35,7 +35,12 @@ addpath(thisDir);
 % Result names that are EXPECTED to filter: documented KnownIssue pins. Anything
 % else filtering means a case did not run - a missing toolchain, a renamed
 % fixture, a broken build - and must not be reported as a pin firing by design.
-knownPins = {'SStackScalingTest/subscriptedHessianStackOverhead'};
+%
+% Empty since #217 closed (ADR-0036): its self-healing pin,
+% SStackScalingTest/subscriptedHessianStackOverhead, was the only entry and is
+% now an ordinary parity assertion. With no pins listed, ANY filter in these
+% classes reads as PARTIAL - which is the correct, stricter reading.
+knownPins = {};
 
 classes = { ...
     'SCodegenTest',          'REQ-T-05  compiled-output equivalence'; ...
