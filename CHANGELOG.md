@@ -35,6 +35,23 @@ below); it is not a patch of upstream 1.x.
 
 ### Fixed
 
+- **A Hessian differentiated through a rolled loop no longer carries an O(n²)
+  stack temporary.** If you wrote a scalar cost as a subscripted loop —
+  `for k = 1:n, y = y + phi(x(k)); end` — the generated Hessian gathered an
+  `n`-by-`n` array of doubles onto the stack inside the loop, even though the
+  Hessian it returns is diagonal. At n = 64 that was **37.5 KB of stack, 63×
+  what a hand-written `diag(exp(x))` needs**; it code-generated cleanly under
+  Embedded Coder and would then overflow a small target at run time. The
+  measured stack is now **160/352/608 B at n = 8/32/64** against 144/336/592 B
+  hand-written — 1.11×/1.05×/1.03×, the same cost as writing the identical
+  maths in vectorized form.
+
+  Derivative values, shapes and the exported sparsity pattern are unchanged; the
+  generated file simply stops computing entries it was already discarding, and
+  its static second-derivative index tables shrink from `n²` to `n` entries.
+  Nothing in your code needs to change — re-generate to pick it up. See
+  ADR-0036.
+
 - **`loopbound` derivatives are now embeddable without a heap.** The runtime-bound
   guard (`assert(N <= Nmax);`) is emitted as the first statement of the generated
   function instead of only at the loop header. Previously the sizes that depend on

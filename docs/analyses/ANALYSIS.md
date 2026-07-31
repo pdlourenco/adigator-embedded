@@ -927,6 +927,90 @@ main-function loop range), not every route to a specialized trip count:
 All three keep the original silent-wrong behaviour above the analyzed count. The
 guard's *absence* is the tell, so they are detectable, but they are not fixed.
 
+### 1.3k The rolled printing run composes loop overmaps as if independent (B37)
+
+**B37 — a rolled second-derivative pattern is computed as the cross product of
+two loop overmaps, so an interior temporary is O(n²) where the exported pattern
+is O(n) (high, embeddability; fixed,
+[#217](https://github.com/pdlourenco/adigator-embedded/issues/217),
+[ADR-0036](../decisions/ADR-0036-overmap-directed-pruning-rolled-printing-run.md)).**
+Found by the ADR-0035 embeddability gate on first contact: the rolled Hessian of
+`sum_k exp(x_k) + 2x_k` carried **37,552 B of stack at n=64 — 63.4×** the
+hand-written `diag(exp(x))` — while ERT-code-generating cleanly and passing
+`SRolledErtCodegenTest`. This is the "hollow milestone" (ADR-0019/ADR-0033) with
+numbers attached: exit-success is necessary, not sufficient.
+
+**Mechanism.** A rolled `for` is walked twice, and the passes do not see the same
+thing. The **overmap run** walks the body once per iteration with the *exact*
+per-iteration derivative patterns and unions them (`cadaOverMap` →
+`cadaUnionVars`, which unions exact locations). The **printing run** walks the
+body *once* — one printed body must serve every iteration — so every loop-body
+operand carries its overmap instead. The printing run therefore composes two
+unions **as if they were independent**, losing the correlation between them.
+
+For `exp(x(k))` the second-derivative pattern is `{(k,k)}` in iteration `k`, so
+the union is the n-nonzero **diagonal**, and that is what the tool exports
+(`SCscMetadataTest`/TS-S-08 pins `Nnz = 8` at n=8). But with both factors of the
+product rule n-wide in the printing run, `times` produced the full n×n cross
+product. Instrumenting both runs shows it directly — per-iteration nonzeros
+`1,1,…,1` unioning to `8`, then a single event at n=8:
+
+```
+SHRINK  scostfun_ADiGatorHes  der=cada1f2dxdx  nzx=64  nzover=8  nzd=8
+```
+
+`cadaPrintReMap` squeezed the 64 straight back to 8 — *one statement later*,
+after the generated code had already gathered n² doubles onto the stack:
+
+```matlab
+cada2tempdx = cada2f1dx(Gator2Data.Index1);      % n^2 doubles, inside the loop
+cada1f2dxdx = cada2tf1(:).*cada2tempdx;          % n^2
+cada1f2dxdx = cada1f2dxdx(Gator2Data.Index3,1);  % ... and back down to n
+```
+
+**Two dead ends worth recording**, because both look like refutations and are
+not. `der_output='csc'` changes the stack by −2.7% and leaves the exponent
+alone: fitting `a·n²+b·n+c` shows the quadratic and constant terms are identical
+across output modes and only the linear term moves, so the object is *interior*,
+upstream of output assembly. And ROM is *modest* (640 B at n=8), which argues
+against an inflated index table until you notice the tables are **down-cast to
+`int8`** (ADR-0001): n² entries cost 64 B in ROM and 512 B on the stack the
+moment they are gathered into a `double` temp.
+
+**Fix.** Hand the emitting operation the overmap its result is about to be
+remapped into (`lib/@cada/private/cadaOverMapTargetNz.m`) and let it drop the
+doomed locations before printing them — the *same* truncation `cadaPrintReMap`
+performs a statement later, which is why the helper returns `[]`, and the caller
+prunes nothing, unless that remap is actually going to happen. Applied in
+`cadaRepDers` (scalar-derivative expansion, where `nnz(scalar) × numel(array)`
+is what turns quadratic) via the two call sites in `cadabinaryarraymath`.
+
+Scope was set by measurement. Instrumenting every `cadaPrintReMap`
+over-approximation across the whole corpus found **18 events**: 17 with this
+defect's signature (`nzx = n²`, `nzover = n`), all on the scalar-expansion path,
+across six fixtures and reaching **third order** (`cada1f2dxdxdx`) — so the fix
+is not Hessian-specific, and the largest is `nzx = 4096` against `nzover = 64`,
+which is the 37.5 KB in one line of log; and one that is different in kind, a *first-order*
+Jacobian's growing concatenation (`ForHorzcat`, `V.dx` at 700 → 600 in the
+`polydatafit` example), a bounded ~17% over-approximation with no growth-law
+character, left alone deliberately. `cadaRepDers`'s third caller (`subsasgn`) and
+the `IF` overmap are likewise out of scope — see ADR-0036.
+
+**Result.** Generated stack 768/9616/37552 → **160/352/608** B at n = 8/32/64
+against 144/336/592 hand-written: 5.33×/28.62×/63.43× → **1.11×/1.05×/1.03×**.
+The series becomes exactly `96 + 8n` — affine, and byte-for-byte the same series
+ADR-0035 measured for the *vectorized* Hessian of the same maths. So the
+subscripted formulation now costs what the vectorized one costs, which also
+answers ADR-0035's open caveat that part of the gap might be intrinsic to the
+rolled path: none of it was.
+
+Pinned by `tests/integration/IRolledOvermapWidthTest.m` (license-free — the n²
+gather went *through* an n² static index table, so `Gator2Data`'s width tracks
+the defect exactly, and a genuinely dense rolled Hessian is checked to be left
+alone) and `SStackScalingTest::subscriptedHessianMatchesVectorizedTwin`
+(Coder-gated, local-only), which was the self-healing `KnownIssue` pin and is now
+an ordinary parity assertion.
+
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
 - `cadaunarymath.m` derivative-rule corrections (`asec`, `acsc`, `asecd`,
@@ -986,6 +1070,7 @@ guard's *absence* is the tell, so they are detectable, but they are not fixed.
 | B29-B31, B33-B34 (`@cadastruct` fallback-naming branch: undefined `NDstr`/`yid`, misspelled empty-eval flag) | **Fixed** - five sites in the `RUNFLAG==2 && nameloc<=0` fallback-name arm (`vertcat`/B29, `ctranspose`/B30, `repmat`/B31, `horzcat`/B33, `subsref`/B34 - the last two found by the fix sweep, not the inventory) used `NDstr` in a scope that never assigns it; for `subsref` the file's only assignment is inside the `ForSubsRef` **subfunction**, which is why a per-file check misses it. The arm is **user-reachable** (`hlp([s; s]')` throws pre-fix), so it is fixed, not guarded. That fixture drives **`vertcat`**'s arm - the `[s; s]` concat result is the unnamed intermediate, while the `ctranspose` result is a function-call input that gets a NAMES entry and takes the *named* arm - so B29 is the one pinned dynamically; B30/B33/B34 are pinned by the static scope guard. Rebuilt with **`DERNUMBER`** - what the deleted `NDstr` stood for - and deliberately **not** the `NVAROFDIFF` used by the `transpose`/`reshape`/`repmat` siblings: `NVAROFDIFF` is invariant across the two Hessian passes, so it could alias a live pass-1 variable and silently win the assignment, converting a loud throw into a wrong derivative (principle 1). Verified correct, not merely non-throwing (`2*sum(x)` -> `[2 2 2]`, analytic-exact, FD 2.8e-10). `subsasgn.m` checked and clean. Harmonizing the three remaining `NVAROFDIFF` siblings is an **open follow-up** (changes shipped emitted identifiers; own ADR). Pinned by `tests/integration/IStructArrayNamingTest.m` / TS-I-27 (§1.3g). |
 | B32 (Hessian generation crashes on a zero/linear-objective Hessian) | **Fixed** — `util/adigatorGenHesFile.m` crashed at `HesLocs1 = dydxlocs(dydxdxlocs(:,1),:)` when the second-derivative `nzlocs` was `[]` (a structurally-zero Hessian, e.g. `y = x(k)`), and the value emission then scattered from an absent runtime `…dxdx_location` field. Fixed by normalizing the empty locs to `0×2` (so the empty CSC pattern builds) and short-circuiting the value emission to a literal `Hes = zeros(shape)` (empty `0×1` for `der_output='csc'`), skipping the scatter. Found by the #38 Phase C `mcGenExprTree` fuzzer; pinned by `tests/integration/IZeroHessianTest.m` (§1.3h). |
 | B35 (a `loopbound` derivative is not embeddable — runtime bound guarded too late) | **Fixed** — `adigatorForInitialize` emitted `assert(N <= Nmax)` at the loop header only, so every bound-dependent size *ahead* of the loop (the user's `zeros(N,1)`; the `cadaforvar<k> = 1:N` loop-variable range the machinery materializes) reached Coder unbounded: heap `emxArray`s with dynamic memory allocation on, outright rejection with it off. Fixed in `lib/adigatorFunctionInitialize.m` by hoisting one guard per declared bound to the first statement of the main function body (all `loopbound` names are validated main-function inputs, so they are in scope there); the per-loop guards stay for the re-differentiation path. Padded ROM −224 B, stack +112 B, heap requirement gone. Pinned by `ILoopboundTest::guardPrecedesEveryBoundDependentSize` (license-free) and `SRolledErtCodegenTest::loopboundGradientErtCodegenStaticMemory` (Coder-gated, local-only) (§1.3i). |
+| B37 (a rolled second-derivative pattern is the cross product of two loop overmaps) | **Fixed** — in the printing run of a rolled loop every operand carries its loop overmap, so `cadabinaryarraymath`'s scalar expansion (`cadaRepDers`) composed two n-wide unions as if independent and emitted the full n×n gather for a Hessian whose exported pattern is the n-nonzero diagonal; `cadaPrintReMap` then discarded 56 of the 64 one statement later, but only after the generated code had put n² doubles on the stack — 37,552 B at n=64, **63.4×** hand-written, while ERT-codegenning cleanly (the hollow milestone). Fixed by handing the emitting operation the overmap its result is about to be remapped into (`lib/@cada/private/cadaOverMapTargetNz.m`) so the doomed locations are dropped *before* they are printed — the same truncation, moved earlier, and guarded to fire only when that remap would actually have happened. Stack 768/9616/37552 → **160/352/608** B at n=8/32/64, i.e. exactly `96+8n`: affine, and the same series as the *vectorized* Hessian of the same maths, which also answers ADR-0035's caveat that part of the gap might be intrinsic to the rolled path (none of it was). Scope set by instrumenting every `cadaPrintReMap` over-approximation across the corpus — 18 events, of which the 17 with a growth law are all scalar expansion (the 18th is a bounded first-order `horzcat` case, §1.3k). Pinned by `tests/integration/IRolledOvermapWidthTest.m` (license-free) and `SStackScalingTest::subscriptedHessianMatchesVectorizedTwin` (Coder-gated, local-only), the latter having been the self-healing KnownIssue pin (§1.3k; issue #217, ADR-0036). |
 | B36 (a loop range over a runtime-named scalar is unbounded even without `loopbound`) | **Fixed** — a file generated *without* the option still prints `cadaforvar1.f = 1:N` when the trip count names a function input (passing a plain numeric to `adigator` fixes the analysis count, not the input), so nothing bounds it and, unlike a `loopbound` file, nothing declares the envelope either. The emitted range and the emitted loop header disagree (literal header, runtime range): measured at `n=5`, calling with `N=3` is loud (index out of bounds) but `N=8` **runs silently** and returns the 5-term answer (70 vs a true 240) — a quietly wrong derivative, principle 1. Fixed by emitting `assert(N == n);` in the body prologue (an equality - the file is specialized, not padded), plus extending the shared guard shape and BOTH recognizers so re-differentiation still works: without the recognizer half every Hessian of a named-trip-count function would have stopped generating. Verified to 3rd order. Unblocked `bench/loopboundPaddingPenalty` under static memory allocation, which raised the measured padding penalty ~2x at small n (every earlier figure was heap-enabled). Fixed for the **direct** form (a main-function input named in a main-function loop range); three routes to a specialized trip count remain unguarded and are recorded as residual scope in §1.3j. Pinned by `tests/integration/ISpecializedTripCountTest.m` (§1.3j; issue #210). |
 
 ---

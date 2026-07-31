@@ -108,10 +108,21 @@ Lands as `bench/measureStackScaling.m` (measurement),
   cleanly and passes the existing gate today. It ships as a `KnownIssue` pin
   (`CI_PLAN.md` §3.3: visible, counted, non-blocking) that **self-heals**: when
   #217 lands, `assumeFail` stops firing and the assertion runs for real.
+
+  **Closed 2026-07-31 by [ADR-0036](ADR-0036-overmap-directed-pruning-rolled-printing-run.md)**
+  — 37,552 → 608 B at n=64, i.e. `96+8n`, byte-for-byte the vectorized
+  Hessian's own series. The pin healed as designed and is now an ordinary
+  parity assertion at `TolParity`. Two things this ADR left open are settled by
+  it: the caveat that *"some part of 28.6× may be intrinsic to the rolled path
+  rather than a generator defect"* — none of it was — and the choice of `K = 4`
+  for that case, which is retired rather than re-tuned.
 - **The gate deliberately produces an Incomplete.** That is the documented
   KnownIssue convention working as intended, and a concrete reason why "expect
   0 incomplete" is the wrong way to read a local run (see `CONTRIBUTING.md`
   §"Local development & pre-push CI" — confirm the codegen classes *per class*).
+  *(No longer true as of ADR-0036: the pin healed, so this gate now has no
+  KnownIssue and `ci_ert`'s `knownPins` list is empty. The reasoning stands for
+  the next pin; the reading rule stands regardless.)*
 - **The `vvecfun` Jacobian is a bounded constant-factor gap, not a watch item.**
   Three vector temporaries against hand-written one, ratio → 3.0. Worth fixing
   for its own sake; *not* the same shape as #217, which is super-linear. An

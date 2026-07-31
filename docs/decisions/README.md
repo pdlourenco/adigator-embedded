@@ -219,3 +219,9 @@ Contracts section (binding conventions), or for purely mechanical choices
   for the same maths, **not** a flatness rule (measured: optimal hand code grows)
   and **not** an invented byte ceiling (no target device is declared). Completes
   REQ-T-10; found #217 on first contact.
+- [ADR-0036](ADR-0036-overmap-directed-pruning-rolled-printing-run.md) —
+  **Accepted**: an operation about to have its result squeezed into a rolled
+  loop's overmap may drop the doomed derivative locations *before* printing them
+  — the same truncation `cadaPrintReMap` already performs, moved ahead of the
+  oversized temporary. Closes #217 (63.4× → 1.03× hand-written); scoped to the
+  scalar-expansion path by measurement, not symmetry.

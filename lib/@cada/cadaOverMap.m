@@ -184,7 +184,11 @@ else
   % --------------------------------------------------------------------- %
   xID = x.id;
   if ADIGATOR.FORINFO.FLAG
-    % ----------------------- In a FOR Loop ----------------------------- % 
+    % ----------------------- In a FOR Loop ----------------------------- %
+    % NOTE (#217/ADR-0036): cadaOverMapTargetNz mirrors the OverLoc/SubsFlag
+    % test below so an emitting operation can drop the locations this remap is
+    % about to discard *before* it prints them. The two must stay in step - if
+    % you change when the remap happens here, change it there too.
     OverLoc  = ADIGATOR.VARINFO.OVERMAP.FOR(xID,1);
     SubsFlag = ADIGATOR.VARINFO.NAMELOCS(xID,3);
     if OverLoc
