@@ -174,7 +174,7 @@ try
     r.mexMs  = 1e3*mean(arrayfun(@(k) timeit(@() mexf(xv)), 1:timeReps));
     clear([wrapper '_mex']);
 
-    cfg = coder.config('lib','ecoder',true); cfg.GenerateReport = false;  % Embedded Coder / ERT (#80 R20b)
+    cfg = adigatorCoderConfig();  % strict Embedded Coder / ERT, shared (#80 R20b)
     codegen(wrapper,'-config',cfg,'-args',{zeros(n,1)},'-d','clib');
     r.cBytes = sumCBytes(fullfile(d,'clib'));
     % R17c (#73): the HONEST footprint - compile the ERT-generated C and read the

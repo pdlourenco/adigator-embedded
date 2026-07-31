@@ -42,8 +42,7 @@ classdef SRolledErtCodegenTest < AdigatorTestCase
             % the regime where the read-then-add alias used to break ERT (n=8 did
             % not trigger it).
             n   = 32;
-            cfg = coder.config('lib', 'ecoder', true);
-            cfg.GenCodeOnly = true;
+            cfg = adigatorCoderConfig('GenCodeOnly', true);   % strict ERT (shared, #80)
             for spec = {{'gradient','_Grd'}, {'hessian','_Hes'}}
                 dt  = spec{1}{1};
                 w   = ['scostfun' spec{1}{2}];
@@ -76,8 +75,10 @@ classdef SRolledErtCodegenTest < AdigatorTestCase
             %
             % Static memory allocation is the whole point of the assertion, so
             % this test sets EnableDynamicMemoryAllocation explicitly rather
-            % than relying on the config default: with the heap enabled the
-            % file generates either way and the test proves nothing.
+            % than relying on the shared helper's guarantee: with the heap
+            % enabled the file generates either way and the test proves nothing,
+            % so the one property under test is stated here, at the assertion,
+            % and does not silently follow a future edit to adigatorCoderConfig.
             %
             % Subfunction reach: the hoisted guard lives in the MAIN function
             % only, so a subfunction doing its own pre-loop `zeros(N,1)` relies
@@ -88,10 +89,8 @@ classdef SRolledErtCodegenTest < AdigatorTestCase
             % subfunction+loopbound artifact is a heavier build, and the failure
             % direction is loud (codegen refusal), not a wrong derivative.
             n   = 8;
-            cfg = coder.config('lib', 'ecoder', true);
-            cfg.EnableDynamicMemoryAllocation = false;
-            cfg.GenCodeOnly = true;
-            cfg.GenerateReport = false;
+            cfg = adigatorCoderConfig('GenCodeOnly', true);   % strict ERT (shared, #80)
+            cfg.EnableDynamicMemoryAllocation = false;        % belt-and-braces, see above
             adigatorGenDerFile_embedded('gradient', 'scostfun_lb', ...
                 {adigatorCreateDerivInput([n 1], 'x'), n}, ...
                 adigatorOptions('overwrite',1,'echo',0,'embed_mode','i', ...

@@ -96,14 +96,20 @@ try
     end
     adigatorGenDerFile_embedded(DerType, 'scostfun_lb', {gx, n}, opts);
     clear(wrapper); rehash;
-    cfg = coder.config('lib','ecoder',true); cfg.GenerateReport = false;
-    % Static memory allocation, per ADR-0034 decision 2: a footprint measured
-    % with the heap enabled is not an embedded footprint, and leaving this at its
-    % default is exactly how B35 hid - the unbounded loop-variable range quietly
-    % became an emxArray and this bench reported a number instead of failing.
-    % Both halves build no-heap since B35 (padded, `assert(N <= Nmax)`) and B36
-    % (exact-n, `assert(N == n)`); a future re-introduction of an unbounded size
-    % now fails the build loudly rather than being absorbed by the heap.
+    % Strict shared Embedded Coder profile (#80a-1, ADR-0033) - it forbids
+    % dynamic memory allocation, which is the property this bench depends on.
+    % ADR-0034 decision 2: a footprint measured with the heap enabled is not an
+    % embedded footprint, and leaving it enabled is exactly how B35 hid - the
+    % unbounded loop-variable range quietly became an emxArray and this bench
+    % reported a number instead of failing. Both halves build no-heap since B35
+    % (padded, `assert(N <= Nmax)`) and B36 (exact-n, `assert(N == n)`), so a
+    % future re-introduction of an unbounded size fails the build loudly.
+    cfg = adigatorCoderConfig();
+    % Restated, not merely inherited (ADR-0033/ADR-0034 decision 2). This bench
+    % emits a NUMBER rather than a pass/fail, so if the shared helper ever
+    % relaxed, the test sites would fail loudly while this one would quietly
+    % resume measuring heap-enabled footprints and report a plausible figure -
+    % which is exactly how B35 hid, and which the R6 go/no-go rests on.
     cfg.EnableDynamicMemoryAllocation = false;
     % x is a fixed-size vector; N is a RUNTIME scalar bound (the padded artifact
     % is called with any n at runtime).

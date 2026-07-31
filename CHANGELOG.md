@@ -15,6 +15,24 @@ below); it is not a patch of upstream 1.x.
      workflow (.github/workflows/release.yml) requires this section to be empty
      and the new version to have its own dated section below. -->
 
+### Added
+
+- **`adigatorCoderConfig` — the Embedded Coder configuration this project
+  generates for.** Returns a `coder.EmbeddedCodeConfig` that forbids dynamic
+  memory allocation (no `malloc`, as an embedded target requires) and pins a
+  portable C profile: C99, no code-replacement library, non-finite support on.
+  Hand it to `codegen` to build a generated derivative the same way this
+  project's own codegen tests and benchmarks do:
+
+  ```matlab
+  cfg = adigatorCoderConfig();                     % or ('GenCodeOnly', true)
+  codegen('myfun_Grd', '-config', cfg, '-args', {zeros(n,1)});
+  ```
+
+  Note that code generation succeeding is **necessary but not sufficient** for
+  embeddability: it rejects *unbounded* sizes, but a bounded-but-large
+  derivative can still overflow a small stack. See ADR-0033.
+
 ### Fixed
 
 - **`loopbound` derivatives are now embeddable without a heap.** The runtime-bound
