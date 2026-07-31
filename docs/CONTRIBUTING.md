@@ -105,8 +105,11 @@ without CasADi) and the `KnownIssue`/`assumeFail` convention for documented-unfi
 bugs (`CI_PLAN.md` §3.3) both produce *Filtered* results in a perfectly healthy
 run. What matters is that the codegen classes specifically are not among them —
 `SCodegenTest`, `SRolledErtCodegenTest`, `SCodegenShowcaseTest`,
-`SLoopboundPaddingTest`, and the Monte-Carlo codegen-equivalence oracle. Say in
-the PR which of them ran, not just how many tests passed.
+`SLoopboundPaddingTest`, and `MCSmokeTest/codegenEquivalenceIsClean` (the
+Monte-Carlo codegen-equivalence oracle, which is a method rather than a class of
+its own). Read the run log for `Filtered by assumption` against those names — the
+same check `CI_PLAN.md` §3.2 prescribes for a hosted job, applied to your own.
+Say in the PR which of them ran, not just how many tests passed.
 
 **The full gate can hang rather than fail.** On Windows/MinGW a `gcc` invocation
 inside a MEX build can stall mid-build having consumed **zero CPU**, blocking
