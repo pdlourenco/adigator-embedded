@@ -38,14 +38,18 @@ in a MATLAB session. Three entry points:
   coverage-sensitive changes.
 - `tests/ci_local.m` — the **full local gate** (adds the Coder-gated system
   suite).
-- `tests/ci_ert.m` — the **embeddability attestation**. Runs *only* the four
-  codegen classes carrying REQ-T-05/REQ-T-10 and prints a per-class verdict,
-  because hosted CI can establish none of them (`CI_PLAN.md` §3.2, quoted
-  below — note it is not the full set that filters there). It distinguishes the two things
-  that both surface as *Filtered* — "this machine has no Embedded Coder"
-  (**nothing** established) from "a documented `KnownIssue` pin fired as
+- `tests/ci_ert.m` — the **embeddability attestation**. Runs *only*
+  `SCodegenTest`, `SCodegenShowcaseTest`, `SRolledErtCodegenTest` and
+  `SStackScalingTest`, printing a per-class verdict, because hosted CI can
+  establish none of them (`CI_PLAN.md` §3.2, quoted below). It distinguishes the
+  two things that both surface as *Filtered* — "this machine has no Embedded
+  Coder" (**nothing** established) from "a documented `KnownIssue` pin fired as
   designed" (established, one recorded gap) — so a release can record the claim
   rather than assert it. Paste its output into the PR or release checklist.
+  **It is not the whole codegen set**: `SLoopboundPaddingTest` and
+  `MCSmokeTest/codegenEquivalenceIsClean` also filter silently on hosted CI and
+  are established by your `ci_local` run, not this one — see "Confirm the
+  codegen classes actually ran" below, which lists all six.
 
 > **CI cannot verify codegen — your local run is the only gate for it.**
 > On GitHub-hosted runners MATLAB Coder and Embedded Coder **install but are not
