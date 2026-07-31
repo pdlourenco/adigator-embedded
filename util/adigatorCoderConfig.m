@@ -25,7 +25,7 @@ function cfg = adigatorCoderConfig(varargin)
 % *unbounded* varsize, but a *bounded-but-large* derivative still code-generates
 % and is still not embeddable (the Gap-B "hollow milestone": ERT-clean yet
 % O(n^2) stack — 16.9 KB at n=64). Catching that needs a **stack ceiling**, a
-% separate gate on top of this config (issue #80a).
+% separate gate on top of this config (issue #80a-2).
 %
 % `GenCodeOnly=true` emits C without invoking a C compiler — for sites (e.g.
 % SRolledErtCodegenTest) that assert ERT *acceptance* without needing a toolchain.

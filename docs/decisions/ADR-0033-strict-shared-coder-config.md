@@ -18,18 +18,25 @@ generated derivatives *are* ERT-capable — not merely assume it. Two problems:
   `SRolledErtCodegenTest`, the Monte-Carlo `oracleCodegenEquivalence`,
   `bench/derivShowcaseC`, and `bench/loopboundPaddingPenalty`. A "strict
   everywhere" policy spread across five literal copies is one edit away from
-  being strict in four places — exactly how a gate quietly weakens (and the
-  fifth copy was already *laxer* than the others, so its footprint was measured
-  under a weaker config than the gate demands).
-- **The config wasn't actually strict.** Every copy set only the ERT target and
-  turned the HTML report off. None set `EnableDynamicMemoryAllocation=false`, so
-  an *unbounded* `coder.varsize` derivative would still code-generate (needing
-  `malloc` on an MCU that has none) and pass the gate.
+  being strict in four places — exactly how a gate quietly weakens. The copies had
+  already begun diverging: as of B35/B36 (#209/#211) two of the five —
+  `bench/loopboundPaddingPenalty` and `SRolledErtCodegenTest` — set
+  `EnableDynamicMemoryAllocation=false` for themselves while the other three did
+  not. Strictness arriving copy-by-copy is the drift, whichever direction it
+  runs.
+- **The config mostly wasn't strict.** Three of the five copies set only the ERT
+  target and turned the HTML report off, so an *unbounded* `coder.varsize`
+  derivative would still code-generate for them (needing `malloc` on an MCU that
+  has none) and pass the gate. The two that *did* forbid dynamic allocation got
+  it as a consequence of B35/B36 rather than from any shared policy — which is
+  the same drift seen from the other side, and is exactly what ADR-0034 decision
+  2 now requires of every embeddability claim. This helper is what makes that
+  requirement enforceable in one place instead of five.
 
 Both feed the deeper lesson from #80's Gap-B analysis: **ERT exit-success is
 necessary but not sufficient for embeddability.** A *bounded-but-large*
 derivative (the "hollow milestone": ERT-clean yet O(n²) stack — 16.9 KB at
-n=64, ~67 KB at n=128) code-generates and would ship a stack-overflow. This is
+n=64; ~67 KB at n=128 by O(n²) extrapolation) code-generates and would ship a stack-overflow. This is
 the codegen twin of ADR-0032's "coverage is necessary, not sufficient".
 
 ## Decision
@@ -67,7 +74,7 @@ Embedded Coder config — and route every codegen site through it.
 
 ## Consequences
 
-- One strict config, four consumers, zero drift; `REQ-T-10` now names the shared
+- One strict config, five consumers, zero drift; `REQ-T-10` now names the shared
   helper and the `EnableDynamicMemoryAllocation=false` flag.
 - **The gate is tightened, not yet complete.** `EnableDynamicMemoryAllocation
   =false` rejects only *unbounded* varsize; the *bounded* O(n²)-stack case still
@@ -78,8 +85,9 @@ Embedded Coder config — and route every codegen site through it.
   "embeddable".
 - **The bench baselines were measured under the *old* config.** `derivShowcaseC`
   and `loopboundPaddingPenalty` now build with the strict profile (`C99` pinned,
-  `CodeReplacementLibrary='None'`, dynamic allocation off) — and the fifth site
-  was previously the laxest copy. The committed `bench/SHOWCASE.md` / guide
+  `CodeReplacementLibrary='None'`, dynamic allocation off). `loopboundPaddingPenalty`
+  already had dynamic allocation off (B35/B36), so for it only the C99 and
+  code-replacement pins are new; `derivShowcaseC` picks up all three. The committed `bench/SHOWCASE.md` / guide
   footprint tables were honest under the old config, so nothing needs
   regenerating now; but **the next regeneration may shift ROM/stack values, and
   that delta must be attributed to this config change, not read as a code

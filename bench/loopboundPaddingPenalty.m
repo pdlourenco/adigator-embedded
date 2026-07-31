@@ -105,7 +105,12 @@ try
     % (padded, `assert(N <= Nmax)`) and B36 (exact-n, `assert(N == n)`), so a
     % future re-introduction of an unbounded size fails the build loudly.
     cfg = adigatorCoderConfig();
-    cfg.GenerateReport = false;
+    % Restated, not merely inherited (ADR-0033/ADR-0034 decision 2). This bench
+    % emits a NUMBER rather than a pass/fail, so if the shared helper ever
+    % relaxed, the test sites would fail loudly while this one would quietly
+    % resume measuring heap-enabled footprints and report a plausible figure -
+    % which is exactly how B35 hid, and which the R6 go/no-go rests on.
+    cfg.EnableDynamicMemoryAllocation = false;
     % x is a fixed-size vector; N is a RUNTIME scalar bound (the padded artifact
     % is called with any n at runtime).
     codegen(wrapper,'-config',cfg,'-args',{zeros(n,1), coder.typeof(0)},'-d','clib');

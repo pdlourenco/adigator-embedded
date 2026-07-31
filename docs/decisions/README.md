@@ -199,6 +199,12 @@ Contracts section (binding conventions), or for purely mechanical choices
   (`lib/@cada`, `lib/@cadastruct`, `lib/cadaUtils`, `lib` orchestration) rather
   than a single repo-wide number, enforced as a no-regression ratchet
   (`tests/ci_coverage_folders.m`) over the **full** suite in the extended job.
+- [ADR-0033](ADR-0033-strict-shared-coder-config.md) — **Accepted**: one
+  blessed **strict Embedded Coder config** (`util/adigatorCoderConfig`) consumed
+  by every codegen site, forbidding dynamic memory allocation and pinning a
+  portable C profile, rather than five drifting inline `coder.config` copies.
+  Implements ADR-0034 decision 2; records that ERT exit-success is **necessary,
+  not sufficient** and names the missing half (the stack ceiling, #80a-2).
 - [ADR-0034](ADR-0034-generated-code-emission-hygiene.md) — **Accepted**:
   **generated-code emission hygiene** — the strict-ERT / no-heap target is a
   generation-time obligation. A runtime `loopbound` is guarded once at the top of
