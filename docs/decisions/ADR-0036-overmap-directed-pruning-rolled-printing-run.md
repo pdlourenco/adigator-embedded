@@ -95,7 +95,11 @@ propagation, where a wrong pattern is a *silently wrong derivative*
   growth-law character, on a path with no repmat and no directly comparable
   target mapping. **Left alone deliberately** — it is a constant-fraction cost,
   not a stack blow-up, and fixing it on no evidence of harm is the wrong trade
-  in this code.
+  in this code. Tracked as
+  [#222](https://github.com/pdlourenco/adigator-embedded/issues/222), which asks
+  what it *implies* (is 17% a constant or the small-n end of a growth law; does
+  it cost anything measurable; is `polydatafit` the only shape that reaches it)
+  rather than assuming it needs fixing.
 
 `cadaRepDers`'s third caller (`subsasgn`, the rolled indexed-assignment path) is
 likewise **not** wired: its repmat lives in the assigned-from variable's row
@@ -143,16 +147,44 @@ Same family of symptom, different site and different failure mode.
   those tables were already down-cast to `int8`, which is exactly why the ROM
   discriminator in #217 read clean while 512 B sat on the stack.
 
-- **The prune is a no-op everywhere else.** Across the corpus it fires on one
-  variable in one fixture; every other generation is byte-identical.
+- **After the fix, essentially nothing in the corpus still needs remapping.**
+  Re-running the census on the *patched* tree: of **440** remap events reaching
+  `cadaPrintReMap`, **439 arrive with patterns identical to their overmap** and
+  skip the reshape entirely. Exactly **one** reaches the reshape branches — the
+  `ForHorzcat` case above (#222), at `nzx = 700 > nzover = 600`. So all 17 of
+  this defect's reshapes are gone, confirmed from the opposite direction to the
+  measurement that found them.
 
-- **A new obligation on future overmap work.** Anything that changes what
-  `cadaOverMap` stores, or when `cadaPrintReMap` is called, now also changes
-  when this prune fires. The helper's guards mirror `cadaOverMap`'s printing
-  branch on purpose — they must be kept in step, and
-  `IRolledOvermapWidthTest` (license-free) is the tripwire: it asserts the
-  second-derivative index metadata stays linear in n, *and* that a genuinely
-  dense rolled Hessian is left alone.
+  That census also settled a *second* question, in the negative. A runtime
+  tripwire was proposed at the remap site — `assert(nzx > nzover || nzd == nzx)`,
+  i.e. "a pattern narrower than its overmap must be a subset of it" — as a
+  guard against the helper ever returning the wrong variable's overmap.
+  Rejected on the data: the clause it tests executes **zero** times (the single
+  event that reaches the region satisfies the first disjunct), so it would
+  assert a property of *every* variable that is only derivable for *pruned*
+  ones, on a branch upstream wrote deliberately and this corpus never exercises
+  — converting a possible working generation into a hard error to guard a
+  clause that never runs. The failure mode it targets is in any case closed
+  structurally: the prune and the remap read the same
+  `OVERMAP.FOR(varID,1)` slot for the same `varID` within one statement, and
+  nothing writes `OVERMAP` during the printing run (all writes are `RUNFLAG==1`
+  or at loop/`if` boundaries). What is *not* closed structurally is the **gate**
+  drifting, which is why that is the guard that shipped — see below.
+
+- **A new obligation on future overmap work — enforced, not merely noted.**
+  Anything that changes what `cadaOverMap` stores, or when `cadaPrintReMap` is
+  called, also changes when this prune fires. The helper's guards mirror
+  `cadaOverMap`'s printing branch on purpose, and that mirror is the whole
+  safety argument, so it is asserted rather than left to vigilance:
+  `IRolledOvermapWidthTest.pruneGateStaysInStepWithTheRemapGate` is a **static,
+  comment-stripped** check that both files still gate on
+  `OVERMAP.FOR(id,1)` *and* `NAMELOCS(id,3)`, and that `cadaOverMap` still calls
+  `cadaPrintReMap` at all. Verified to discriminate (the two gate-carrying files
+  pass, files without the gate fail), so it can fire.
+
+  The same class carries the behavioural guards: the second-derivative index
+  metadata stays linear in n, and a genuinely dense rolled Hessian is left
+  alone. All license-free.
 
 **Revisit when:** a printing-run over-approximation outside the scalar-expansion
 path is measured to *cost* something — the `ForHorzcat` one above is the known

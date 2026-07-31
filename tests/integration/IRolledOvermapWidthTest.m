@@ -143,9 +143,58 @@ classdef IRolledOvermapWidthTest < AdigatorTestCase
                  'longer proves the ADR-0036 prune leaves a genuinely wide ', ...
                  'pattern alone.'], which, w, n));
         end
+
+        function pruneGateStaysInStepWithTheRemapGate(tc)
+            % The load-bearing obligation ADR-0036 creates, made testable.
+            %
+            % The whole safety argument is "the prune removes only what
+            % cadaPrintReMap is about to discard anyway", and that holds ONLY
+            % because cadaOverMapTargetNz gates on the same two things
+            % cadaOverMap's printing branch uses to decide whether it calls
+            % cadaPrintReMap at all: OVERMAP.FOR(id,1) and NAMELOCS(id,3). If
+            % either side's gate is changed without the other, the prune starts
+            % removing locations that survive - a silently wrong derivative,
+            % not an error (principle 1). Vigilance is not a mechanism; this is.
+            %
+            % Static, comment-stripped (a comment naming the pattern must not
+            % satisfy the guard), and license-free.
+            root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
+            gate = @(s) [~isempty(regexp(s, ...
+                            'ADIGATOR\.VARINFO\.OVERMAP\.FOR\(\s*\w+\s*,\s*1\s*\)','once')), ...
+                         ~isempty(regexp(s, ...
+                            'ADIGATOR\.VARINFO\.NAMELOCS\(\s*\w+\s*,\s*3\s*\)','once'))];
+
+            helper = tc.codeLines(fullfile(root,'lib','@cada','private','cadaOverMapTargetNz.m'));
+            tc.verifyEqual(gate(helper), [true true], ...
+                ['cadaOverMapTargetNz no longer gates on BOTH OVERMAP.FOR(id,1) ', ...
+                 'and NAMELOCS(id,3). Those two are what make the prune a subset ', ...
+                 'of what cadaPrintReMap discards (ADR-0036) - if the gate has ', ...
+                 'genuinely moved, re-derive the safety argument before relaxing ', ...
+                 'this test.']);
+
+            overmap = tc.codeLines(fullfile(root,'lib','@cada','cadaOverMap.m'));
+            tc.verifyEqual(gate(overmap), [true true], ...
+                ['cadaOverMap no longer gates its remap on BOTH OVERMAP.FOR(id,1) ', ...
+                 'and NAMELOCS(id,3), so cadaOverMapTargetNz is mirroring a test ', ...
+                 'that no longer exists (ADR-0036).']);
+
+            % and the mirrored site must still be the one that calls the remap
+            tc.verifyNotEmpty(regexp(overmap,'cadaPrintReMap','once'), ...
+                'cadaOverMap no longer calls cadaPrintReMap - ADR-0036 needs revisiting');
+        end
     end
 
     methods (Access = private)
+        function s = codeLines(~, file)
+            % File contents with comments stripped, so a static guard cannot be
+            % satisfied by a comment that merely names the pattern it requires.
+            % The strip is naive (first '%' to end of line); for a REQUIRE-style
+            % guard like this one that direction is strict, never permissive.
+            txt = fileread(file);
+            c = regexp(txt, '\r\n|\n|\r', 'split');
+            s = strjoin(regexprep(c, '%.*$', ''), newline);
+        end
+
         function [w, which] = gator2Width(tc, fname, n)
             % Widest Gator2Data index table of the rolled Hessian at size n, and
             % which field it was. The max is over every Index* rather than the

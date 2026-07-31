@@ -58,7 +58,7 @@ function tnz = cadaOverMapTargetNz(varID,Vcount,zsize)
 %
 % see also cadaOverMap, cadaPrintReMap, cadaUnionVars, cadaRepDers
 
-global ADIGATOR ADIGATORVARIABLESTORAGE
+global ADIGATOR ADIGATORVARIABLESTORAGE %#ok<GVMIS> - the @cada class idiom
 tnz = [];
 
 % Printing run of a FOR loop only - the overmap does not exist yet during the
