@@ -68,9 +68,13 @@ propagation, where a wrong pattern is a *silently wrong derivative*
    `OverLoc` and `SubsFlag` (`NAMELOCS(:,3)`) test as `cadaOverMap`'s printing
    branch, plus a `func.size` match so no caller has to reason about
    `cadaPrintReMap`'s changing-size `xref`/`oref` mapping.
-2. **The overmap is exact, not an approximation.** It is the union of the
-   per-iteration patterns, so a location outside it is one the overmap run found
-   zero in *every* iteration — structurally zero, not merely small.
+2. **A location outside the overmap is structurally zero, not merely small.**
+   `cadaUnionVars` unions *exact* locations, so the stored overmap contains at
+   least the union of the variable's per-iteration patterns. It is not
+   necessarily tight — an overmap slot can be **shared** by several variables,
+   since `cadaOverMap`'s direct-assignment merge folds LHS and RHS slots
+   together — but that only makes the prune more conservative. Safety rests on
+   property 1, not on tightness.
 3. **Composing overmapped operands is sound at run time only because the
    non-live slots hold zero**, which is what the per-iteration re-zeroing of the
    derivative temporaries buys. That same invariant is what makes pruning to the
@@ -121,9 +125,11 @@ Same family of symptom, different site and different failure mode.
   The generated series becomes exactly `96 + 8n` — **affine**, and
   byte-for-byte the same series ADR-0035 measured for the *vectorized* Hessian
   (`96+8n` against hand-written `80+8n`). The subscripted rolled Hessian joins
-  the parity cases: `SStackScalingTest.subscriptedHessianStackOverhead` loses its
-  `KnownIssue` tag and moves from `TolPin = 4` to `TolParity = 1.5`, the same
-  budget its vectorized twin already meets.
+  the parity cases: `SStackScalingTest`'s pin loses its `KnownIssue` tag and
+  moves from `TolPin = 4` to `TolParity = 1.5`, the same budget its vectorized
+  twin already meets. Renamed with the tag —
+  `subscriptedHessianStackOverhead` → `subscriptedHessianMatchesVectorizedTwin`,
+  since what it now asserts is parity, not an overhead ceiling.
 
 - **ADR-0035's caveat is answered.** It flagged that the 28.6× "charges the
   *generator* for the *user's* choice of a subscripted formulation, so some part
@@ -162,7 +168,7 @@ dead code.
   (`mtimes`, `cadaunarymath`, `sum`, `subsasgn`, `cadaunion`'s result…). Catches
   future instances of the same class in one go. Rejected on evidence: of the 18
   over-approximations the probe found, 17 are on the one path this change wires
-  up and the sixteenth is a bounded first-order concatenation that costs
+  up and the remaining one is a bounded first-order concatenation that costs
   nothing. So the general version would touch many second-derivative propagation
   paths with nothing measured behind any of them — the wrong trade in
   principle-1 territory. The helper is written so adding a site later is a

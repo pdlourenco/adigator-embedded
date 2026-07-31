@@ -41,12 +41,17 @@ function tnz = cadaOverMapTargetNz(varID,Vcount,zsize)
 % prunes on a non-empty answer can only ever remove locations the tool was
 % already about to discard.
 %
-% Correctness rests on the overmap being the union of the per-iteration
-% patterns: a location outside it is one the overmap run found zero in EVERY
-% iteration, so it is structurally zero, not merely small. Note the operands
-% themselves are safe to compose this way at run time because their overmap
-% slots that are not live in the current iteration hold zero - that is what the
-% per-iteration re-zeroing of the derivative temporaries buys.
+% Correctness rests on that identity, NOT on the overmap being tight. The stored
+% overmap contains at least the union of this variable's per-iteration patterns
+% (cadaUnionVars unions exact locations), but a slot can be SHARED by several
+% variables - cadaOverMap's direct-assignment merge folds LHS and RHS slots
+% together - so in general it is a superset of this variable's own union. That
+% only makes the prune more conservative: a location outside it is one the
+% overmap run found zero in every iteration for every variable sharing the slot,
+% hence structurally zero, not merely small. Note the operands themselves are
+% safe to compose this way at run time because their overmap slots that are not
+% live in the current iteration hold zero - that is what the per-iteration
+% re-zeroing of the derivative temporaries buys.
 %
 % Copyright Pedro Lourenço and GMV.  2026-07  (#217)
 % Distributed under the GNU General Public License version 3.0

@@ -38,8 +38,9 @@ addpath(thisDir);
 %
 % Empty since #217 closed (ADR-0036): its self-healing pin,
 % SStackScalingTest/subscriptedHessianStackOverhead, was the only entry and is
-% now an ordinary parity assertion. With no pins listed, ANY filter in these
-% classes reads as PARTIAL - which is the correct, stricter reading.
+% now an ordinary parity assertion (renamed with the tag, to
+% subscriptedHessianMatchesVectorizedTwin). With no pins listed, ANY filter in
+% these classes reads as PARTIAL - which is the correct, stricter reading.
 knownPins = {};
 
 classes = { ...

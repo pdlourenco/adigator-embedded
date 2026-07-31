@@ -69,13 +69,13 @@ classdef IRolledOvermapWidthTest < AdigatorTestCase
             widths = zeros(size(tc.Sizes));
             for i = 1:numel(tc.Sizes)
                 n = tc.Sizes(i);
-                widths(i) = tc.gator2Width('rowRolledDiag', n);
+                [widths(i), which] = tc.gator2Width('rowRolledDiag', n);
                 tc.verifyLessThanOrEqual(widths(i), tc.MaxPerN*n, sprintf( ...
-                    ['#217: widest Gator2Data index table is %d at n=%d. The ', ...
-                     'Hessian of sum_k exp(x_k) is diagonal, so the interior ', ...
-                     'second-derivative pattern must be O(n), not O(n^2) - a ', ...
-                     'quadratic table is the n^2 stack gather ADR-0036 removed.'], ...
-                    widths(i), n));
+                    ['#217: widest Gator2Data index table is %s at %d entries, ', ...
+                     'n=%d. The Hessian of sum_k exp(x_k) is diagonal, so the ', ...
+                     'interior second-derivative pattern must be O(n), not ', ...
+                     'O(n^2) - a quadratic table is the n^2 stack gather ', ...
+                     'ADR-0036 removed.'], which, widths(i), n));
             end
             % Growth law, not just magnitude: doubling n must roughly double the
             % table (linear), not quadruple it (the defect).
@@ -111,10 +111,15 @@ classdef IRolledOvermapWidthTest < AdigatorTestCase
             % couples x(k) to ALL of x through the sum, so the exact Hessian is
             % full - if pruning were over-eager it would silently zero the
             % off-diagonal, which is exactly the failure mode principle 1 is
-            % about. So no width assertion here (a quadratic pattern is the right
-            % answer for this shape) - only the values, against finite
-            % differences, plus a check that the Hessian really is dense so the
-            % guard cannot quietly degenerate into a second diagonal case.
+            % about.
+            %
+            % Two assertions make this a guard rather than theatre. The width
+            % must come out QUADRATIC here (the opposite of the case above): that
+            % is what shows the prune ran over a genuinely wide pattern and kept
+            % it, not that this fixture is a second diagonal case in disguise.
+            % And the values must survive finite differences. If a future change
+            % legitimately narrows this shape, the width assertion fires first -
+            % check the FD values still pass, then relax it.
             writeFixtureFile('rowRolledDense', { ...
                 'n = size(x,1);', 'p = sum(x);', 'y = 0;', ...
                 'for k = 1:n', '    y = y + p*exp(x(k));', 'end'});
@@ -131,22 +136,33 @@ classdef IRolledOvermapWidthTest < AdigatorTestCase
                  'ADR-0036 prune fires here it drops real off-diagonal terms']);
             tc.verifyGreaterThan(nnz(abs(H) > 1e-8), n, ...
                 'this fixture is only a guard if its Hessian is actually dense');
+            [w, which] = tc.gator2Width('rowRolledDense', n);
+            tc.verifyGreaterThan(w, tc.MaxPerN*n, sprintf( ...
+                ['the dense fixture''s widest Gator2Data table is %s at %d ', ...
+                 'entries for n=%d - that is not quadratic, so this case no ', ...
+                 'longer proves the ADR-0036 prune leaves a genuinely wide ', ...
+                 'pattern alone.'], which, w, n));
         end
     end
 
     methods (Access = private)
-        function w = gator2Width(tc, fname, n)
-            % widest Gator2Data index table of the rolled Hessian at size n
+        function [w, which] = gator2Width(tc, fname, n)
+            % Widest Gator2Data index table of the rolled Hessian at size n, and
+            % which field it was. The max is over every Index* rather than the
+            % one field that carried the #217 gather, because the emitted names
+            % are generation-order artifacts and pinning one would be more
+            % brittle than the breadth is - `which` is returned so a future
+            % failure names the table instead of just the number.
             d = tc.genHes(fname, n);
             S = load(fullfile(d, [fname '_ADiGatorHes.mat']));
             T = S.([fname '_ADiGatorHes']);
             tc.assertTrue(isfield(T,'Gator2Data'), ...
                 'second-derivative static data missing - generation changed shape');
             g = T.Gator2Data;
-            w = 0;
+            w = 0; which = '';
             for f = fieldnames(g).'
-                if strncmp(f{1},'Index',5)
-                    w = max(w, numel(g.(f{1})));
+                if strncmp(f{1},'Index',5) && numel(g.(f{1})) > w
+                    w = numel(g.(f{1})); which = f{1};
                 end
             end
             tc.assertGreaterThan(w, 0, 'no Gator2Data.Index* tables found');
@@ -161,8 +177,14 @@ classdef IRolledOvermapWidthTest < AdigatorTestCase
         end
 
         function varargout = runIn(~, d, wrapper, xf)
+            % Clear the wrapper, the _ADiGatorHes file AND its persistent global
+            % before running: this class generates same-named artifacts into
+            % sibling folders, and a plain clear(wrapper) misses the
+            % cross-directory .mat staleness (the ILoopboundTest precedent).
             old = cd(d);
             restore = onCleanup(@() cd(old));
+            adi = strrep(wrapper,'_Hes','_ADiGatorHes');
+            clear(wrapper); clear(adi); clear('global',['ADiGator_',adi]);
             rehash;
             [varargout{1:nargout}] = feval(wrapper, xf);
         end

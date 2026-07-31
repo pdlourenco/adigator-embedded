@@ -50,7 +50,7 @@ below); it is not a patch of upstream 1.x.
   generated file simply stops computing entries it was already discarding, and
   its static second-derivative index tables shrink from `n²` to `n` entries.
   Nothing in your code needs to change — re-generate to pick it up. See
-  ADR-0036 and issue #217.
+  ADR-0036.
 
 - **`loopbound` derivatives are now embeddable without a heap.** The runtime-bound
   guard (`assert(N <= Nmax);`) is emitted as the first statement of the generated

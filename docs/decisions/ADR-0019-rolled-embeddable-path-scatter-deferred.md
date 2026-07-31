@@ -113,7 +113,7 @@ quoted elsewhere the scope needs stating.
    and [ADR-0035](ADR-0035-embeddability-gate-calibrated-to-hand-written.md) make.
 
    **Resolved (#217, [ADR-0036](ADR-0036-overmap-directed-pruning-rolled-printing-run.md)):
-   it did not need the rewrite.** The locus guessed below was right — a gather
+   it did not need the rewrite.** The locus this amendment guessed was right — a gather
    through an n²-sized second-derivative index table on `cadaPrintReMap`'s
    `nzover` path — and the cause was one over-approximation: the printing run
    composes loop overmaps as if independent, so a product of two n-wide unions
