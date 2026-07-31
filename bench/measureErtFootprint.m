@@ -35,6 +35,13 @@ sizx = fullfile(mingw,'bin','size.exe');
 if ~isfile(gcc) || ~isfile(sizx); return; end
 inc  = fullfile(matlabroot,'extern','include');   % tmwtypes.h etc.
 want = {[wrapper '.c'], [wrapper '_data.c']};
+% The ENTRY POINT is mandatory; `<wrapper>_data.c` (static index tables) is
+% optional and absent for a hand-written reference. Without this guard a missing
+% or renamed entry point would silently fall through to measuring the data
+% object alone - `got` still true, a small non-zero frame, and a caller (the
+% ADR-0035 gate) reading a flattering PASS off an artifact it never measured.
+% Honest-or-nothing: return unmeasured instead.
+if ~isfile(fullfile(clibDir, want{1})); return; end
 rom = 0; ram = 0; stack = 0; got = false;
 for w = want
     cpath = fullfile(clibDir, w{1});

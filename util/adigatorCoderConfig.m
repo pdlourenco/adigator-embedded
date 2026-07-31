@@ -24,8 +24,12 @@ function cfg = adigatorCoderConfig(varargin)
 % Necessary, not sufficient: `EnableDynamicMemoryAllocation=false` rejects
 % *unbounded* varsize, but a *bounded-but-large* derivative still code-generates
 % and is still not embeddable (the Gap-B "hollow milestone": ERT-clean yet
-% O(n^2) stack — 16.9 KB at n=64). Catching that needs a **stack ceiling**, a
-% separate gate on top of this config (issue #80a-2).
+% O(n^2) stack). Catching that needs a separate gate on top of this config: the
+% compiled stack measured against what a HAND-WRITTEN derivative of the same
+% maths needs (ADR-0035, TS-S-09 `SStackScalingTest`) — deliberately a ratio and
+% not a byte ceiling, since this project declares no target device. Note the
+% 16.9 KB @ n=64 figure once quoted here does not reproduce (#216); the
+% reproducible instance is the rolled Hessian at 28.6x hand-written (#217).
 %
 % `GenCodeOnly=true` emits C without invoking a C compiler — for sites (e.g.
 % SRolledErtCodegenTest) that assert ERT *acceptance* without needing a toolchain.
