@@ -98,6 +98,31 @@ current directory) on the **system** PATH so `cmd.exe` finds the generated
 `.bat` build script, plus `MW_MINGW64_LOC` and `MinGW\bin` on the persistent
 PATH — an R2024a environment quirk, not a toolbox bug.
 
+**Confirm the codegen classes actually ran — per class, not by a total.** Since
+your local run is the only gate for them, "it passed" is worth checking. Do *not*
+use an aggregate incomplete count for this: optional dependencies (`SCasadiOracleTest`
+without CasADi) and the `KnownIssue`/`assumeFail` convention for documented-unfixed
+bugs (`CI_PLAN.md` §3.3) both produce *Filtered* results in a perfectly healthy
+run. What matters is that the codegen classes specifically are not among them —
+`SCodegenTest`, `SRolledErtCodegenTest`, `SCodegenShowcaseTest`,
+`SLoopboundPaddingTest`, and the Monte-Carlo codegen-equivalence oracle. Say in
+the PR which of them ran, not just how many tests passed.
+
+**The full gate can hang rather than fail.** On Windows/MinGW a `gcc` invocation
+inside a MEX build can stall mid-build having consumed **zero CPU**, blocking
+MATLAB indefinitely — nothing times out, so the run simply never ends. Two
+consequences worth planning for:
+
+- **Launch it so you can watch it.** Redirect to a log file and read it as it
+  grows; a run piped through something that buffers until exit is
+  indistinguishable from a hung one.
+- **Tell hung from slow by CPU *time*, not wall-clock.** Sample the MATLAB
+  process's accumulated CPU seconds twice, ~20 s apart — unchanged means stalled,
+  not working. The MEX `buildLog.log` (under the temp
+  `codegen/mex/<fn>/build/win64/`) names the step it stopped on. Kill the
+  compiler process, its shell and MATLAB, then re-run: this is a toolchain
+  stall, not a repository defect, and re-running has cleared it (#214).
+
 ## Design decisions (ADRs)
 
 Non-obvious tactical choices live in [`decisions/`](decisions/) — see
