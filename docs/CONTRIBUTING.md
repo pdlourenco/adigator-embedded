@@ -30,7 +30,7 @@ The ceremony costs more than the signal. Note the outcome in the PR description:
 
 The code requires real MATLAB (R2022a+, [ADR-0003](decisions/ADR-0003-r2022a-minimum-release.md)).
 The license-free way to get the CI verdict before pushing is to run the suites
-in a MATLAB session. Two entry points:
+in a MATLAB session. Three entry points:
 
 - `tests/ci_prepush.m` — the **fast pre-push gate** (lint + unit + integration),
   what the hook runs. CI additionally runs the coverage ratchet (`ci_coverage`);
@@ -38,6 +38,18 @@ in a MATLAB session. Two entry points:
   coverage-sensitive changes.
 - `tests/ci_local.m` — the **full local gate** (adds the Coder-gated system
   suite).
+- `tests/ci_ert.m` — the **embeddability attestation**. Runs *only*
+  `SCodegenTest`, `SCodegenShowcaseTest`, `SRolledErtCodegenTest` and
+  `SStackScalingTest`, printing a per-class verdict, because hosted CI can
+  establish none of them (`CI_PLAN.md` §3.2, quoted below). It distinguishes the
+  two things that both surface as *Filtered* — "this machine has no Embedded
+  Coder" (**nothing** established) from "a documented `KnownIssue` pin fired as
+  designed" (established, one recorded gap) — so a release can record the claim
+  rather than assert it. Paste its output into the PR or release checklist.
+  **It is not the whole codegen set**: `SLoopboundPaddingTest` and
+  `MCSmokeTest/codegenEquivalenceIsClean` also filter silently on hosted CI and
+  are established by your `ci_local` run, not this one — see "Confirm the
+  codegen classes actually ran" below, which lists all six.
 
 > **CI cannot verify codegen — your local run is the only gate for it.**
 > On GitHub-hosted runners MATLAB Coder and Embedded Coder **install but are not
