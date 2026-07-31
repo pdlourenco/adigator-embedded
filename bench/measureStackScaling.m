@@ -14,9 +14,12 @@ function report = measureStackScaling(varargin)
 %
 % Why a ratio against hand-written code, and not "the stack must be flat":
 % *a growing stack is normal*. A Hessian's answer is n×n; even the optimal
-% hand-written `Hes = diag(exp(x))` grows (measured exponent ≈0.6), because
-% temporaries scale even when the output goes to the caller's buffer. A flatness
-% gate would fail correct, optimal code. And not an absolute byte ceiling
+% hand-written `Hes = diag(exp(x))` grows — measured exactly `80 + 8n`, i.e.
+% LINEAR at one double per element — because temporaries scale even when the
+% output goes to the caller's buffer. (Not "exponent ≈0.6": a power-law fit to
+% affine data reads sub-linear, which is the artifact this function's own
+% `.trend` output exists to keep out of the assertions.) A flatness gate would
+% fail correct, optimal code. And not an absolute byte ceiling
 % either: this project declares no target device, so any ceiling would be
 % invented and would quietly become policy.
 %
@@ -186,7 +189,6 @@ end
 
 function fp = ertFootprint(fn, n, d)
 cfg = adigatorCoderConfig();      % strict shared ERT profile (ADR-0033)
-cfg.GenerateReport = false;
 codegen(fn,'-config',cfg,'-args',{zeros(n,1)},'-d','clib');
 fp = measureErtFootprint(fullfile(d,'clib'), fn);
 end
