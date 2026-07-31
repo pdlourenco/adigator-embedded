@@ -204,10 +204,15 @@ Contracts section (binding conventions), or for purely mechanical choices
   by every codegen site, forbidding dynamic memory allocation and pinning a
   portable C profile, rather than five drifting inline `coder.config` copies.
   Implements ADR-0034 decision 2; records that ERT exit-success is **necessary,
-  not sufficient** and names the missing half (the stack ceiling, #80a-2).
+  not sufficient** and names the missing half (#80a-2, delivered by ADR-0035 as a ratio against hand-written code rather than the byte ceiling anticipated here).
 - [ADR-0034](ADR-0034-generated-code-emission-hygiene.md) — **Accepted**:
   **generated-code emission hygiene** — the strict-ERT / no-heap target is a
   generation-time obligation. A runtime `loopbound` is guarded once at the top of
   the function it bounds (B35); a test may only claim embeddability with
   `EnableDynamicMemoryAllocation = false`; emitted identifiers are a surface, so
   the `NVAROFDIFF`→`DERNUMBER` name harmonization is sequenced separately (open).
+- [ADR-0035](ADR-0035-embeddability-gate-calibrated-to-hand-written.md) —
+  **Accepted**: the embeddability gate asserts `generated stack <= 4x hand-written`
+  for the same maths, **not** a flatness rule (measured: optimal hand code grows)
+  and **not** an invented byte ceiling (no target device is declared). Completes
+  REQ-T-10; found #217 on first contact.
