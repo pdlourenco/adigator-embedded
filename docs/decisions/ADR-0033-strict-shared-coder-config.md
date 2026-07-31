@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-07-29. Extends the V&V-for-release effort from *correctness*
+Accepted — 2026-07-29. **Context corrected 2026-07-31** (#216): the hollow-milestone evidence is now #217, not ADR-0019's non-reproducing unrolled figure. Extends the V&V-for-release effort from *correctness*
 (ADR-0032 coverage floor + the value oracles) to *embeddability*. Realizes the
 first half of issue #80's "compile everything through Embedded Coder (ERT)"
 objective as a shared, strict, drift-proof config; the stack-ceiling gate that
@@ -35,9 +35,21 @@ generated derivatives *are* ERT-capable — not merely assume it. Two problems:
 
 Both feed the deeper lesson from #80's Gap-B analysis: **ERT exit-success is
 necessary but not sufficient for embeddability.** A *bounded-but-large*
-derivative (the "hollow milestone": ERT-clean yet O(n²) stack — 16.9 KB at
-n=64; ~67 KB at n=128 by O(n²) extrapolation) code-generates and would ship a stack-overflow. This is
-the codegen twin of ADR-0032's "coverage is necessary, not sufficient".
+derivative (the "hollow milestone") code-generates and would ship a
+stack-overflow. This is the codegen twin of ADR-0032's "coverage is necessary,
+not sufficient".
+
+The worked instance is the **rolled/subscripted Hessian**: 37.5 KB of stack at n=64 — 63x
+the hand-written derivative of the same maths — while ERT-codegenning cleanly and
+passing every test that existed before ADR-0035's gate
+([#217](https://github.com/pdlourenco/adigator-embedded/issues/217)). As accepted (PR #204), this ADR cited ADR-0019's *unrolled* figure (16.9 KB at n=64, plus a
+~67 KB extrapolation to n=128) instead. That figure **does not reproduce** — the
+unrolled (`unroll=1`) loop form does not code-generate at all today, so nothing about its stack can
+be measured ([#216](https://github.com/pdlourenco/adigator-embedded/issues/216)).
+The argument is unchanged, and the substituted instance is the stronger one: it
+can be re-run, and it sits on the path ADR-0019 *recommends* rather than on a
+form already declared non-embeddable — so the necessary-but-not-sufficient point
+now bites on shipping code.
 
 ## Decision
 
@@ -76,12 +88,16 @@ Embedded Coder config — and route every codegen site through it.
 
 - One strict config, five consumers, zero drift; `REQ-T-10` now names the shared
   helper and the `EnableDynamicMemoryAllocation=false` flag.
-- **The gate is tightened, not yet complete.** `EnableDynamicMemoryAllocation
-  =false` rejects only *unbounded* varsize; the *bounded* O(n²)-stack case still
-  passes. The completion is a **stack ceiling** on the compiled `-fstack-usage`
-  footprint — reusing the existing `measureErtFootprint` helper (R17c/ADR-0027),
-  gating by the *property* (stack is O(n), caught via an n-vs-2n scaling check or
-  an absolute bound) — tracked as **#80a-2**. That is what turns "codegens" into
+- **The gate was tightened, and is now complete.** `EnableDynamicMemoryAllocation
+  =false` rejects only *unbounded* varsize; the *bounded* large-stack case still
+  passed. The completion **landed as #80a-2 / [ADR-0035](ADR-0035-embeddability-gate-calibrated-to-hand-written.md)**,
+  and not in the form anticipated here: this ADR expected a **stack ceiling**, and
+  ADR-0035 rejects that formulation — no target device is declared, so a byte
+  ceiling would be invented and would become policy by accident. What shipped is a
+  **ratio against the stack a hand-written derivative of the same maths needs**
+  (`measureErtFootprint`, R17c/ADR-0027; `SStackScalingTest`/TS-S-09). It also
+  rejects the "stack is O(n)" property test floated here — measurement showed even
+  optimal hand-written code grows. That is what turns "codegens" into
   "embeddable".
 - **The bench baselines were measured under the *old* config.** `derivShowcaseC`
   and `loopboundPaddingPenalty` now build with the strict profile (`C99` pinned,
