@@ -33,6 +33,25 @@ below); it is not a patch of upstream 1.x.
   embeddability: it rejects *unbounded* sizes, but a bounded-but-large
   derivative can still overflow a small stack. See ADR-0033.
 
+### Changed
+
+- **The `polydatafit` example now builds its Vandermonde matrix the embeddable
+  way, and the ODE examples say what stops them being embeddable.** `fit.m` grew
+  the matrix by concatenation (`V = [V, x.^count]`), which differentiates fine
+  but has no compile-time size bound — so MATLAB Coder rejects *that function*,
+  before any derivative exists, under the static memory allocation an embedded
+  target requires. It now pre-allocates `V` and writes columns into it. The
+  mathematics and the computed Jacobian are unchanged.
+
+  If you copied that pattern: prefer indexed writes into a pre-sized array over
+  growing one, for anything you intend to differentiate for an embedded target.
+
+  `mybrussode` and `burgersfun_noloop` size their state from a runtime grid size
+  `N` and now carry a note explaining the two ways to make such a function
+  embeddable — pin the size at build time (`coder.Constant`), or declare a
+  maximum with the `loopbound` option. `lb_alloc` gained the matching contrast:
+  a runtime bound is not itself a barrier, an *undeclared* one is.
+
 ### Fixed
 
 - **A Hessian differentiated through a rolled loop no longer carries an O(n²)

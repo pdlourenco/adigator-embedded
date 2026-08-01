@@ -993,7 +993,11 @@ is not Hessian-specific, and the largest is `nzx = 4096` against `nzover = 64`,
 which is the 37.5 KB in one line of log; and one that is different in kind, a *first-order*
 Jacobian's growing concatenation (`ForHorzcat`, `V.dx` at 700 → 600 in the
 `polydatafit` example), a bounded ~17% over-approximation with no growth-law
-character, left alone deliberately. `cadaRepDers`'s third caller (`subsasgn`) and
+character, left alone deliberately. *(Amended 2026-08-01: that shape has since
+been removed from the corpus — `polydatafit`'s growing concatenation was
+rewritten to pre-size its matrix after the example audit found the user function
+does not ERT-codegen — so the count above is historical and #222 is closed as
+moot.)* `cadaRepDers`'s third caller (`subsasgn`) and
 the `IF` overmap are likewise out of scope — see ADR-0036.
 
 **Result.** Generated stack 768/9616/37552 → **160/352/608** B at n = 8/32/64

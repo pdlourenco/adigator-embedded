@@ -8,6 +8,9 @@ if dim_x < m
   error('x must have at least m entries');
 end
 
+% Note: this numjac callback keeps the concatenation-grown V on purpose --
+% it is a host-only finite-difference reference and is never differentiated
+% or code-generated. fit.m explains why the differentiated copy pre-sizes V.
 V = ones(dim_x, 1);
 
 for count = 1 : (m-1)
