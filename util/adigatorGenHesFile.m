@@ -252,7 +252,8 @@ end
 % airtight guard would need core placement, but the derivative arity is only
 % known after the first pass; or (b) the adigatorGenFiles4* solver wrappers'
 % second-order (vector) constraint derivatives, which call adigator twice
-% directly (ADR-0026 already quarantines those wrappers as not-at-parity). It
+% directly (ADR-0037 deprecates those wrappers; ADR-0026 has the parity
+% analysis). It
 % also fires whenever loopbound is set and the output is non-scalar, even if no
 % loop actually matched the bound value - acceptable for a fail-loud interim.
 if ~isempty(opts.loopbound) && prod(adiout.func.size) > 1
