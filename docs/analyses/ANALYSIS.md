@@ -909,22 +909,24 @@ because it executes during adigator's own initial test evaluation of the source
 and throws there anyway. The check exists so the user sees *why* instead of a
 bare `Assertion failed`, matching the actionable-rediff pattern of #173 PR A.
 
-**Residual scope — three shapes are still specialized and still unguarded.**
-"Fixed" above means the direct form (a main-function input named in a
-main-function loop range), not every route to a specialized trip count:
+**Residual scope — the remaining shapes are still specialized and still
+unguarded.** "Fixed" above means the direct form (a main-function input named in
+a main-function loop range), not every route to a specialized trip count:
 
 1. **Pass-through into a subfunction** — `main(x,N)` calling `sub(x,N)` whose
    loop is `for k = 1:N`. The harvest is gated to the main function so a
    subfunction's parameter cannot shadow a same-named main input with a
    different value and forge a false guard; the cost is that a genuine
    pass-through is missed. This is the most likely real-world shape of the three.
+   **Fixed (issue #213 route 1)** by *interprocedural resolution* rather than by
+   loosening that gate — see §1.3l below.
 2. **A bound reached through a struct field** — `for k = 1:p.N` with `p` a struct
    input. `p` is not numeric and `N` is not a top-level input name, so neither
    qualifies.
 3. **A non-integer scalar input in the range** — `for k = 1:round(1/h)`. Excluded
    deliberately: a floating-point equality assert is not a shape worth emitting.
 
-All three keep the original silent-wrong behaviour above the analyzed count. The
+The remaining two keep the original silent-wrong behaviour above the analyzed count. The
 guard's *absence* is the tell, so they are detectable, but they are not fixed.
 
 ### 1.3k The rolled printing run composes loop overmaps as if independent (B37)
@@ -1015,6 +1017,89 @@ alone) and `SStackScalingTest::subscriptedHessianMatchesVectorizedTwin`
 (Coder-gated, local-only), which was the self-healing `KnownIssue` pin and is now
 an ordinary parity assertion.
 
+### 1.3l A trip count passed through into a subfunction is unguarded (B38)
+
+**B38 — a loop bound handed to a subfunction specializes the file without
+saying so (medium-high; principle-1 residue of B36; fixed,
+[#213](https://github.com/pdlourenco/adigator-embedded/issues/213) route 1).**
+B36 (§1.3j) closed the *direct* form — a main-function input named in a
+main-function loop range. This is the same silent-wrong failure one call deep:
+
+```matlab
+function y = main(x,N),  y = sub(x,N); end
+function y = sub(x,N),   y = 0; for k = 1:N, y = y + x(k)^2; end, end
+```
+
+`N` **is** a main input, so it is guardable in principle. It was missed because
+the harvest is gated to the main function (`ADIGATOR.TRIPCOUNTSCAN`), and that
+gate is load-bearing: without it a subfunction parameter that *shadows* a
+same-named main input with a different value would forge `assert(N == 3)` into a
+function whose own `N` is 5, rejecting every correct call. Pinned by
+`ISpecializedTripCountTest::subfunctionLoopDoesNotForgeAGuard`. So the fix could
+not be a looser gate — that reintroduces the forge.
+
+**Mechanism — resolve, don't loosen.** A subfunction's loop range naming one of
+its *own parameters* records `(FunID, parameter position)` instead of being
+discarded. Every call site records its literal argument text per position. After
+all functions are printed, a parameter earns a guard only if **every** recorded
+call site passes the *same bare identifier*, which the existing filter then
+requires to be a main input bound to a plain integer scalar. The guard emitted
+is the ordinary main-scope `assert(N == n);` #211 already ships, so every
+recognizer, the slim whitelist, `adigatorCheckTripCountRediff` and the
+re-differentiation machinery are untouched.
+
+Resolution follows the **argument**, so the callee's spelling never leaks into
+main's scope: `main(x,M)` calling a subfunction whose parameter is spelled `N`
+guards **`M`**. But an argument's text is only a name in the **caller's** scope,
+so it is matched against main's inputs *only when the caller is the main
+function*. Resolving a site inside another subfunction would be name equality —
+the shadowing forge one hop deeper, and it forges on **correct** code:
+
+```matlab
+function y = main(x,N),   a = scale(x,N); b = energy(x); y = a+b; end
+function y = scale(x,N),  y = sum(x)*N; end
+function y = energy(x),   N = numel(x); y = accum(x,N); end   % a LOCAL N
+function y = accum(x,N),  y = 0; for k = 1:N, y = y+x(k)^2; end, end
+```
+
+main's `N` is an unrelated multiplier and the file is valid for every `N`, so
+any guard on it rejects correct calls. Transitive resolution through an
+intermediate subfunction is the strictly-more-capable version and is
+deliberately **not** attempted: declining costs a missed guard, guessing costs a
+false assertion. Pinned by `twoHopCallSiteDoesNotForgeAGuard`.
+
+**Fail-closed on everything else**, each pinned: a non-bare argument
+(`sub(x,N-1)` — the callee loops `N-1` times, so `assert(N == n)` would state
+the wrong specialization), a local (`sub(x,N2)`), a callee never called, and —
+the case the implementation lookup forced — **two call sites that disagree**.
+ADiGator prints one body per *function*, not per call site, so a callee reached
+with two different inputs has no single value to assert; guarding either would
+reject correct calls through the other. For the same reason call-site arguments
+are recorded at **every** call site, not just the main function's: recording
+only main's would let a callee also reached from another subfunction look
+consistently-called and forge a guard the other caller never satisfies. Each
+record carries its **caller's id** as well as the argument text — the site
+list gives agreement, the caller id gives scope, and both are needed.
+
+**Boundary, and it is not this defect's.** Chaining `adigator()` by hand over a
+generated file that *calls a subfunction* fails (`MATLAB:structRefFromNonStruct`)
+— with no trip count, no bound parameter and nothing this feature touches. So
+the third-order pin the direct form carries cannot be written for this shape.
+The supported path is unaffected: `adigatorGenHesFile` reaches second order by
+its own route, and there the guard survives at exactly one per level with
+`sum(x³) → 3x² → diag(6x)` analytic-exact and the oversized call still erroring.
+The limitation itself is pinned by
+`reDifferentiatingASubfunctionCallingFileIsUnsupported`, so if a future change
+fixes it the test goes red and the third-order pin can be restored.
+
+**Residual, shared with B36's direct form:** the guard states the value of the
+main input *at entry*. A user who reassigns that input before the call (or
+before the loop, in the direct form) would get a guard comparing against the
+entry value while the loop runs on the reassigned one. Not introduced here, and
+not addressed here.
+
+Pinned by `tests/integration/ISpecializedTripCountTest.m` (§1.3l; issue #213).
+
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
 - `cadaunarymath.m` derivative-rule corrections (`asec`, `acsc`, `asecd`,
@@ -1074,6 +1159,7 @@ an ordinary parity assertion.
 | B29-B31, B33-B34 (`@cadastruct` fallback-naming branch: undefined `NDstr`/`yid`, misspelled empty-eval flag) | **Fixed** - five sites in the `RUNFLAG==2 && nameloc<=0` fallback-name arm (`vertcat`/B29, `ctranspose`/B30, `repmat`/B31, `horzcat`/B33, `subsref`/B34 - the last two found by the fix sweep, not the inventory) used `NDstr` in a scope that never assigns it; for `subsref` the file's only assignment is inside the `ForSubsRef` **subfunction**, which is why a per-file check misses it. The arm is **user-reachable** (`hlp([s; s]')` throws pre-fix), so it is fixed, not guarded. That fixture drives **`vertcat`**'s arm - the `[s; s]` concat result is the unnamed intermediate, while the `ctranspose` result is a function-call input that gets a NAMES entry and takes the *named* arm - so B29 is the one pinned dynamically; B30/B33/B34 are pinned by the static scope guard. Rebuilt with **`DERNUMBER`** - what the deleted `NDstr` stood for - and deliberately **not** the `NVAROFDIFF` used by the `transpose`/`reshape`/`repmat` siblings: `NVAROFDIFF` is invariant across the two Hessian passes, so it could alias a live pass-1 variable and silently win the assignment, converting a loud throw into a wrong derivative (principle 1). Verified correct, not merely non-throwing (`2*sum(x)` -> `[2 2 2]`, analytic-exact, FD 2.8e-10). `subsasgn.m` checked and clean. Harmonizing the three remaining `NVAROFDIFF` siblings is an **open follow-up** (changes shipped emitted identifiers; own ADR). Pinned by `tests/integration/IStructArrayNamingTest.m` / TS-I-27 (§1.3g). |
 | B32 (Hessian generation crashes on a zero/linear-objective Hessian) | **Fixed** — `util/adigatorGenHesFile.m` crashed at `HesLocs1 = dydxlocs(dydxdxlocs(:,1),:)` when the second-derivative `nzlocs` was `[]` (a structurally-zero Hessian, e.g. `y = x(k)`), and the value emission then scattered from an absent runtime `…dxdx_location` field. Fixed by normalizing the empty locs to `0×2` (so the empty CSC pattern builds) and short-circuiting the value emission to a literal `Hes = zeros(shape)` (empty `0×1` for `der_output='csc'`), skipping the scatter. Found by the #38 Phase C `mcGenExprTree` fuzzer; pinned by `tests/integration/IZeroHessianTest.m` (§1.3h). |
 | B35 (a `loopbound` derivative is not embeddable — runtime bound guarded too late) | **Fixed** — `adigatorForInitialize` emitted `assert(N <= Nmax)` at the loop header only, so every bound-dependent size *ahead* of the loop (the user's `zeros(N,1)`; the `cadaforvar<k> = 1:N` loop-variable range the machinery materializes) reached Coder unbounded: heap `emxArray`s with dynamic memory allocation on, outright rejection with it off. Fixed in `lib/adigatorFunctionInitialize.m` by hoisting one guard per declared bound to the first statement of the main function body (all `loopbound` names are validated main-function inputs, so they are in scope there); the per-loop guards stay for the re-differentiation path. Padded ROM −224 B, stack +112 B, heap requirement gone. Pinned by `ILoopboundTest::guardPrecedesEveryBoundDependentSize` (license-free) and `SRolledErtCodegenTest::loopboundGradientErtCodegenStaticMemory` (Coder-gated, local-only) (§1.3i). |
+| B38 (a trip count passed through into a subfunction is unguarded) | **Fixed** — B36's principle-1 residue one call deep: `main(x,N)` handing `N` to a subfunction that loops on it specialized the file without saying so, because the harvest is gated to the main function. That gate could not simply be loosened — it is what stops a shadowing subfunction parameter forging a guard with the wrong value (`subfunctionLoopDoesNotForgeAGuard`). Fixed by **interprocedural resolution** instead: a subfunction's loop range naming its own parameter records the position, every call site records its **caller's id** and its literal argument, and a guard is earned only when every site is *in the main function* and passes the same *bare identifier* — so `main(x,M)` guards `M` even when the callee spells the parameter `N`, while a site inside another subfunction (whose argument names something in ITS scope) declines rather than forging on correct code. Emits the ordinary main-scope `assert(N == n);` #211 already ships, so no recognizer, whitelist or re-diff path changes. Fail-closed on an expression, a local, a callee never called, or **disagreeing call sites** (adigator prints one body per function, not per call site). Guard survives to 2nd order via `adigatorGenHesFile`, analytic-exact; the 3rd-order pin the direct form carries is impossible for this shape because re-differentiating a subfunction-calling generated file fails for unrelated, pre-existing reasons — itself now pinned. Routes 2/3/4 remain (§1.3j). Pinned by `tests/integration/ISpecializedTripCountTest.m` (§1.3l; issue #213). |
 | B37 (a rolled second-derivative pattern is the cross product of two loop overmaps) | **Fixed** — in the printing run of a rolled loop every operand carries its loop overmap, so `cadabinaryarraymath`'s scalar expansion (`cadaRepDers`) composed two n-wide unions as if independent and emitted the full n×n gather for a Hessian whose exported pattern is the n-nonzero diagonal; `cadaPrintReMap` then discarded 56 of the 64 one statement later, but only after the generated code had put n² doubles on the stack — 37,552 B at n=64, **63.4×** hand-written, while ERT-codegenning cleanly (the hollow milestone). Fixed by handing the emitting operation the overmap its result is about to be remapped into (`lib/@cada/private/cadaOverMapTargetNz.m`) so the doomed locations are dropped *before* they are printed — the same truncation, moved earlier, and guarded to fire only when that remap would actually have happened. Stack 768/9616/37552 → **160/352/608** B at n=8/32/64, i.e. exactly `96+8n`: affine, and the same series as the *vectorized* Hessian of the same maths, which also answers ADR-0035's caveat that part of the gap might be intrinsic to the rolled path (none of it was). Scope set by instrumenting every `cadaPrintReMap` over-approximation across the corpus — 18 events, of which the 17 with a growth law are all scalar expansion (the 18th is a bounded first-order `horzcat` case, §1.3k). Pinned by `tests/integration/IRolledOvermapWidthTest.m` (license-free) and `SStackScalingTest::subscriptedHessianMatchesVectorizedTwin` (Coder-gated, local-only), the latter having been the self-healing KnownIssue pin (§1.3k; issue #217, ADR-0036). |
 | B36 (a loop range over a runtime-named scalar is unbounded even without `loopbound`) | **Fixed** — a file generated *without* the option still prints `cadaforvar1.f = 1:N` when the trip count names a function input (passing a plain numeric to `adigator` fixes the analysis count, not the input), so nothing bounds it and, unlike a `loopbound` file, nothing declares the envelope either. The emitted range and the emitted loop header disagree (literal header, runtime range): measured at `n=5`, calling with `N=3` is loud (index out of bounds) but `N=8` **runs silently** and returns the 5-term answer (70 vs a true 240) — a quietly wrong derivative, principle 1. Fixed by emitting `assert(N == n);` in the body prologue (an equality - the file is specialized, not padded), plus extending the shared guard shape and BOTH recognizers so re-differentiation still works: without the recognizer half every Hessian of a named-trip-count function would have stopped generating. Verified to 3rd order. Unblocked `bench/loopboundPaddingPenalty` under static memory allocation, which raised the measured padding penalty ~2x at small n (every earlier figure was heap-enabled). Fixed for the **direct** form (a main-function input named in a main-function loop range); three routes to a specialized trip count remain unguarded and are recorded as residual scope in §1.3j. Pinned by `tests/integration/ISpecializedTripCountTest.m` (§1.3j; issue #210). |
 

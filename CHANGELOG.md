@@ -71,6 +71,31 @@ below); it is not a patch of upstream 1.x.
   Nothing in your code needs to change — re-generate to pick it up. See
   ADR-0036.
 
+- **A trip count handed to a subfunction is now guarded too.** If your function
+  takes a loop bound and passes it on —
+
+  ```matlab
+  function y = main(x,N),  y = sub(x,N); end
+  function y = sub(x,N),   y = 0; for k = 1:N, y = y + x(k)^2; end, end
+  ```
+
+  — the generated file was specialized to the `N` you generated at and said
+  nothing about it. Calling with a **larger** `N` ran and quietly returned the
+  answer for the generated size. Such files now open with `assert(N == <n>);`
+  and reject the mismatch, the same way a bound used directly in the main
+  function already did.
+
+  The guard names **your** input, not the subfunction's parameter: if `main`
+  takes `M` and the subfunction spells its parameter `N`, the guard is on `M`.
+
+  It is deliberately conservative — a guard is emitted only when the bound
+  reaches the subfunction as a plain variable, passed directly from your
+  function, through *every* call. Passing an expression (`sub(x,N-1)`), passing
+  a local, calling the same subfunction with two different bounds, or handing
+  the bound on through a second subfunction all leave the file unguarded rather
+  than risk an assertion that rejects correct calls. Those cases keep the
+  previous behaviour.
+
 - **`loopbound` derivatives are now embeddable without a heap.** The runtime-bound
   guard (`assert(N <= Nmax);`) is emitted as the first statement of the generated
   function instead of only at the loop header. Previously the sizes that depend on

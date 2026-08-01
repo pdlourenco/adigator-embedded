@@ -186,6 +186,23 @@ for FlowCount = 1:FlowSize
         if ADIGATOR.TRIPCOUNTSCAN
           ADIGATOR.TRIPCOUNTCANDIDATES = ...
             [ADIGATOR.TRIPCOUNTCANDIDATES, TripCountNames(LoopStrRHS)];
+        elseif ~isempty(ADIGATOR.PRINTFUNINPUTS)
+          % #213 route 1: this is a SUBFUNCTION, so a name in its loop range is
+          % not guardable here - the guard is emitted into the MAIN function and
+          % a subfunction parameter can shadow a same-named main input with a
+          % different value (the reason the gate above exists). But if the name
+          % is one of THIS function's own parameters, it may still be guardable
+          % by resolving the parameter back through the call sites to a main
+          % input. Record the position; adigator.m does the resolution once
+          % every function has been printed and every call site seen.
+          subNames = TripCountNames(LoopStrRHS);
+          for Scount = 1:length(subNames)
+            ArgPos = find(strcmp(ADIGATOR.PRINTFUNINPUTS,subNames{Scount}),1);
+            if ~isempty(ArgPos)
+              ADIGATOR.TRIPCOUNTSUBPARAMS(end+1,:) = ...
+                [ADIGATOR.PRINTFUNID, ArgPos];
+            end
+          end
         end
         if DerNumber == 1
           LoopVarStr = [LoopVar,' = ',LoopStrRHS,';'];
@@ -588,6 +605,7 @@ return
 end
 
 function FunStri = CheckFunctionCall(FunStri,FunStrChecks,Tfid,indent,DerNumber,MajorLineCount,Ffid)
+global ADIGATOR %#ok<GVMIS> - #213 route 1 records call-site arguments
 
 [Start,End] = regexp(FunStri,FunStrChecks,'start','end');
 
@@ -619,6 +637,36 @@ elseif any(FunLoc)
   InputStrs = SeperateOutputStrings(InputStr,1);
   NumInputs = length(InputStrs);
   InVarStrs = cell(1,NumInputs);
+
+  % #213 route 1: record this call site as {callerFunID, argument text}, per
+  % position, keyed by callee FunID.
+  %
+  % The CALLER's id is half the record and must not be dropped. The argument
+  % text is only a name in the CALLER's scope, so it can be matched against the
+  % main function's input names solely when the caller IS the main function.
+  % Resolve a text captured inside another subfunction and you are back to name
+  % equality - i.e. the very shadowing forge the TRIPCOUNTSCAN gate exists to
+  % stop, one hop deeper: `energy` with a local `N = numel(x)` calling
+  % `accum(x,N)` would forge `assert(N == ...)` on main's unrelated `N`.
+  %
+  % Recording every site (not only main's) is still necessary: a callee also
+  % reached from a subfunction must not look consistently-called. Both halves
+  % are needed - the site list for agreement, the caller id for scope.
+  %
+  % Restriction worth stating: this records calls appearing in an ASSIGNMENT,
+  % which is the only shape reaching here (a bare `sub(x,M);` statement is
+  % rejected outright further down, and a call inside an if/while condition or a
+  % for range is printed by getIfForStatement, not this path). If such a call
+  % ever becomes reachable it would be an unrecorded site, so the agreement test
+  % would no longer see every caller - revisit this block if that changes.
+  RecArgs = ADIGATOR.TRIPCOUNTCALLARGS;
+  for Icount = 1:NumInputs
+    if numel(RecArgs) < FunLoc; RecArgs{FunLoc} = {}; end
+    if numel(RecArgs{FunLoc}) < Icount; RecArgs{FunLoc}{Icount} = {}; end
+    RecArgs{FunLoc}{Icount}{end+1} = ...
+      {ADIGATOR.PRINTFUNID, strtrim(InputStrs{Icount})};
+  end
+  ADIGATOR.TRIPCOUNTCALLARGS = RecArgs;
   
   printNewIO = 0;
   for Icount = 1:NumInputs
