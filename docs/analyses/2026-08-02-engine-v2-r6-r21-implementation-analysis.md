@@ -123,17 +123,35 @@ because of three enforced invariants:
 
 **[M] E4** catalogued the boundary with 29 single-op probes: **12 accepted, 17
 refused**. The fence is *wider* than the three sites above — subsref (`x(1)`,
-`x(end)`, `y(1)=…`, `if x(1)`: "Invalid vectorized subsref"), the colon form
+`x(end)`, `if x(1)`: "Invalid vectorized subsref"), subsasgn (`y(1)=…`:
+"Invalid vectorized subsasgn"), the colon form
 (`x(2:end)`: "may only use colon as 1:N, 1:1:N, or N:-1:1"), catenation along the
 free dimension (`[x;x]`), and `prod`/`max`/`norm` all carry designed messages
 too, for 11 named refusals in all. Accepted: elementwise ops, `x'`, `x(:)`,
-`[x,x]`, `repmat`, and `length`/`numel`/`size` used as values. But the fence is
-**not uniform**: `mean(x)`, `reshape(x,[],1)`, `x'*x` and `cumsum(x)` are
-overloaded yet fail with generic MATLAB errors (`MATLAB:invalidConversion`,
-`MATLAB:nonLogicalConditional`, `MATLAB:nonaninf`, `MATLAB:cumsum:wrongInput`)
-rather than a named refusal. (`diff`/`sort` have no `cada` overload at all, so
-they sit outside the fence rather than being holes in it.) §4.2's "refuse loudly
-with a named id" posture applies here as much as to Tier 2's new guards.
+`[x,x]`, `repmat`, and `length`/`numel`/`size` used as values.
+
+> **Correction (see `ANALYSIS.md` §1.3n / B40).** An earlier revision of this
+> paragraph said four ops — `mean`, `reshape(x,[],1)`, `x'*x`, `cumsum` — "are
+> overloaded yet fail with generic MATLAB errors rather than a named refusal".
+> That was wrong on all four, and was inferred from the error identifiers
+> without checking whether the overloads exist. Corrected:
+>
+> - `mean` and `cumsum` have **no `@cada` overload at all** — like `diff`/`sort`
+>   they sit *outside* the fence, and fail identically in non-vectorized mode.
+> - `reshape` and `mtimes` **do** carry designed vectorized refusals
+>   (`reshape.m:120–122`, `mtimes.m:130–131`); the probes bypassed them.
+>   `reshape(x,[],1)` dies on the unsupported `[]` dimension placeholder and
+>   fails the same way on a plain `[3 1]` input (verified) — not a vectorized
+>   defect.
+> - The one genuine hole is **`x'*x`**: `mtimes` keys its guard on the *result*
+>   dimensions (`:129`), so a contraction *over* the free dimension with a
+>   finite result slips past it into `true(…,Inf)` → `MATLAB:nonaninf`.
+>   Semantically this is `sum`'s case and wants `sum`'s refusal.
+> - Separately, **none** of the eleven named refusals carries an error
+>   identifier — all are bare `error('…')`, so none is programmatically
+>   catchable, unlike `adigator:loopbound:rangemismatch`. That is the half §4.2's
+>   "refuse loudly with a named id" posture actually bears on, and it is what
+>   Tier 2 inherits along with the fence.
 
 **This is the load-bearing observation for Tier 2:** the printer's
 symbolic-size plumbing exists and is proven; what has never existed is
@@ -538,7 +556,7 @@ Each: what to run → what each outcome means. These gate the design.
 | E1 | **design passes, criterion failed** | structure stable + held-out exact *once anchors clear two emitter thresholds*; B2 needs canonicalization (§4) |
 | E2 | **passes, beats prediction** | `coder.Constant(64)` ⇒ 48 B ROM, `.rdata` 0, **no** table (generator eliminated, not folded) |
 | E3 | **no duplicates** (bounded form) | 0 duplicate rows over 7 anchors incl. an adversarial repeat; RUNFLAG-1 census still owed |
-| E4 | **catalogued** | 12 accept / 17 refuse; fence wider than §2 states but uneven (4 ops crash instead of refusing) |
+| E4 | **catalogued** | 12 accept / 17 refuse; fence wider than §2 states; one hole (`x'*x` contraction) and no refusal carries an error id |
 | E5 | **93.1%** | padded 4400 B = 272 `.text` + 4128 `.rdata`; one `static const signed char iv[4096]`; `.rdata` = n² bytes in the exact-`n` sweep |
 | E6 | **passes decisively** | exact values vs generated; ROM 4400→160 (27.5×), stack 352→96 (3.7×); HZ-2 confirmed |
 
@@ -595,10 +613,13 @@ mode, one anchor — not a corpus average.
   the `Inf` dimension (sum, scalar subsref, loop, …). Defines what Tier 2
   must *not* promise and cross-checks §2's invariants.
   **Result — 12 accept / 17 refuse of 29 probes; see §2.** The fence is wider
-  than §2 states (subsref, colon form, catenation, `prod`/`max`/`norm` all carry
-  designed messages — 11 named refusals) but **uneven**: `mean`,
-  `reshape(x,[],1)`, `x'*x` and `cumsum` are overloaded yet fail with generic
-  MATLAB errors instead of a named refusal. *Method note:* the first
+  than §2 states — subsref, subsasgn, the colon form, catenation and
+  `prod`/`max`/`norm` all carry designed messages, 11 named refusals in all.
+  Two real gaps, **corrected** from this bullet's first revision (see the
+  correction box in §2, and `ANALYSIS.md` §1.3n / B40): the one hole is `x'*x`,
+  where `mtimes` keys its guard on the *result* dimensions and so misses a
+  contraction *over* the free dimension; and none of the 11 refusals carries an
+  error identifier, so none is programmatically catchable. *Method note:* the first
   single-process batch produced three spurious `MATLAB:FileIO:InvalidFid`
   verdicts, one of which turned the **accepted** `y = x.^2` into a false refusal;
   all three were re-run in fresh processes and the table above reflects those.
