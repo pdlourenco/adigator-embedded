@@ -1,3 +1,22 @@
+% =====================================================================
+% DEPRECATED EXAMPLE -- demonstrates the inherited-upstream
+% adigatorGenFiles4* solver wrappers (ADR-0037).
+%
+% This family is shipped for CONTINUITY with the upstream repository only.
+% It is NOT maintained, and its functionality may be REDUCED OR REMOVED in
+% a future release without a further deprecation period.
+%
+% The wrappers emit HOST-ONLY derivative files, so -- unlike every other
+% example here -- this one is NOT expected to be embeddable: it is exempt
+% from the rule the other examples are held to, that the differentiated
+% user function must itself code-generate under the strict embedded
+% profile (adigatorCoderConfig). (It also needs the IPOPT MEX,
+% so it is skip-gated in the test suite.)
+%
+% Writing new code? Use the core generators (adigatorGenJacFile,
+% adigatorGenHesFile, adigatorGenDerFile_embedded) and build the
+% solver-shaped wrapper yourself. See ADR-0037 and issue #156.
+% =====================================================================
 % This solves the Ginzburg-Landau (2-dimensional) superconductivity problem
 % using IPOPT, supplying derivatives via ADiGator and the
 % adigatorGenFiles4Ipopt command

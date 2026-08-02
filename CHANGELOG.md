@@ -92,6 +92,30 @@ below); it is not a patch of upstream 1.x.
   precondition on the generated `.m`; generated C is fixed-size by construction,
   and `assert` does not generally survive into it with runtime checks off.
 
+### Deprecated
+
+- **The `adigatorGenFiles4*` solver-integration wrappers are deprecated.**
+  `adigatorGenFiles4Fmincon`, `…Fminunc`, `…Fsolve`, `…Ipopt` and `…gpops2` are
+  carried over from upstream ADiGator. They are now shipped for **continuity
+  with the upstream repository only**: they are **not maintained**, and their
+  functionality **may be reduced or removed in a future release** without a
+  further deprecation period.
+
+  Nothing changes in this release — they still work exactly as before. What
+  changes is the promise: the feature gap below will not be closed.
+
+  They emit **host-only** derivative files, so they do not support embedded code
+  generation, `embed_mode`, `path`, the `csc` output form, or reverse mode. If
+  you are writing new code, use the core generators — `adigatorGenJacFile`,
+  `adigatorGenHesFile`, `adigatorGenDerFile_embedded` — and build the
+  solver-shaped wrapper around them. If you have existing code calling the
+  `Files4*` family, it keeps working, but treat it as carrying migration risk.
+
+  The four `examples/optimization/{fmincon,fminunc,fsolve,ipopt}Ex/` examples
+  demonstrate this family and are tagged deprecated for the same reason. Unlike
+  every other shipped example, they are not expected to be embeddable. See
+  ADR-0037.
+
 ## [2.0] — 2026-07-26
 
 First release of the embedded fork. Everything below is new relative to the

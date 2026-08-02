@@ -155,13 +155,14 @@ Contracts section (binding conventions), or for purely mechanical choices
   any committed *source* file, including hand-written example code loaded directly
   from `examples/…` (small single-function files whole; markers only for partial
   excerpts) — `verbatim` kept only for ad-hoc sketches not backed by a file.
-- [ADR-0026](ADR-0026-inherited-solver-wrappers-not-at-parity.md) — **Accepted**:
-  the inherited-upstream solver wrappers `adigatorGenFiles4{Fminunc,Fsolve,Fmincon,
-  Ipopt,gpops2}` are **kept but flagged as not at embedded feature parity** (host-only;
-  no `EMBED_MODE`/codegen/`PATH`/`nonzeros`/reverse mode), via a header banner on each
-  generator + a user-guide note, rather than removed or brought to parity. Preserves
-  upstream drop-in compatibility; removal stays the revisit path if that goal is dropped
-  (issue #156).
+- [ADR-0026](ADR-0026-inherited-solver-wrappers-not-at-parity.md) — **Superseded
+  by [ADR-0037](ADR-0037-files4-family-deprecated.md)**: the inherited-upstream solver
+  wrappers `adigatorGenFiles4{Fminunc,Fsolve,Fmincon,Ipopt,gpops2}` are **kept but
+  flagged as not at embedded feature parity** (host-only; no
+  `EMBED_MODE`/codegen/`PATH`/`nonzeros`/reverse mode), via a header banner on each
+  generator + a user-guide note, rather than removed or brought to parity. Its parity
+  analysis still stands; its implicit commitment to keep the family available, and its
+  removal-revisit condition, do not (issue #156).
 - [ADR-0027](ADR-0027-compiled-memory-metrics.md) — **Accepted**: the showcase's
   C-level footprint is measured from the compiled **Embedded Coder** object — ROM
   (`.text`+`.rdata`), static RAM (`.data`+`.bss`) via `size -A`, max stack via
@@ -225,3 +226,9 @@ Contracts section (binding conventions), or for purely mechanical choices
   — the same truncation `cadaPrintReMap` already performs, moved ahead of the
   oversized temporary. Closes #217 (63.4× → 1.03× hand-written); scoped to the
   scalar-expansion path by measurement, not symmetry.
+- [ADR-0037](ADR-0037-files4-family-deprecated.md) — **Accepted**: the inherited
+  `adigatorGenFiles4*` family is **deprecated** — shipped for upstream
+  continuity, unmaintained, and permitted to lose functionality or be removed in a
+  future release. Supersedes ADR-0026's "keep but flag"; also exempts the four
+  `*Ex` examples from the rule that a shipped example's user function must itself
+  ERT-codegen.

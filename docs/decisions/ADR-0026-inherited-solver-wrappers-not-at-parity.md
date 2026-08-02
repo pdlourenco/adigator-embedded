@@ -2,7 +2,16 @@
 
 ## Status
 
-Accepted — 2026-07-08
+Accepted — 2026-07-08. **Superseded by [ADR-0037](ADR-0037-files4-family-deprecated.md)**
+(2026-08-01): the family is now **deprecated** — shipped for upstream continuity,
+unmaintained, and permitted to lose functionality or be removed without a further
+ADR. The analysis below (what the parity gap *is*, and why bringing it to parity
+or removing it outright were both rejected) still stands and is the reasoning
+ADR-0037 builds on; what no longer holds is this ADR's implicit commitment that
+the family stays available indefinitely, and its revisit condition, which
+required the fork to formally drop upstream drop-in compatibility before removal
+could be considered. (Its "no behaviour change" statement was about *this* ADR's
+own change and remains true — ADR-0037 likewise changes no behaviour.)
 
 ## Context
 
