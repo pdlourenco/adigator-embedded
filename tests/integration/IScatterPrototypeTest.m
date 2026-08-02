@@ -71,11 +71,20 @@ classdef IScatterPrototypeTest < AdigatorTestCase
             for n = tc.Runtime
                 [Grd, Fun] = tc.runIn(d, 'scatterAnchor_Grd', xf, n);
                 [Gsc, Fsc] = IScatterPrototypeTest.scatterReference(xf, n, tc.Nmax);
+                % AbsTol 0 is deliberate and safe, for a reason worth stating
+                % because it is also what this test exists to catch. The emitted
+                % body accumulates elementwise as (yd(k) + exp(x_k)*1) + 2*1 and
+                % the reference writes (yd(k) + ek.*xdk) + 2.*xdk - the same
+                % operands in the same left-to-right association, so per element
+                % it is the same floating-point order, not a reassociated one.
+                % Every other element is 0+0+0. If a future emission changes
+                % that association this fires, which is correct: R21 must not
+                % silently change the arithmetic.
                 tc.verifyEqual(Grd, Gsc, 'AbsTol', 0, sprintf( ...
                     ['R21: the scatter form must reproduce the rolled ', ...
-                     'emission EXACTLY at n=%d, not merely closely - these ', ...
-                     'are the same sum in a different order, so any nonzero ', ...
-                     'difference is a real disagreement.'], n));
+                     'emission BIT-EXACTLY at n=%d. Same operands, same ', ...
+                     'association per element - a difference means the ', ...
+                     'arithmetic changed, not merely the rounding.'], n));
                 tc.verifyEqual(Fun, Fsc, 'AbsTol', 0, sprintf( ...
                     'R21: function values must agree exactly at n=%d', n));
             end
@@ -86,7 +95,8 @@ classdef IScatterPrototypeTest < AdigatorTestCase
             % the reference against the closed form and against finite
             % differences, so this class cannot certify a shared error.
             tc.writeAnchor();
-            rng(22);
+            rng(21);   % same point as scatterFormMatchesTheRolledEmission, so
+                       % generated == reference == analytic closes at one x
             xf = 0.4*randn(tc.Nmax,1);
             for n = tc.Runtime
                 [Gsc, Fsc] = IScatterPrototypeTest.scatterReference(xf, n, tc.Nmax);
@@ -120,9 +130,9 @@ classdef IScatterPrototypeTest < AdigatorTestCase
             T = S.scatterAnchor_ADiGatorGrd;
             tc.assertTrue(isfield(T,'Gator1Data'), ...
                 'first-derivative static data missing - generation changed shape');
-            % Today's tables are [nzover x niters] masks, i.e. Nmax^2. That is
-            % the cost R21 removes; assert the SHAPE so the premise is explicit
-            % and a future change is visible here rather than silently.
+            % Today's tables are [nzover x niters] masks, i.e. Nmax^2. This is
+            % a lower bound on numel only - the shape itself is asserted in the
+            % loop below, which is where the premise actually lives.
             widest = 0;
             for f = fieldnames(T.Gator1Data).'
                 if strncmp(f{1},'Index',5)
@@ -132,11 +142,13 @@ classdef IScatterPrototypeTest < AdigatorTestCase
             tc.verifyGreaterThanOrEqual(widest, tc.Nmax, ...
                 'expected a per-iteration index table of at least Nmax entries');
             % One nonzero per column is the nz_k = 1 premise, read off the mask.
+            nChecked = 0;
             for f = fieldnames(T.Gator1Data).'
                 A = T.Gator1Data.(f{1});
                 if strncmp(f{1},'Index',5) && size(A,2) == tc.Nmax && size(A,1) == tc.Nmax
                     % full(): the classic .mat stores these tables SPARSE, and
                     % verifyEqual compares sparsity as well as value.
+                    nChecked = nChecked + 1;
                     perCol = full(sum(A ~= 0, 1));
                     tc.verifyEqual(unique(perCol), 1, sprintf( ...
                         ['R21 premise: %s must carry exactly one nonzero per ', ...
@@ -144,6 +156,12 @@ classdef IScatterPrototypeTest < AdigatorTestCase
                          'shape; found %s.'], f{1}, mat2str(unique(perCol))));
                 end
             end
+            tc.assertGreaterThan(nChecked, 0, ...
+                ['no [Nmax x Nmax] Gator1Data.Index* table was found, so the ', ...
+                 'nz_k premise was never actually checked and this method ', ...
+                 'passed vacuously. If the emission changed shape - R21 ', ...
+                 'landing is the expected cause - re-derive this guard ', ...
+                 'against the new table layout. Do not delete it.']);
         end
     end
 

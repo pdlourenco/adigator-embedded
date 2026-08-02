@@ -122,13 +122,17 @@ classdef SGenericBoundFoldingTest < matlab.unittest.TestCase
             rehash;
         end
 
-        function out = buildAndRead(~, dirname, args)
+        function out = buildAndRead(tc, dirname, args)
             % Build under the SHARED strict profile (ADR-0033) and read back the
             % generated C plus its compiled section sizes. Restating the no-heap
             % setting rather than only inheriting it is the ADR-0034 decision-2
             % posture: a footprint measured with the heap on is not an embedded
             % footprint.
-            cfg = adigatorCoderConfig();
+            % GenCodeOnly: this test reads the emitted C and recompiles it
+            % itself with gcc, so building and linking an ERT lib would only
+            % add a hard dependency on a configured MEX compiler - and a
+            % codegen failure there is another non-skip-clean way to fail.
+            cfg = adigatorCoderConfig('GenCodeOnly', true);
             cfg.EnableDynamicMemoryAllocation = false;
             % Called directly rather than wrapped in evalc: anything referenced
             % only inside an evalc string reads as unused to checkcode, and
@@ -138,6 +142,16 @@ classdef SGenericBoundFoldingTest < matlab.unittest.TestCase
             clib = fullfile(pwd, dirname);
             out.src = fileread(fullfile(clib,'genkern.c'));
             [out.text, out.rdata] = SGenericBoundFoldingTest.sections(clib,'genkern.c');
+            % -1 is sections()' "unmeasured" sentinel - no standalone gcc/size
+            % (guaranteed off Windows, and on Windows without the MinGW support
+            % package), or the compile failed. Skip rather than assert on an
+            % artifact that was never measured: asserting would fail with a
+            % confident and FALSE claim about the toolchain. sect() returns 0
+            % for a genuinely absent section, so 0 and -1 stay distinguishable
+            % and the real assertion is not weakened (CI_PLAN section 3.2).
+            tc.assumeGreaterThanOrEqual(out.text, 0, ...
+                ['standalone gcc/size toolchain absent - the section-size ', ...
+                 'half of the Route B premise cannot be measured here.']);
             out.rom = out.text + out.rdata;
         end
     end
