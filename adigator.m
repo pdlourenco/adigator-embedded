@@ -532,6 +532,19 @@ ADIGATOR.TRIPCOUNTSCAN       = false;
 % Main-function input names, so adigatorPrintTempFiles can tell OUR equality
 % guard from a user's own `assert(x == 5)` without carrying FunctionInfo.
 ADIGATOR.MAININPUTNAMES      = FunctionInfo(1).Input.Names;
+% Route 1 of the B36 residuals (issue #213): a SUBFUNCTION's loop range may name
+% one of its own parameters, which is guardable only by resolving that parameter
+% back through the call site to a main-function input. Two collections, both
+% filled while the temp files are printed and joined below:
+%   TRIPCOUNTCALLARGS{FunID}{ArgPos} - the literal argument text at EVERY call
+%       site of that callee, so a callee called from two places with different
+%       arguments can be told apart from one called consistently.
+%   TRIPCOUNTSUBPARAMS [FunID ArgPos] - callee parameter positions that a
+%       subfunction actually uses as a loop trip count.
+ADIGATOR.TRIPCOUNTCALLARGS   = {};
+ADIGATOR.TRIPCOUNTSUBPARAMS  = zeros(0,2);
+ADIGATOR.PRINTFUNID          = 0;
+ADIGATOR.PRINTFUNINPUTS      = {};
 for Fcount = 1:FunCount
   ADIGATOR.SVACOUNT = 0; ADIGATOR.SVRCOUNT = 0;
   DerNumber  = FunctionInfo(Fcount).DERNUMBER;
@@ -576,6 +589,10 @@ for Fcount = 1:FunCount
   % same-named main input with a different value - guarding on that would fire a
   % false assertion at runtime.
   ADIGATOR.TRIPCOUNTSCAN = (Fcount == 1);
+  % Which function is being printed, and its own parameter names - so a
+  % subfunction's loop range can be matched against its parameters (#213 r1).
+  ADIGATOR.PRINTFUNID     = Fcount;
+  ADIGATOR.PRINTFUNINPUTS = FunctionInfo(Fcount).Input.Names;
   [ForCount,IfCount] = adigatorPrintTempFiles(FunctionInfo(Fcount).File.fid,Tfid,...
     FunFlowInfo{Fcount},DerNumber,ForCount,FunStrChecks);
   % Assign outputs to adigatorOutputs
@@ -625,6 +642,48 @@ rehash
 % not already carrying a 'loopbound' <= guard, whose padded semantics are the
 % deliberate opposite of a specialization.
 ADIGATOR.OPTIONS.TRIPCOUNTGUARD = struct('name',cell(1,0),'value',cell(1,0));
+% Route 1 (issue #213): a subfunction's loop range naming one of its own
+% parameters becomes a candidate only if that parameter provably carries a main
+% input's value through EVERY call. `sub(x,M)` with sub's parameter spelled `N`
+% earns a guard on `M` - resolution follows the ARGUMENT, so the callee's
+% spelling never leaks into main's scope.
+%
+% Fail-closed, and the caller check is the load-bearing one: an argument's text
+% is a name in the CALLER's scope, so it may be matched against main's inputs
+% only when the caller is the main function. A site inside another subfunction
+% would be resolved by name equality - the shadowing forge the TRIPCOUNTSCAN
+% gate exists to stop (an `energy` local `N = numel(x)` calling `accum(x,N)`
+% must not guard main's unrelated `N`). Transitive resolution through an
+% intermediate subfunction is the strictly-more-capable version and is
+% deliberately NOT attempted here; declining costs a missed guard, guessing
+% costs a false assertion on correct code.
+%
+% Also declined: an expression or field reference, a local, a callee never
+% called, and call sites that disagree. (Nothing here bypasses the filter below
+% - a resolved name still has to be a main input bound to an integer scalar.)
+SubParams = unique(ADIGATOR.TRIPCOUNTSUBPARAMS,'rows');
+for Scount = 1:size(SubParams,1)
+  FunID  = SubParams(Scount,1);
+  ArgPos = SubParams(Scount,2);
+  if numel(ADIGATOR.TRIPCOUNTCALLARGS) < FunID || ...
+      numel(ADIGATOR.TRIPCOUNTCALLARGS{FunID}) < ArgPos
+    continue                        % callee never called at that position
+  end
+  Sites = ADIGATOR.TRIPCOUNTCALLARGS{FunID}{ArgPos};
+  if isempty(Sites); continue; end
+  Callers  = cellfun(@(c) c{1}, Sites);
+  SiteArgs = cellfun(@(c) c{2}, Sites, 'UniformOutput', false);
+  if any(Callers ~= 1)
+    continue                        % a name from a non-main scope: not ours
+  end
+  SiteArgs = unique(SiteArgs);
+  if numel(SiteArgs) ~= 1; continue; end            % call sites disagree
+  ArgName = SiteArgs{1};
+  if isempty(regexp(ArgName,'^[A-Za-z]\w*$','once'))
+    continue                        % not a bare name: expression/field/index
+  end
+  ADIGATOR.TRIPCOUNTCANDIDATES{end+1} = ArgName;
+end
 if ~isempty(ADIGATOR.TRIPCOUNTCANDIDATES)
   MainInNames = FunctionInfo(1).Input.Names;
   lbNames     = {};
