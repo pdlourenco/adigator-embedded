@@ -231,7 +231,8 @@ column has unique rows**; a repeated subscript inside one iteration breaks it
 all* is exactly E3's question — the binary-op pattern arithmetic unions
 coincident locations before emission, so the answer may well be "never"; the
 fallback costs nothing if it is. **[M] E3 (bounded)**: a static census over the
-emitted tables of seven anchors — `scostfun_lb`, `scostfun`, a two-subscript
+emitted tables of seven cases over four functions — `scostfun_lb`, `scostfun`,
+a two-subscript
 `x(k)*x(k-1)`, and an adversarial `x(k)*x(k) + x(k)` written to force a repeat —
 gradient and Hessian, found **zero** duplicate rows in any per-iteration column
 (14–24 columns per case). That is *necessary, not sufficient*: it reads the
@@ -317,7 +318,10 @@ generic kernel (`zeros(N,1)`, an `uint32(reshape(1:1:N,N,1))` index generator,
 it is **eliminated** — Coder proves `idx(k) == k`, collapses it into the loop
 induction variable, and auto-vectorizes the body. The runtime-`N` control costs
 144 B with `.rdata` 16 B and keeps a `tmp_data[64]` materialization loop. So
-Route B does not reproduce today's tables; it deletes them.
+*where the generator is affine*, Route B does not reproduce today's tables — it
+deletes them. Scope: measured on the identity family `idx(k) = k`, the easiest
+case for Coder to collapse into an induction variable; other affine families and
+all non-affine tables are untested, and §5 step 2 keeps the table on a miss.
 The bound moves from generation time to
 build time, which is exactly the R6 modularity ask (one qualified source
 artifact per unit family; N a configuration parameter of the *build*),
@@ -371,7 +375,7 @@ and they compose:
   The 7/11/13 + 17 anchors **straddle both cuts**, so B2 would have reported
   "structure drifts ⇒ refuse" on functions that reconstruct perfectly. Re-run
   with every anchor above both thresholds (17/19/23, **29 held out**): structure
-  identical for all three anchor functions, **0** non-affine scalars
+  identical for all three anchor cases, **0** non-affine scalars
   (107/10, 245/15, 75/8 constant/affine), and **0** held-out misses.
 
   Fix — either works, the second is preferred because the first hard-codes a
@@ -379,8 +383,15 @@ and they compose:
 
   1. constrain B2's anchors (and E1's) to sit above both thresholds; or
   2. **canonicalize before comparing** — both forms are deterministic functions
-     of *array length alone*, so B2 can normalize `a:s:b` ↔ literal list and
-     `Data<k>` ↔ inline literal and diff the canonical text.
+     of the array's own contents (length, plus integrality and, for the range
+     form, an exact arithmetic-progression test) and never of derivative
+     structure, so B2 can normalize `a:s:b` ↔ literal list and `Data<k>` ↔
+     inline literal and diff the canonical text. Note the guards are wider than
+     the length cut alone: `structure_to_embed_mfile.m:210–216` also requires
+     real, finite, integer-valued, `< 2^53` **and** `all(diff(A) == diff(A)(1))`;
+     `subsasgn.m:105/181` also require `all(floor(b(:)) == b(:))`. The
+     canonicalization holds regardless of which guard fired — but do not build
+     the predicate from the length cut alone.
 
   Without this, B2's measured refusal rate is an artifact of emitter formatting
   and would argue for Route C on false evidence.
@@ -438,7 +449,8 @@ effect:
    `col(c) = a·c + b` (an exact integer check). Hit ⇒ emit the expression of
    `cadaforcountJ`, no table. For the allocation anchor the emitted update
    collapses to `yd(c) = yd(c) + contrib;` — *zero* index ROM (**[M] E2**
-   measured exactly that: 48 B, `.rdata` 0, no table), which also
+   measured a hand-written equivalent, since nothing emits this form today:
+   48 B, `.rdata` 0, no table), which also
    shrinks the Tier-1 padding penalty: R17 attributes the padded ROM's
    `n`-independence to `Nmax`-sized `static const` tables, and generators
    delete the tables they fire on. **[M] E5 sizes it: 93.1%.** The padded
@@ -447,7 +459,9 @@ effect:
    `static const signed char iv[4096]` (4096 B = 93.1% of total ROM), the
    `[64 × 64]` per-iteration position map of S4. Across the exact-`n` sweep
    `.rdata` is **exactly n² bytes** (16/64/256/1024/4096 at n = 4/8/16/32/64)
-   while `.text` stays ~192 B and `n`-independent. Generator recognition still
+   while `.text` is 384/176/192/192/192 — `n`-independent from n = 16 up, with
+   a larger frame at n = 4. (ROM totals 400/240/448/1216/4288 reproduce
+   `bench/SHOWCASE.md`'s exact-`n` column.) Generator recognition still
    only fires on affine column families; miss ⇒ keep the table (fail-closed).
 3. **Tier 2** (Route B): with S4 already expression-valued, B1+B2 only have
    S2/S3/S5 left — the tractable sinks.
@@ -501,9 +515,10 @@ landing.
   step 2, not after.
 - Coder behavior becomes load-bearing: constant folding of generator
   expressions (E2) and read-modify-write acceptance on locals (E6) are
-  assumptions about the *toolchain*, verifiable only by local ERT runs
-  ([`../CI_PLAN.md`](../CI_PLAN.md) §3.2 applies to every codegen claim in
-  this analysis).
+  properties of the *toolchain*, now verified once on R2024a + MinGW under the
+  strict profile — and requiring re-verification per toolchain, since nothing in
+  CI can check them ([`../CI_PLAN.md`](../CI_PLAN.md) §3.2 applies to every
+  codegen claim in this analysis; Coder is unlicensed on hosted runners).
 
 ## 7. Experiments for the MATLAB session
 
@@ -511,7 +526,12 @@ Each: what to run → what each outcome means. These gate the design.
 
 > **All six were run on 2026-08-02** (MATLAB R2024a, Coder + Embedded Coder
 > licensed, MinGW; ADR-0027 `size -A` / `gcc -Os -fstack-usage`; strict no-heap
-> `adigatorCoderConfig`). Outcomes are recorded per experiment below.
+> `adigatorCoderConfig`). Outcomes are recorded per experiment below; in each
+> bullet the text above **Result** is the original specification, verbatim, so
+> its future tense is deliberate. The harnesses (`lbsum`, the `x(k)*x(k)+x(k)`
+> probe, the E2 generic kernel, the E6 hand-written scatter) were scratch files
+> and are **not retained in the tree** — re-running means re-writing them from
+> the descriptions here.
 
 | # | Outcome | One-line result |
 |---|---|---|
@@ -519,8 +539,11 @@ Each: what to run → what each outcome means. These gate the design.
 | E2 | **passes, beats prediction** | `coder.Constant(64)` ⇒ 48 B ROM, `.rdata` 0, **no** table (generator eliminated, not folded) |
 | E3 | **no duplicates** (bounded form) | 0 duplicate rows over 7 anchors incl. an adversarial repeat; RUNFLAG-1 census still owed |
 | E4 | **catalogued** | 12 accept / 17 refuse; fence wider than §2 states but uneven (4 ops crash instead of refusing) |
-| E5 | **93.1%** | padded 4400 B = 272 `.text` + 4128 `.rdata`; one `static const signed char iv[4096]`; `.rdata` = n² bytes |
+| E5 | **93.1%** | padded 4400 B = 272 `.text` + 4128 `.rdata`; one `static const signed char iv[4096]`; `.rdata` = n² bytes in the exact-`n` sweep |
 | E6 | **passes decisively** | exact values vs generated; ROM 4400→160 (27.5×), stack 352→96 (3.7×); HZ-2 confirmed |
+
+All E5/E6 figures are the `scostfun_lb` gradient at `Nmax = 64`, inline (`'i'`)
+mode, one anchor — not a corpus average.
 
 - **E1 — structural stability + literal fit.** Generate
   `examples/jacobians/loopbound/lb_alloc.m` / the `scostfun` anchor
@@ -559,7 +582,8 @@ Each: what to run → what each outcome means. These gate the design.
   *common* ⇒ scatter needs the accumulation-safe emission designed up
   front.
   **Result (bounded form) — none found.** Rather than instrument the engine, a
-  static census read the tables the current emission built for seven anchors
+  static census read the tables the current emission built for seven cases over
+  four functions
   (`scostfun_lb`, `scostfun`, a two-subscript `x(k)*x(k-1)`, and an adversarial
   `x(k)*x(k) + x(k)`), gradient and Hessian: **0** duplicate rows in any
   per-iteration column, 14–24 columns per case. Supports HZ-1's own guess and
@@ -587,7 +611,11 @@ Each: what to run → what each outcome means. These gate the design.
   exactly: **272 B `.text` + 4128 B `.rdata`**, the `.rdata` essentially one
   `static const signed char iv[4096]` (the `[64 × 64]` S4 position map). The
   exact-`n` sweep gives `.rdata` = **n² bytes** (16/64/256/1024/4096 at
-  n = 4/8/16/32/64) with `.text` flat at ~192 B. *Method note:* the decomposition
+  n = 4/8/16/32/64) against `.text` of 384/176/192/192/192 — `n`-independent
+  from n = 16 up, with a larger frame at n = 4. ROM totals
+  (400/240/448/1216/4288) reproduce `bench/SHOWCASE.md`'s exact-`n` column, so
+  the split is consistent with the committed figures rather than a fresh
+  measurement of them. *Method note:* the decomposition
   is the `.text`/`.rdata` **section split**, not a per-object one — in inline
   mode there is no `<wrapper>_data.c` to separate (see §3.3).
 - **E6 — scatter-by-hand prototype.** Hand-edit one generated
@@ -602,7 +630,7 @@ Each: what to run → what each outcome means. These gate the design.
   |---|---:|---:|---:|---:|
   | generated (today) | 4400 | 272 | 4128 | 352 |
   | hand scatter (§3.2) | **160** | 144 | **16** | **96** |
-  | | **27.5×** | | **258×** | **3.7×** |
+  | *ratio* | **27.5×** | 1.9× | **258×** | **3.7×** |
 
   Values are **exactly** the generated file's at n = 1, 2, 8, 16, 32, 64
   (max abs difference `0`), central-FD agreement ~8e-9, padded tail exactly zero
@@ -629,7 +657,8 @@ independently; E1/E2/E6 are the three results that could falsify the design,
 and E5 is the number that could shrink Tier 2's motivation before anyone
 builds it.
 
-**All four have now been run (2026-08-02).** E2 and E6 pass — E6 decisively
+**All six have now been run (2026-08-02); the four that could move the design
+resolve as follows.** E2 and E6 pass — E6 decisively
 (values exactly equal to today's artifact, 27.5× ROM, 3.7× stack, HZ-2
 confirmed), E2 better than this document predicted (generators compile to *no*
 table rather than a folded one). E1 falsified **its own criterion** rather than
