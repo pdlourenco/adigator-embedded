@@ -84,7 +84,8 @@ classdef UCoreErrorHygieneTest < matlab.unittest.TestCase
             % single-process batch produced spurious MATLAB:FileIO:InvalidFid
             % verdicts, and the natural explanation -- a failed generation
             % leaving the print FID closed -- would have been a B16 gap. It
-            % measured clean, and the batch anomaly was a harness artifact. So
+            % measured clean, and the batch anomaly was a harness artifact of
+            % undetermined mechanism, not an engine defect. So
             % this pins a property that HOLDS and was merely untested; it is a
             % regression net, not a bug fix.
             %
@@ -101,16 +102,23 @@ classdef UCoreErrorHygieneTest < matlab.unittest.TestCase
                 struct('overwrite',1,'echo',0), 'Grd'), ?MException, ...
                 'the malformed fixture must error, or this test proves nothing');
 
+            % Snapshot AFTER the failure on purpose: this method scopes its
+            % hygiene check to the RECOVERING generation, keeping it orthogonal
+            % to erroringTransformLeavesSessionClean. Anything the failure
+            % itself leaked is baselined out here and is that method's job --
+            % do not "fix" this by moving the snapshot above the verifyError.
             [g0, p0, f0] = snapshotSession();
             adigatorGenJacFile(good, {ax}, struct('overwrite',1,'echo',0), 'Grd');
             verifySessionClean(tc, g0, p0, f0, ...
                 'after a generation that followed a failed one');
 
             % The recovered file must be correct, not merely produced.
-            clear(good);  rehash;
+            clear([good '_Grd']);  rehash;
             x = [0.3; -1.1; 2.4];
             Grd = feval([good '_Grd'], x);
-            tc.verifyEqual(Grd(:), cos(x), 'AbsTol', 1e-12, ...
+            % Compared unflattened: the scalar-function gradient is 3x1 per
+            % contract C-1, so this also pins orientation.
+            tc.verifyEqual(Grd, cos(x), 'AbsTol', 1e-12, ...
                 'd/dx sum(sin(x)) = cos(x) after recovering from a failure');
         end
 

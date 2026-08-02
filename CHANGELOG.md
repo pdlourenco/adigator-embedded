@@ -17,14 +17,6 @@ below); it is not a patch of upstream 1.x.
 
 ### Added
 
-- **Re-entry pin: a generation after a failed generation must still work.**
-  `UCoreErrorHygieneTest.generationSucceedsAfterAFailedGeneration` (TS-U-08)
-  runs a malformed fixture to force a failure, then generates a real gradient
-  in the same session and checks it against the analytic derivative. The
-  existing pins asserted that a failure *releases* its state; releasing state
-  is a weaker claim than leaving the engine able to start over. Found while
-  cataloguing the vectorized refusal boundary (engine-v2 analysis, E4): the
-  property was never in doubt once measured — it holds — but it was untested.
 - **`adigatorCoderConfig` — the Embedded Coder configuration this project
   generates for.** Returns a `coder.EmbeddedCodeConfig` that forbids dynamic
   memory allocation (no `malloc`, as an embedded target requires) and pins a
