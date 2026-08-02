@@ -71,6 +71,49 @@ classdef UCoreErrorHygieneTest < matlab.unittest.TestCase
             verifySessionClean(tc, g0, p0, f0, 'after a failed transformation');
         end
 
+        function generationSucceedsAfterAFailedGeneration(tc)
+            % RE-ENTRY: a failed generation must not break the NEXT one in the
+            % same session. erroringTransformLeavesSessionClean asserts the
+            % session looks clean after a failure; nothing asserted that a
+            % subsequent generation actually works, which is a different claim
+            % -- state can be released and still leave the engine unable to
+            % start over (a closed print FID being the obvious way).
+            %
+            % The gap surfaced while cataloguing the vectorized refusal
+            % boundary (2026-08-02 engine-v2 analysis, experiment E4): a
+            % single-process batch produced spurious MATLAB:FileIO:InvalidFid
+            % verdicts, and the natural explanation -- a failed generation
+            % leaving the print FID closed -- would have been a B16 gap. It
+            % measured clean, and the batch anomaly was a harness artifact. So
+            % this pins a property that HOLDS and was merely untested; it is a
+            % regression net, not a bug fix.
+            %
+            % Non-vacuous by construction: the failure is asserted to happen,
+            % and the recovered generation is checked against the analytic
+            % gradient rather than merely against "no error".
+            good = 'adigator_hyg_reentry_ok';
+            bad  = 'adigator_hyg_reentry_bad';
+            writeUserFunction(good, 'y = sum(sin(x));');
+            writeUserFunction(bad,  'y = sum(x) + thisVariableDoesNotExist;');
+            ax = adigatorCreateDerivInput([3 1], 'x');
+
+            tc.verifyError(@() adigatorGenJacFile(bad, {ax}, ...
+                struct('overwrite',1,'echo',0), 'Grd'), ?MException, ...
+                'the malformed fixture must error, or this test proves nothing');
+
+            [g0, p0, f0] = snapshotSession();
+            adigatorGenJacFile(good, {ax}, struct('overwrite',1,'echo',0), 'Grd');
+            verifySessionClean(tc, g0, p0, f0, ...
+                'after a generation that followed a failed one');
+
+            % The recovered file must be correct, not merely produced.
+            clear(good);  rehash;
+            x = [0.3; -1.1; 2.4];
+            Grd = feval([good '_Grd'], x);
+            tc.verifyEqual(Grd(:), cos(x), 'AbsTol', 1e-12, ...
+                'd/dx sum(sin(x)) = cos(x) after recovering from a failure');
+        end
+
         function strayTransformGlobalAlwaysCaught(tc)
             % Guard the strict invariant predicate so it cannot pass vacuously:
             % after R11/#54 (ADR-0015) ANY surviving transformation global is a
