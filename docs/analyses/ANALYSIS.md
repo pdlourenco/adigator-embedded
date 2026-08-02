@@ -909,9 +909,9 @@ because it executes during adigator's own initial test evaluation of the source
 and throws there anyway. The check exists so the user sees *why* instead of a
 bare `Assertion failed`, matching the actionable-rediff pattern of #173 PR A.
 
-**Residual scope — the remaining shapes are still specialized and still
-unguarded.** "Fixed" above means the direct form (a main-function input named in
-a main-function loop range), not every route to a specialized trip count:
+**Residual scope — four shapes are still specialized; two remain unguarded.**
+"Fixed" above means the direct form (a main-function input named in a
+main-function loop range), not every route to a specialized trip count:
 
 1. **Pass-through into a subfunction** — `main(x,N)` calling `sub(x,N)` whose
    loop is `for k = 1:N`. The harvest is gated to the main function so a
@@ -925,9 +925,15 @@ a main-function loop range), not every route to a specialized trip count:
    qualifies.
 3. **A non-integer scalar input in the range** — `for k = 1:round(1/h)`. Excluded
    deliberately: a floating-point equality assert is not a shape worth emitting.
+4. **A second loop over a declared `loopbound` name whose trip count does not
+   match** — `for a = 1:N` (matches Nmax) alongside `for b = 1:N-1` (matches
+   nothing, so a literal header). Pre-existing, not introduced by B36, and
+   excluded from its `==` guard on purpose because the name is a declared
+   `loopbound`. **Refused at generation since #213 route 4(a)** — see §1.3m.
 
-The remaining two keep the original silent-wrong behaviour above the analyzed count. The
-guard's *absence* is the tell, so they are detectable, but they are not fixed.
+Routes 2 and 3 keep the original silent-wrong behaviour above the analyzed
+count. The guard's *absence* is the tell, so they are detectable, but they are
+not fixed.
 
 ### 1.3k The rolled printing run composes loop overmaps as if independent (B37)
 
@@ -1099,6 +1105,73 @@ entry value while the loop runs on the reassigned one. Not introduced here, and
 not addressed here.
 
 Pinned by `tests/integration/ISpecializedTripCountTest.m` (§1.3l; issue #213).
+### 1.3m A `loopbound` file specializes a bound-derived loop it cannot express (B39)
+
+
+**B39 — a second loop over a declared `loopbound` name with a non-matching trip
+count is silently specialized (medium; pre-existing, predates B35/B36; refused
+at generation, [#213](https://github.com/pdlourenco/adigator-embedded/issues/213)
+route 4(a)).**
+
+```matlab
+adigatorOptions(...,'loopbound','N')   % declared maximum Nmax
+for a = 1:N        % trip count Nmax   -> runtime header + assert(N <= Nmax)
+for b = 1:N-1      % trip count Nmax-1 -> matches nothing -> LITERAL header
+```
+
+`adigatorLoopboundMatch` pairs loops with bounds **by trip-count value**, so the
+second loop matches no declared bound and keeps a fixed literal header — inside
+a file whose bound is otherwise runtime. It is excluded from B36's `==`
+specialization guard deliberately (the name is a declared `loopbound`, and the
+two guards are opposites — a name must never carry both), which leaves it
+covered only by `assert(N <= Nmax)`. That assert is satisfied by exactly the
+calls that make the loop wrong: run at `n < Nmax` and the file executes
+`b = 1:Nmax-1` regardless. Silent, and wrong (principle 1).
+
+**Refusal, and the reason is expressive rather than semantic.** An earlier draft
+of this section claimed the shape cannot be padded. That is wrong, and worth
+recording because it was the load-bearing sentence: for `for b = 1:N-1`
+analyzed at Nmax the padded-program argument *does* hold — the analyzed
+iteration set `1..Nmax-1` contains the runtime `1..n-1` (the file's own assert
+gives `n <= Nmax`), the loop-variable values are `1,2,…` independent of `N`, so
+iteration `j` does the same work at every admissible `n`, and the skipped tail
+stays structurally zero exactly as in the matching loop. A header
+`for c = 1:N-1` under the existing assert would be correct.
+
+What is missing is the ability to *express* it: matching is by trip-count value
+and `adigatorForInitialize` emits only `for c = 1:<name>`, so an affine-in-bound
+header has no form today — that is Tier 2 of issue #6. Until it exists, refusing
+converts a silent wrong derivative into a loud, actionable failure, which
+principle 1 ranks strictly better. (A shape whose loop-variable *values* depend
+on the bound, e.g. `for b = Nmax-N+1:Nmax`, genuinely cannot be padded — a
+different case, not what this check is about.)
+
+Generation raises `adigator:loopbound:rangemismatch` naming the bound the range
+actually mentioned, its declared maximum, the measured trip count, and three
+ways out (make the count match and skip inside the body; declare the second
+count as its own bound, noting matching is by value so the caller must keep them
+consistent; or drop the name from `loopbound` and let B36's `==` guard state the
+specialization).
+
+**Narrow by construction.** The check keys on the loop RANGE naming a declared
+bound, not on the value, so a deliberate fixed `for k = 1:3` inside a loopbound
+file never trips it — only bound-derived counts do, which is exactly the unsafe
+set. `lib/adigatorLoopboundRangeCheck.m` holds the reasoning; the record is made
+in `adigatorPrintTempFiles` (which has the range text) and joined to the trip
+count in `adigatorForInitialize` (which has the count), keyed by the `ForCount`
+both agree on.
+
+**Residual — one level of indirection defeats it.** The predicate is syntactic
+on the range text, so `M = N-1; for b = 1:M` names no declared bound, is not
+recorded, and is still silently specialized. Arguably the more natural way to
+write it. Closing that needs the bound's value traced through assignments, which
+is a different analysis from reading the range; this route is therefore
+narrowed, not finished.
+
+Pinned by `ISpecializedTripCountTest::boundDerivedCountThatMatchesNoBoundIsRefused`
+and, for the other direction, `legitimateLoopboundShapesStillGenerate` — two
+matching loops, a deliberate literal, and the ordinary single-loop case all
+still generate, with the padded semantics unchanged at `n < Nmax`.
 
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
@@ -1160,8 +1233,9 @@ Pinned by `tests/integration/ISpecializedTripCountTest.m` (§1.3l; issue #213).
 | B32 (Hessian generation crashes on a zero/linear-objective Hessian) | **Fixed** — `util/adigatorGenHesFile.m` crashed at `HesLocs1 = dydxlocs(dydxdxlocs(:,1),:)` when the second-derivative `nzlocs` was `[]` (a structurally-zero Hessian, e.g. `y = x(k)`), and the value emission then scattered from an absent runtime `…dxdx_location` field. Fixed by normalizing the empty locs to `0×2` (so the empty CSC pattern builds) and short-circuiting the value emission to a literal `Hes = zeros(shape)` (empty `0×1` for `der_output='csc'`), skipping the scatter. Found by the #38 Phase C `mcGenExprTree` fuzzer; pinned by `tests/integration/IZeroHessianTest.m` (§1.3h). |
 | B35 (a `loopbound` derivative is not embeddable — runtime bound guarded too late) | **Fixed** — `adigatorForInitialize` emitted `assert(N <= Nmax)` at the loop header only, so every bound-dependent size *ahead* of the loop (the user's `zeros(N,1)`; the `cadaforvar<k> = 1:N` loop-variable range the machinery materializes) reached Coder unbounded: heap `emxArray`s with dynamic memory allocation on, outright rejection with it off. Fixed in `lib/adigatorFunctionInitialize.m` by hoisting one guard per declared bound to the first statement of the main function body (all `loopbound` names are validated main-function inputs, so they are in scope there); the per-loop guards stay for the re-differentiation path. Padded ROM −224 B, stack +112 B, heap requirement gone. Pinned by `ILoopboundTest::guardPrecedesEveryBoundDependentSize` (license-free) and `SRolledErtCodegenTest::loopboundGradientErtCodegenStaticMemory` (Coder-gated, local-only) (§1.3i). |
 | B38 (a trip count passed through into a subfunction is unguarded) | **Fixed** — B36's principle-1 residue one call deep: `main(x,N)` handing `N` to a subfunction that loops on it specialized the file without saying so, because the harvest is gated to the main function. That gate could not simply be loosened — it is what stops a shadowing subfunction parameter forging a guard with the wrong value (`subfunctionLoopDoesNotForgeAGuard`). Fixed by **interprocedural resolution** instead: a subfunction's loop range naming its own parameter records the position, every call site records its **caller's id** and its literal argument, and a guard is earned only when every site is *in the main function* and passes the same *bare identifier* — so `main(x,M)` guards `M` even when the callee spells the parameter `N`, while a site inside another subfunction (whose argument names something in ITS scope) declines rather than forging on correct code. Emits the ordinary main-scope `assert(N == n);` #211 already ships, so no recognizer, whitelist or re-diff path changes. Fail-closed on an expression, a local, a callee never called, or **disagreeing call sites** (adigator prints one body per function, not per call site). Guard survives to 2nd order via `adigatorGenHesFile`, analytic-exact; the 3rd-order pin the direct form carries is impossible for this shape because re-differentiating a subfunction-calling generated file fails for unrelated, pre-existing reasons — itself now pinned. Routes 2/3/4 remain (§1.3j). Pinned by `tests/integration/ISpecializedTripCountTest.m` (§1.3l; issue #213). |
+| B39 (a `loopbound` file specializes a bound-derived loop it cannot express) | **Refused at generation** — `loopbound` pairs loops with bounds by trip-count VALUE, so a second loop over `N-1` matched nothing, took a literal header inside a runtime-bound file, and was then wrong for every call below the maximum while the file's own `assert(N <= Nmax)` was satisfied by exactly those calls. Refused rather than fixed for an EXPRESSIVE reason, not a semantic one: a `for c = 1:N-1` header would be correct under the file's existing assert (an earlier draft wrongly claimed the shape is unpaddable), but matching is by trip-count value and only `1:<name>` headers can be emitted - affine bounds are issue #6 Tier 2. So generation raises `adigator:loopbound:rangemismatch` naming the bound actually mentioned, with three ways out. Keys on the range EXPRESSION naming a declared bound, so a deliberate `for k = 1:3` and a field reference `1:p.N` (route 2's shape) are untouched; recorded for the MAIN function only, since ForCount restarts per function. Residual: one level of indirection (`M = N-1; for b = 1:M`) still escapes. Pre-existing, predates B35/B36. Pinned by `ISpecializedTripCountTest` both ways (§1.3m; issue #213 route 4a). |
 | B37 (a rolled second-derivative pattern is the cross product of two loop overmaps) | **Fixed** — in the printing run of a rolled loop every operand carries its loop overmap, so `cadabinaryarraymath`'s scalar expansion (`cadaRepDers`) composed two n-wide unions as if independent and emitted the full n×n gather for a Hessian whose exported pattern is the n-nonzero diagonal; `cadaPrintReMap` then discarded 56 of the 64 one statement later, but only after the generated code had put n² doubles on the stack — 37,552 B at n=64, **63.4×** hand-written, while ERT-codegenning cleanly (the hollow milestone). Fixed by handing the emitting operation the overmap its result is about to be remapped into (`lib/@cada/private/cadaOverMapTargetNz.m`) so the doomed locations are dropped *before* they are printed — the same truncation, moved earlier, and guarded to fire only when that remap would actually have happened. Stack 768/9616/37552 → **160/352/608** B at n=8/32/64, i.e. exactly `96+8n`: affine, and the same series as the *vectorized* Hessian of the same maths, which also answers ADR-0035's caveat that part of the gap might be intrinsic to the rolled path (none of it was). Scope set by instrumenting every `cadaPrintReMap` over-approximation across the corpus — 18 events, of which the 17 with a growth law are all scalar expansion (the 18th is a bounded first-order `horzcat` case, §1.3k). Pinned by `tests/integration/IRolledOvermapWidthTest.m` (license-free) and `SStackScalingTest::subscriptedHessianMatchesVectorizedTwin` (Coder-gated, local-only), the latter having been the self-healing KnownIssue pin (§1.3k; issue #217, ADR-0036). |
-| B36 (a loop range over a runtime-named scalar is unbounded even without `loopbound`) | **Fixed** — a file generated *without* the option still prints `cadaforvar1.f = 1:N` when the trip count names a function input (passing a plain numeric to `adigator` fixes the analysis count, not the input), so nothing bounds it and, unlike a `loopbound` file, nothing declares the envelope either. The emitted range and the emitted loop header disagree (literal header, runtime range): measured at `n=5`, calling with `N=3` is loud (index out of bounds) but `N=8` **runs silently** and returns the 5-term answer (70 vs a true 240) — a quietly wrong derivative, principle 1. Fixed by emitting `assert(N == n);` in the body prologue (an equality - the file is specialized, not padded), plus extending the shared guard shape and BOTH recognizers so re-differentiation still works: without the recognizer half every Hessian of a named-trip-count function would have stopped generating. Verified to 3rd order. Unblocked `bench/loopboundPaddingPenalty` under static memory allocation, which raised the measured padding penalty ~2x at small n (every earlier figure was heap-enabled). Fixed for the **direct** form (a main-function input named in a main-function loop range); three routes to a specialized trip count remain unguarded and are recorded as residual scope in §1.3j. Pinned by `tests/integration/ISpecializedTripCountTest.m` (§1.3j; issue #210). |
+| B36 (a loop range over a runtime-named scalar is unbounded even without `loopbound`) | **Fixed** — a file generated *without* the option still prints `cadaforvar1.f = 1:N` when the trip count names a function input (passing a plain numeric to `adigator` fixes the analysis count, not the input), so nothing bounds it and, unlike a `loopbound` file, nothing declares the envelope either. The emitted range and the emitted loop header disagree (literal header, runtime range): measured at `n=5`, calling with `N=3` is loud (index out of bounds) but `N=8` **runs silently** and returns the 5-term answer (70 vs a true 240) — a quietly wrong derivative, principle 1. Fixed by emitting `assert(N == n);` in the body prologue (an equality - the file is specialized, not padded), plus extending the shared guard shape and BOTH recognizers so re-differentiation still works: without the recognizer half every Hessian of a named-trip-count function would have stopped generating. Verified to 3rd order. Unblocked `bench/loopboundPaddingPenalty` under static memory allocation, which raised the measured padding penalty ~2x at small n (every earlier figure was heap-enabled). Fixed for the **direct** form (a main-function input named in a main-function loop range); of the four routes to a specialized trip count recorded as residual scope in §1.3j, two remain unguarded (routes 1 and 4 were since handled by #213). Pinned by `tests/integration/ISpecializedTripCountTest.m` (§1.3j; issue #210). |
 
 ---
 

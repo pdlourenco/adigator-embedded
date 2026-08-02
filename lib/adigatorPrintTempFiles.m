@@ -204,6 +204,32 @@ for FlowCount = 1:FlowSize
             end
           end
         end
+        % #213 route 4(a): record WHICH declared `loopbound` names this loop's
+        % RANGE mentions. adigatorLoopboundMatch keys on the trip-count VALUE,
+        % so a second loop like `for b = 1:N-1` does not match Nmax, silently
+        % takes a LITERAL header, and is then wrong below the maximum in exactly
+        % the B36 way - while sitting inside a padded file whose
+        % `assert(N <= Nmax)` is satisfied by precisely those calls. The trip
+        % count is not known here; adigatorForInitialize has it and raises
+        % there. This only records the mention, keyed by the ForCount both sides
+        % agree on.
+        %
+        % Gated on TRIPCOUNTSCAN for the same reason the harvest above is, and
+        % it is not optional: ForCount RESTARTS per function (0 for the main
+        % function, 1 for every subfunction - adigator.m), so an ungated record
+        % has subfunction loops overwriting main-function entries by index.
+        % That cuts both ways - a subfunction loop over the bound would forge a
+        % refusal for an unrelated main loop, and a subfunction loop that does
+        % NOT name the bound would erase a real one.
+        %
+        % Names are taken with a leading-dot exclusion so a field reference like
+        % `1:p.N` does not read as a mention of a declared `N`; that shape is
+        % route 2 of the residuals and must keep generating as it does today.
+        if ADIGATOR.TRIPCOUNTSCAN && ~isempty(ADIGATOR.OPTIONS.LOOPBOUND)
+          RangeNames = regexp(LoopStrRHS,'(?<![.\w])[A-Za-z]\w*','match');
+          ADIGATOR.LOOPBOUNDINRANGE{ForCount} = intersect( ...
+            RangeNames, {ADIGATOR.OPTIONS.LOOPBOUND.name});
+        end
         if DerNumber == 1
           LoopVarStr = [LoopVar,' = ',LoopStrRHS,';'];
           fprintf(Tfid,[indent,LoopVarStr,'\n']);

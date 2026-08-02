@@ -260,6 +260,7 @@ else
         if ADIGATOR.FILE.FUNID == 1
           LBname = adigatorLoopboundMatch(ADIGATOR.OPTIONS.LOOPBOUND,...
             ADIGATORFORDATA(ForCount).MAXLENGTH);
+          adigatorLoopboundRangeCheck(ForCount,LBname);
         else
           LBname = '';
         end
@@ -365,6 +366,7 @@ else
       if ADIGATOR.FILE.FUNID == 1
         LBname = adigatorLoopboundMatch(ADIGATOR.OPTIONS.LOOPBOUND,...
           ADIGATORFORDATA(ForCount).MAXLENGTH);
+        adigatorLoopboundRangeCheck(ForCount,LBname);
       else
         LBname = '';
       end

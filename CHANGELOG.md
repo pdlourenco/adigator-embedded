@@ -95,6 +95,33 @@ below); it is not a patch of upstream 1.x.
   the bound on through a second subfunction all leave the file unguarded rather
   than risk an assertion that rejects correct calls. Those cases keep the
   previous behaviour.
+- **A `loopbound` file that mixes a matching and a non-matching loop is now
+  refused instead of quietly specialized.** If you declare `loopbound','N'` and
+  the function has two loops —
+
+  ```matlab
+  for a = 1:N        % matches the declared maximum
+  for b = 1:N-1      % does not
+  ```
+
+  — the second loop matched no declared bound, so it was given a *fixed* header
+  inside a file whose bound is otherwise runtime. Every call below the maximum
+  then ran that loop the wrong number of times and returned a wrong answer with
+  no error; the file's own `assert(N <= Nmax)` is satisfied by exactly those
+  calls. Generation now stops with an actionable message naming the trip count,
+  the declared maximum, and three ways to resolve it.
+
+  It refuses rather than generating something because the header that *would*
+  be correct — `for b = 1:N-1`, under the assert the file already carries —
+  cannot currently be expressed: loops are matched to a bound by trip-count
+  value, and only `1:<name>` headers are emitted. Until bounds can be affine,
+  stopping is better than emitting a file that is quietly wrong.
+
+  Only loops in your main function whose *range mentions* a declared bound are
+  affected — a deliberate fixed loop such as `for k = 1:3` is untouched, as are
+  two loops that both match and a bound reached through a struct field. Note the
+  check reads the loop range, so writing `M = N-1; for b = 1:M` still slips
+  through; prefer spelling the bound in the range if you want it checked.
 
 - **`loopbound` derivatives are now embeddable without a heap.** The runtime-bound
   guard (`assert(N <= Nmax);`) is emitted as the first statement of the generated
