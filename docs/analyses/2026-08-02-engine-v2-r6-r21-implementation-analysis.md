@@ -598,11 +598,23 @@ mode, one anchor — not a corpus average.
   than §2 states (subsref, colon form, catenation, `prod`/`max`/`norm` all carry
   designed messages — 11 named refusals) but **uneven**: `mean`,
   `reshape(x,[],1)`, `x'*x` and `cumsum` are overloaded yet fail with generic
-  MATLAB errors instead of a named refusal. *Method note:* a single-process
-  batch is **contaminated** — a failed generation leaves the engine's print FID
-  closed, so later ops report `MATLAB:FileIO:InvalidFid` instead of their own
-  verdict (it turned the accepted `y = x.^2` into a false refusal). Run one
-  process per op, or at minimum re-run every `InvalidFid` in isolation.
+  MATLAB errors instead of a named refusal. *Method note:* the first
+  single-process batch produced three spurious `MATLAB:FileIO:InvalidFid`
+  verdicts, one of which turned the **accepted** `y = x.^2` into a false refusal;
+  all three were re-run in fresh processes and the table above reflects those.
+  The obvious explanation — that a failed generation leaves the engine's print
+  FID closed and poisons later ops — **was tested and does not hold**: in one
+  session, good → refused → good → good all behave correctly through plain
+  `adigator()`, a refused generation leaves **0** open fids and the global count
+  unchanged, and replaying the batch's opening sequence reproduces no failure.
+  B16's error-path cleanup (`adigatorClearTransformGlobals` at
+  `adigator.m:993/1000`) holds. So this is a **harness artifact of undetermined
+  mechanism**, not an engine defect — recorded here as a caution, not a bug.
+  Run one process per op, or at minimum re-run every `InvalidFid` in isolation.
+  Worth noting separately: `UCoreErrorHygieneTest` pins "no leaked fids, clean
+  globals after a failure" but **not** "a subsequent generation succeeds in the
+  same session" — the property that appeared to have broken. It holds today
+  (measured); it is simply unpinned.
 - **E5 — table share of the padding penalty.** Decompose the padded 4400 B
   ROM: bytes in `[· × Nmax]` tables vs everything else. Quantifies how much
   step 2 (generators) undercuts the Tier-2 motivation — the §5(i)
