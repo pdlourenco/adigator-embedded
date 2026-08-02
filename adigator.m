@@ -545,6 +545,10 @@ ADIGATOR.TRIPCOUNTCALLARGS   = {};
 ADIGATOR.TRIPCOUNTSUBPARAMS  = zeros(0,2);
 ADIGATOR.PRINTFUNID          = 0;
 ADIGATOR.PRINTFUNINPUTS      = {};
+% Route 4(a) (#213): per-loop record of whether a loop RANGE names a declared
+% loopbound parameter, keyed by ForCount. adigatorForInitialize joins it with the
+% analyzed trip count and refuses a bound-derived count that matches no bound.
+ADIGATOR.LOOPBOUNDINRANGE    = {};
 for Fcount = 1:FunCount
   ADIGATOR.SVACOUNT = 0; ADIGATOR.SVRCOUNT = 0;
   DerNumber  = FunctionInfo(Fcount).DERNUMBER;
