@@ -1173,6 +1173,62 @@ and, for the other direction, `legitimateLoopboundShapesStillGenerate` — two
 matching loops, a deliberate literal, and the ordinary single-loop case all
 still generate, with the padded semantics unchanged at `n < Nmax`.
 
+### 1.3n The vectorized-mode refusal fence is wider than documented, and uneven (B40)
+
+**B40 — four overloaded operations reach a generic MATLAB error on the
+vectorized (`Inf`) dimension instead of a named refusal (low; pre-existing;
+open; [#56](https://github.com/pdlourenco/adigator-embedded/issues/56)).**
+
+**Principle 1 is _not_ engaged.** Every operation below *errors*. Nothing here
+produces a wrong derivative, and nothing generates a file. This is a diagnostic-
+quality defect: the user is stopped, but not told why, and not by us.
+
+Measured by 29 single-op probes with `adigatorCreateDerivInput([Inf 1],...)`,
+one MATLAB process per op (2026-08-02; the engine-v2 analysis, experiment E4):
+**12 accepted, 17 refused.**
+
+The **good half, which was under-documented**: the fence is considerably wider
+than `docs/DESIGN.md`-adjacent prose and the vectorized examples suggest. Eleven
+refusals carry designed, named messages —
+
+| op | message |
+|---|---|
+| `sum(x)` / `prod(x)` / `max(x)` | `Cannot sum/prod/find max over vectorized dimension` |
+| `norm(x)` | routes through `sum` |
+| `for i = 1:length(x)` | `Cannot loop over vectorized dimension` |
+| `[x;x]` | `Cannot catonate in vectorized dimension` |
+| `x(1)`, `x(end)`, `y(1)=…`, `if x(1)` | `Invalid vectorized subsref` |
+| `x(2:end)` | `If N is vectorized dimension, may only use colon as 1:N, 1:1:N, or N:-1:1` |
+
+Accepted: elementwise ops, `x'`, `x(:)`, `[x,x]` (non-free dimension),
+`repmat`, and `length`/`numel`/`size` used as values.
+
+The **defect**: four operations *are* overloaded for `cada` yet fail with a
+generic MATLAB error that names neither the vectorized dimension nor adigator —
+
+| op | identifier |
+|---|---|
+| `mean(x)` | `MATLAB:invalidConversion` (conversion to logical from `cada`) |
+| `reshape(x,[],1)` | `MATLAB:nonLogicalConditional` |
+| `x'*x` | `MATLAB:nonaninf` (NaN and Inf not allowed) |
+| `cumsum(x)` | `MATLAB:cumsum:wrongInput` |
+
+`mean` and `x'*x` are reductions over the free dimension, so the correct
+behaviour is exactly `sum`'s refusal; `cumsum` likewise; `reshape` collides with
+the `Inf` entry in `func.size`. (`diff` and `sort` have no `cada` overload at
+all, so they sit *outside* the fence rather than being holes in it — a different
+and larger gap, tracked with vectorization work generally.)
+
+Why it matters beyond ergonomics: §2's invariants 2–3 are the fence around the
+one symbolic-dimension mechanism the engine already has, and any future
+symbolic-N work (#6 Tier 2) inherits both the fence and the obligation to
+"refuse loudly with a named id". A boundary that is enforced in eleven places by
+design and in four places by accident is a poor foundation to extend, and the
+four accidental ones are the least likely to survive a refactor unnoticed.
+
+Open. The fix is small — route the four through the same refusal `sum` uses —
+but it belongs with vectorization work rather than on its own.
+
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
 - `cadaunarymath.m` derivative-rule corrections (`asec`, `acsc`, `asecd`,
@@ -1234,6 +1290,7 @@ still generate, with the padded semantics unchanged at `n < Nmax`.
 | B35 (a `loopbound` derivative is not embeddable — runtime bound guarded too late) | **Fixed** — `adigatorForInitialize` emitted `assert(N <= Nmax)` at the loop header only, so every bound-dependent size *ahead* of the loop (the user's `zeros(N,1)`; the `cadaforvar<k> = 1:N` loop-variable range the machinery materializes) reached Coder unbounded: heap `emxArray`s with dynamic memory allocation on, outright rejection with it off. Fixed in `lib/adigatorFunctionInitialize.m` by hoisting one guard per declared bound to the first statement of the main function body (all `loopbound` names are validated main-function inputs, so they are in scope there); the per-loop guards stay for the re-differentiation path. Padded ROM −224 B, stack +112 B, heap requirement gone. Pinned by `ILoopboundTest::guardPrecedesEveryBoundDependentSize` (license-free) and `SRolledErtCodegenTest::loopboundGradientErtCodegenStaticMemory` (Coder-gated, local-only) (§1.3i). |
 | B38 (a trip count passed through into a subfunction is unguarded) | **Fixed** — B36's principle-1 residue one call deep: `main(x,N)` handing `N` to a subfunction that loops on it specialized the file without saying so, because the harvest is gated to the main function. That gate could not simply be loosened — it is what stops a shadowing subfunction parameter forging a guard with the wrong value (`subfunctionLoopDoesNotForgeAGuard`). Fixed by **interprocedural resolution** instead: a subfunction's loop range naming its own parameter records the position, every call site records its **caller's id** and its literal argument, and a guard is earned only when every site is *in the main function* and passes the same *bare identifier* — so `main(x,M)` guards `M` even when the callee spells the parameter `N`, while a site inside another subfunction (whose argument names something in ITS scope) declines rather than forging on correct code. Emits the ordinary main-scope `assert(N == n);` #211 already ships, so no recognizer, whitelist or re-diff path changes. Fail-closed on an expression, a local, a callee never called, or **disagreeing call sites** (adigator prints one body per function, not per call site). Guard survives to 2nd order via `adigatorGenHesFile`, analytic-exact; the 3rd-order pin the direct form carries is impossible for this shape because re-differentiating a subfunction-calling generated file fails for unrelated, pre-existing reasons — itself now pinned. Routes 2/3/4 remain (§1.3j). Pinned by `tests/integration/ISpecializedTripCountTest.m` (§1.3l; issue #213). |
 | B39 (a `loopbound` file specializes a bound-derived loop it cannot express) | **Refused at generation** — `loopbound` pairs loops with bounds by trip-count VALUE, so a second loop over `N-1` matched nothing, took a literal header inside a runtime-bound file, and was then wrong for every call below the maximum while the file's own `assert(N <= Nmax)` was satisfied by exactly those calls. Refused rather than fixed for an EXPRESSIVE reason, not a semantic one: a `for c = 1:N-1` header would be correct under the file's existing assert (an earlier draft wrongly claimed the shape is unpaddable), but matching is by trip-count value and only `1:<name>` headers can be emitted - affine bounds are issue #6 Tier 2. So generation raises `adigator:loopbound:rangemismatch` naming the bound actually mentioned, with three ways out. Keys on the range EXPRESSION naming a declared bound, so a deliberate `for k = 1:3` and a field reference `1:p.N` (route 2's shape) are untouched; recorded for the MAIN function only, since ForCount restarts per function. Residual: one level of indirection (`M = N-1; for b = 1:M`) still escapes. Pre-existing, predates B35/B36. Pinned by `ISpecializedTripCountTest` both ways (§1.3m; issue #213 route 4a). |
+| B40 (the vectorized refusal fence is wider than documented, and uneven) | **Open** — diagnostic quality only; **principle 1 is not engaged**, every operation involved errors and none produces a wrong derivative. Measured by 29 single-op probes on a free (`Inf`) dimension, one MATLAB process per op: 12 accepted, 17 refused. Eleven refusals are *designed* and named — the fence is considerably wider than the prose suggested, covering subsref (`x(1)`, `x(end)`, `y(1)=…`, `if x(1)`), the colon form (`x(2:end)`), catenation along the free dimension, and `prod`/`max`/`norm` as well as the `sum`/loop pair that was documented. The defect is the other four: `mean`, `reshape(x,[],1)`, `x'*x` and `cumsum` are overloaded for `cada` yet fail with a generic MATLAB error (`MATLAB:invalidConversion`, `MATLAB:nonLogicalConditional`, `MATLAB:nonaninf`, `MATLAB:cumsum:wrongInput`) naming neither the vectorized dimension nor adigator; three of them are reductions over the free dimension, so `sum`'s refusal is the correct behaviour. (`diff`/`sort` have no `cada` overload at all and sit outside the fence rather than being holes in it.) Matters beyond ergonomics because any symbolic-N work (#6 Tier 2) inherits this fence plus the obligation to refuse with a named id, and the four accidental refusals are the ones least likely to survive a refactor unnoticed. Fix is small — route the four through `sum`'s refusal — but belongs with vectorization work. Not separately pinned; catalogued only (§1.3n; issue #56). |
 | B37 (a rolled second-derivative pattern is the cross product of two loop overmaps) | **Fixed** — in the printing run of a rolled loop every operand carries its loop overmap, so `cadabinaryarraymath`'s scalar expansion (`cadaRepDers`) composed two n-wide unions as if independent and emitted the full n×n gather for a Hessian whose exported pattern is the n-nonzero diagonal; `cadaPrintReMap` then discarded 56 of the 64 one statement later, but only after the generated code had put n² doubles on the stack — 37,552 B at n=64, **63.4×** hand-written, while ERT-codegenning cleanly (the hollow milestone). Fixed by handing the emitting operation the overmap its result is about to be remapped into (`lib/@cada/private/cadaOverMapTargetNz.m`) so the doomed locations are dropped *before* they are printed — the same truncation, moved earlier, and guarded to fire only when that remap would actually have happened. Stack 768/9616/37552 → **160/352/608** B at n=8/32/64, i.e. exactly `96+8n`: affine, and the same series as the *vectorized* Hessian of the same maths, which also answers ADR-0035's caveat that part of the gap might be intrinsic to the rolled path (none of it was). Scope set by instrumenting every `cadaPrintReMap` over-approximation across the corpus — 18 events, of which the 17 with a growth law are all scalar expansion (the 18th is a bounded first-order `horzcat` case, §1.3k). Pinned by `tests/integration/IRolledOvermapWidthTest.m` (license-free) and `SStackScalingTest::subscriptedHessianMatchesVectorizedTwin` (Coder-gated, local-only), the latter having been the self-healing KnownIssue pin (§1.3k; issue #217, ADR-0036). |
 | B36 (a loop range over a runtime-named scalar is unbounded even without `loopbound`) | **Fixed** — a file generated *without* the option still prints `cadaforvar1.f = 1:N` when the trip count names a function input (passing a plain numeric to `adigator` fixes the analysis count, not the input), so nothing bounds it and, unlike a `loopbound` file, nothing declares the envelope either. The emitted range and the emitted loop header disagree (literal header, runtime range): measured at `n=5`, calling with `N=3` is loud (index out of bounds) but `N=8` **runs silently** and returns the 5-term answer (70 vs a true 240) — a quietly wrong derivative, principle 1. Fixed by emitting `assert(N == n);` in the body prologue (an equality - the file is specialized, not padded), plus extending the shared guard shape and BOTH recognizers so re-differentiation still works: without the recognizer half every Hessian of a named-trip-count function would have stopped generating. Verified to 3rd order. Unblocked `bench/loopboundPaddingPenalty` under static memory allocation, which raised the measured padding penalty ~2x at small n (every earlier figure was heap-enabled). Fixed for the **direct** form (a main-function input named in a main-function loop range); of the four routes to a specialized trip count recorded as residual scope in §1.3j, two remain unguarded (routes 1 and 4 were since handled by #213). Pinned by `tests/integration/ISpecializedTripCountTest.m` (§1.3j; issue #210). |
 
