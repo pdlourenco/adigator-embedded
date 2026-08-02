@@ -99,7 +99,12 @@ propagation, where a wrong pattern is a *silently wrong derivative*
   [#222](https://github.com/pdlourenco/adigator-embedded/issues/222), which asks
   what it *implies* (is 17% a constant or the small-n end of a growth law; does
   it cost anything measurable; is `polydatafit` the only shape that reaches it)
-  rather than assuming it needs fixing.
+  rather than assuming it needs fixing. *(Answered and closed 2026-08-01: the
+  ratio is exactly `(m−1)/(m−2)`, constant in n and shrinking in m — one
+  appended block, never more, and `vertcat` is unaffected. The cost question
+  turned out to be unanswerable because the shape does not ERT-codegen at all,
+  in the **user** function; `polydatafit` was then rewritten to pre-size its
+  matrix, which removes the shape from the corpus entirely.)*
 
 `cadaRepDers`'s third caller (`subsasgn`, the rolled indexed-assignment path) is
 likewise **not** wired: its repmat lives in the assigned-from variable's row
@@ -155,6 +160,16 @@ Same family of symptom, different site and different failure mode.
   this defect's reshapes are gone, confirmed from the opposite direction to the
   measurement that found them.
 
+  **Amended 2026-08-01: that surviving event no longer occurs either.** Its
+  source was `V = [V, x.^count]` in the `polydatafit` example, rewritten to
+  pre-size `V` once the example audit found the *user* function does not
+  ERT-codegen at all — a growing concatenation is unbounded under static memory
+  allocation, so the shape could never have reached an embedded target. The
+  corpus now yields **zero** reshaping remaps, and #222 is closed as moot. The
+  census figures above are kept as measured on the tree at the time; anyone
+  re-running them today will find 439 identical-pattern events and none at all
+  in the reshape branches.
+
   That census also settled a *second* question, in the negative. A runtime
   tripwire was proposed at the remap site — `assert(nzx > nzover || nzd == nzx)`,
   i.e. "a pattern narrower than its overmap must be a subset of it" — as a
@@ -187,8 +202,9 @@ Same family of symptom, different site and different failure mode.
   alone. All license-free.
 
 **Revisit when:** a printing-run over-approximation outside the scalar-expansion
-path is measured to *cost* something — the `ForHorzcat` one above is the known
-candidate and is currently just noted, not tracked as a defect. The helper is
+path is measured to *cost* something. (The `ForHorzcat` one above was the known
+candidate; as of 2026-08-01 the corpus no longer contains it — see the amendment
+in Consequences — so there is currently no candidate at all.) The helper is
 the reusable part; wiring another op to it is small. Or if the rolled loop
 machinery stops recomputing patterns from overmapped operands in the printing
 run, which would remove the over-approximation at its source and make the prune

@@ -2,6 +2,28 @@ function out = burgersfun_noloop(t,y,N)
 %   Jacek Kierzenka and Lawrence F. Shampine
 %   Copyright 1984-2014 The MathWorks, Inc.
 % Derivative function.
+%
+% Embeddability note. The grid size N is an ordinary runtime input here, and
+% the state arrays are sized from it. That is fine for a host run, but it means
+% this function -- on its own, before any derivative exists -- does not
+% code-generate under static memory allocation, the setting an embedded target
+% requires: nothing bounds N, so no array sized from it has a compile-time
+% bound. Fixing the problem size makes it embeddable, e.g. by passing N as a
+% coder.Constant, which is the natural configuration when the grid is decided
+% at build time.
+%
+% Wanting ONE generated file to serve several grid sizes is a different
+% question, and the obvious answer is the wrong one here: `loopbound` matches a
+% declared bound against a LOOP TRIP COUNT, and this function has no loop over
+% N to match. It would also be unsafe even if it did -- `loopbound` pads to
+% Nmax, and padding is only benign if nothing reads the tail, whereas indexing
+% like y(N+1:end) sees the padded maximum (see adigatorOptions). The result
+% would be wrong numbers at n < Nmax rather than an error.
+%
+% The mechanism that does leave a size free for vectorized code is vectorized
+% mode -- see examples/optimization/vectorized/allocation/, where one generated
+% file serves any N and K. Adopting it means writing the function against that
+% pattern, which is a larger change than pinning the size.
 a = y(1:N);
 a = a(:);
 x = y(N+1:end);
