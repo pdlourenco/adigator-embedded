@@ -1504,21 +1504,47 @@ The adversarial pass is the one that matters for a negative result: it includes
 (`x(k-1)*x(k)*x(k+1)`), a whole-vector reduction inside the loop, and nested
 loops. None produced a duplicate.
 
-**Why, structurally.** `lib/@cada/private/cadaunion.m` builds
-`sparse(rows, cols, …)` for each operand and reads the result back with `find`.
-A sparse matrix holds **at most one entry per `(row, col)`** and `find`
-enumerates stored entries, so a union's location list is duplicate-free by
-construction. A per-iteration column derived from that list inherits the
-property: distinct per-iteration nonzeros map to distinct overmap rows, because
-the overmap itself lists each location once.
+**Why — and this splits into one structural half and one empirical half.** A
+position-map column carries a duplicate iff *either*
 
-Worth flagging for whoever implements the scatter, because the same mechanism
-has a second edge: `cadaunion` tags the two operands `-1` and `+2` before
-adding them, so a location that appeared **twice within one operand** would sum
-to `-2`, and `-2 + 2 == 0` makes `find` drop it **silently**. Duplicate-freedom
-is therefore not merely observed downstream of the union — the union would
-destroy the evidence. That is a further reason to take the location list as
-given rather than to re-derive or hand-assemble one.
+  * **(1)** two **distinct** per-iteration nonzeros map to the same overmap
+    row, *or*
+  * **(2)** the iteration's own `nzlocs` already lists the same location twice.
+
+**(1) is ruled out structurally.** `lib/@cada/private/cadaunion.m` builds
+`sparse(rows, cols, …)` for each operand and reads the result back with `find`;
+a sparse matrix holds **at most one entry per `(row, col)`** and `find`
+enumerates stored entries, so the overmap lists each location exactly once and
+location → overmap-row is injective. Distinct nonzeros cannot collide.
+
+**(2) is empirical only.** A per-iteration `nzlocs` is *not* necessarily a union
+output — `cadaRepDers`' scalar expansion and the subsref/subsasgn index
+arithmetic build location lists by direct construction. So nothing structural
+forbids a per-iteration list from repeating a location; what rules it out here
+is the measurement: the `dup within an iteration` column is **0 across all 2130
+observations**, including on shapes written specifically to force one.
+
+That distinction is why the adversarial pass matters rather than being
+ceremony. If the whole property were structural, `x(k)*x(k)` and "the same
+target assigned twice in one iteration" could not have been informative. They
+were the right experiment precisely because (2) was open — and they are the
+reason (a)'s "build the fallback anyway" is prudence rather than theatre.
+
+**A second edge in the same mechanism, for whoever implements the scatter.**
+`cadaunion` tags the operands `-1` and `+2` before adding, and `sparse` sums
+duplicates, so a location repeated *within* one operand does not merely
+collapse — it is **misread**:
+
+| x copies | y copies | sum | `find` / classification |
+|---:|---:|---:|---|
+| 1 | 1 | `+1` | both operands — correct |
+| 2 | 1 | `0` | **dropped entirely** (a zero is not stored) |
+| 3 | 1 | `-1` | **survives, tagged x-only** — `zyind = find(zind>0)` silently loses y's claim |
+
+So the failure mode is "dropped **or corrupted**", not only dropped: the union
+would destroy the very evidence a duplicate ever existed. That is a further
+reason for (b) — take the union's location list as given rather than
+re-deriving or hand-assembling one.
 
 **What this means for R21.** (A measurement record, not entries in §2's
 running list of optimization opportunities.)
@@ -1556,9 +1582,16 @@ running list of optimization opportunities.)
 **Scope.** This measures what the *current* engine computes. The scatter form's
 columns would be built by new code, so the census constrains that code (point 2)
 rather than certifying it. Reverse mode is not covered — it requires unrolled
-loops, so it has no FOR overmap to instrument. The instrumentation is not
-retained in the tree; it is ~25 lines at one call site, reproducible from this
-description.
+loops, so it has no FOR overmap to instrument. The instrumentation is not retained in the tree. To reproduce: copy the repo,
+insert a logger in `lib/@cada/cadaOverMap.m` immediately after the FOR-overmap
+union (`xOver = cadaUnionVars(xOver,x)` under `if fOverLoc`, in the
+`RUNFLAG == 1` branch), recording per variable of differentiation
+`size(x.deriv(V).nzlocs,1)` (`nz_k`), the count of repeated rows in that list,
+and the count of repeated entries in `ismember(x.deriv(V).nzlocs,
+xOver.deriv(V).nzlocs,'rows')`; append and **close** per call, since B16
+handle hygiene closes stray handles on every generation exit. Then run the
+`tests/unit` + `tests/integration` suites against the instrumented copy. It is
+~25 lines at one call site.
 
 ---
 

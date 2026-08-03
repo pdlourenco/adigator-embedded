@@ -54,12 +54,18 @@ classdef IScatterPrototypeTest < AdigatorTestCase
     % anywhere -- not in the repository's own unit + integration suites, and not
     % in deliberately adversarial shapes written to force one (`x(k)*x(k)`,
     % `x(k)^3`, the same target assigned twice in one iteration, overlapping
-    % windows). There is a structural reason: `cadaunion` builds
-    % `sparse(rows,cols,...)` and reads it back with `find`, so a union's
-    % location list is duplicate-free by construction, and a per-iteration
-    % column derived from it inherits that. See `ANALYSIS.md` §2.5, which
-    % also records the constraint that follows for R21: derive the column
-    % from the union's own location list, or the guarantee is forfeited.
+    % windows).
+    %
+    % That result is half structural and half empirical, and the halves matter
+    % (`ANALYSIS.md` §2.5). Two DISTINCT nonzeros cannot collide on one row --
+    % `cadaunion` reads its result off a sparse matrix, which holds at most one
+    % entry per (row,col), so the overmap lists each location once and the map
+    % is injective. But an iteration's own nzlocs repeating a location is NOT
+    % structurally excluded: those lists are not always union outputs
+    % (`cadaRepDers` scalar expansion, subsref/subsasgn index arithmetic build
+    % them directly). Only measurement rules that out -- which is exactly why
+    % the adversarial shapes were worth running, and why the fail-closed
+    % fallback R21 carries is prudence rather than theatre.
     %
     % So the honest boundary is: these anchors pin that the target emission
     % reproduces today's values exactly at `nz_k = 1` and `nz_k = 2`; HZ-1 is
