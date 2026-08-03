@@ -69,7 +69,7 @@ in a MATLAB session. Three entry points:
 
 **Run them on a clean path** — in a fresh `matlab -batch`, not against a dirty
 interactive session and never via `addpath(genpath(...))`. CI uses a clean path
-(`matlab-actions/run-tests`, no `genpath`), so a dirty-path run can pass locally
+(`matlab-actions/run-command` + `tests/ci_gate.m`, no `genpath`), so a dirty-path run can pass locally
 while CI goes red on a test class missing its `PathFixture` (this is real —
 [ADR-0017](decisions/ADR-0017-prepush-clean-path-testing.md), the PR #81 lesson):
 

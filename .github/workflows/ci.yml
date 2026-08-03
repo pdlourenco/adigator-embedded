@@ -59,7 +59,8 @@ jobs:
       # run-command, not run-tests: the action cannot put `tests/` on the path,
       # and without it every class deriving from AdigatorTestCase is dropped
       # from the suite SILENTLY - reported as a smaller count with 0 Failed and
-      # 0 Incomplete, not as an error. That hid 10 gating tests (TS-I-29/30/31).
+      # 0 Incomplete, not as an error. That hid 16 tests across 5 classes
+      # (unit 201->195, integration 170->160), including TS-I-29/30/31.
       # ci_gate adds only `tests/` (never genpath - per-class PathFixtures must
       # stay load-bearing) and fails if any test class contributes no tests.
       - name: Unit tests (TS-U)

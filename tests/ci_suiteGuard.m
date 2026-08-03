@@ -1,7 +1,8 @@
-function ci_suiteGuard(folder)
+function suite = ci_suiteGuard(folder)
 %CI_SUITEGUARD  Fail if any test class in tests/<folder> contributes no tests.
 %
-%   ci_suiteGuard('integration')
+%   suite = ci_suiteGuard('integration')   % returns it, so callers need
+%                                          % not build the suite twice
 %
 % A test class that cannot load is dropped from the suite **silently**. It does
 % not fail and it is not filtered — it disappears, and the run still reports
@@ -53,7 +54,11 @@ for k = 1:numel(d)
     p = fullfile(target, d(k).name);
     if ~isTestClassFile(p); continue; end
     [~, cls] = fileparts(d(k).name);
-    if ~any(startsWith(names, [cls '/']))
+    % `Cls/method`, or `Cls[p=v]/method` when the class takes a
+    % ClassSetupParameter - match either, or a fully-present parameterized
+    % class would be reported as silently lost.
+    pat = ['^' regexptranslate('escape', cls) '[\[/]'];
+    if ~any(~cellfun('isempty', regexp(names, pat, 'once')))
         missing{end+1} = cls; %#ok<AGROW>
     end
 end
@@ -74,6 +79,8 @@ end
 function tf = isTestClassFile(p)
 % A classdef whose name contains Test. Read rather than executed, so a file
 % that is broken is still recognised as one that OUGHT to have contributed.
+% An abstract base (`classdef (Abstract) Foo`) does not match, which is what we
+% want - keep that in mind before relaxing the pattern.
 tf = false;
 try
     txt = fileread(p);

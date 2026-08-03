@@ -38,14 +38,19 @@ target  = fullfile(thisDir, folder);
 assert(isfolder(target), 'ci_gate:noSuchFolder', ...
     'no test folder tests/%s', folder);
 
-ci_suiteGuard(folder);          % shared with ci_local - see its header
-suite = testsuite(target);
+% The addpath above is the FIX; the guard is the tripwire for the next
+% cause of silent loss, whatever that turns out to be. Returns the suite so
+% it is not constructed twice (construction loads every class).
+suite = ci_suiteGuard(folder);
 
 runner = TestRunner.withTextOutput;
 if nargin > 1 && ~isempty(junitPath)
     if ~isAbsolutePath(junitPath); junitPath = fullfile(root, junitPath); end
     outdir = fileparts(junitPath);
-    if ~isempty(outdir) && ~isfolder(outdir); mkdir(outdir); end
+    if ~isempty(outdir) && ~isfolder(outdir)
+        [ok, msg] = mkdir(outdir);
+        assert(ok, 'ci_gate:mkdir', 'could not create %s: %s', outdir, msg);
+    end
     runner.addPlugin(XMLPlugin.producingJUnitFormat(junitPath));
 end
 
