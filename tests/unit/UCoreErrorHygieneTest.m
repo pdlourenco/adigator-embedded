@@ -140,20 +140,45 @@ classdef UCoreErrorHygieneTest < matlab.unittest.TestCase
             % handles open. Measured stack: `adigatortempfunc1:5 ->
             % adigator:775`.
             %
-            % If someone later adds a `sort` overload this method fails at its
-            % assertNotEmpty rather than passing vacuously, and the message
-            % says to pick another unoverloaded operation.
+            % TWO ways this could silently stop testing its mode, and both are
+            % guarded below. (a) `sort` starts working -- caught by requiring
+            % the failure at all. (b) `sort` starts failing EARLIER: if a named
+            % refusal for unoverloaded operations lands during the initial scan
+            % -- a plausible near-term change, since B40's own fix direction is
+            % adding named refusals -- the failure site moves back into the
+            % `:242` region and this method degrades into a duplicate of
+            % `generationSucceedsAfterAFailedGeneration` while staying green.
+            % That is precisely the failure this method was added to fix, one
+            % step removed, so it is guarded by the stack rather than assumed:
+            % `adigatortempfunc1` is the file adigator writes through `Tfid`,
+            % so it cannot appear on the stack before that handle is open. That
+            % is a direct test of "handles were open" and is less brittle than
+            % pinning `:775`.
             good = 'adigator_hyg_midfail_ok';
             mid  = 'adigator_hyg_midfail_bad';
             writeUserFunction(good, 'y = sum(sin(x));');
             writeUserFunction(mid,  'y = sort(x);');
             ax = adigatorCreateDerivInput([3 1], 'x');
 
-            tc.verifyError(@() adigatorGenJacFile(mid, {ax}, ...
-                struct('overwrite',1,'echo',0), 'Grd'), ?MException, ...
+            % try/catch rather than verifyError: the exception's STACK is the
+            % subject here, and verifyError does not hand the MException back.
+            midErr = MException.empty;
+            try
+                adigatorGenJacFile(mid, {ax}, struct('overwrite',1,'echo',0), 'Grd');
+            catch caught
+                midErr = caught;
+            end
+            tc.assertNotEmpty(midErr, ...
                 ['`sort` must still have no @cada overload, or this method no ', ...
                  'longer injects a MID-TRANSFORMATION failure. Pick another ', ...
                  'unoverloaded operation rather than deleting this test.']);
+            tc.assertTrue(any(strcmp({midErr.stack.name}, 'adigatortempfunc1')), ...
+                ['this fixture must fail INSIDE the transformation pass, with ', ...
+                 'the handles open - adigatortempfunc1 does not exist until ', ...
+                 'Tfid is open. If this fires, the failure site moved back to ', ...
+                 'the initial evaluation and this method is now a duplicate of ', ...
+                 'generationSucceedsAfterAFailedGeneration: pick another ', ...
+                 'operation that survives the initial eval.']);
 
             [g0, p0, f0] = snapshotSession();
             adigatorGenJacFile(good, {ax}, struct('overwrite',1,'echo',0), 'Grd');
