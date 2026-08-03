@@ -39,9 +39,10 @@ classdef IScatterPrototypeTest < AdigatorTestCase
     %     one Tier 1 is measured on.
     %   * The **pair** anchor (`pairAnchor`, `y = sum_k x(k)*x(k-1)`,
     %     `nz_k = 2`, position map `col(c) = [c; c+1]`) -- width greater than
-    %     one and genuinely NOT the identity, so the scatter form's
-    %     gather-compute-scatter machinery is actually exercised rather than
-    %     collapsing into a straight indexed update.
+    %     one and genuinely NOT the identity, so the reference is a genuine
+    %     gather/compute/scatter rather than degenerating into a straight
+    %     indexed update. (R21's machinery does not exist yet; what is
+    %     exercised is the hand-written target emission.)
     %
     % SCOPE, stated because the headline would otherwise overreach it. Neither
     % anchor reaches **HZ-1** -- duplicate rows within one position-map column,
@@ -215,10 +216,11 @@ classdef IScatterPrototypeTest < AdigatorTestCase
             % where the scatter form has to gather narrow, compute, and scatter
             % back through a real map rather than collapsing into `yd(c) += …`.
             %
-            % Plain rolled loop, no `loopbound`: the trip count here is n-1,
-            % which matches no declared bound and is refused by design (B39,
-            % #213 route 4a). Padded semantics are the other anchor's job; this
-            % one is about width.
+            % Plain rolled loop, and that is why `loopbound` is not used here:
+            % the trip count is n-1, which would match no declared bound and be
+            % refused (B39, #213 route 4a). Nothing is refused as written -
+            % no bound is declared and numel(x) is a compile-time literal.
+            % Padded semantics are the other anchor's job; this one is width.
             n = 8;
             tc.writePairAnchor();
             d = tc.genPairGrd(n);
@@ -227,11 +229,18 @@ classdef IScatterPrototypeTest < AdigatorTestCase
             [Grd, Fun] = tc.runIn(d, 'pairAnchor_Grd', xf);
             [Gsc, Fsc] = IScatterPrototypeTest.pairScatterReference(xf, n);
 
-            % Bit-exact, verified by measurement before this was asserted. Each
-            % yd(k) is accumulated by the same iterations in the same order in
-            % both forms, so the association matches element by element even
-            % though - unlike the allocation anchor - a row is now written by
-            % TWO different iterations.
+            % Bit-exact, and for a structural reason rather than "it measured
+            % equal once" - the justification style #216 punished.
+            %
+            % Row j has exactly two live contributions, at iterations j-1 and
+            % j, in BOTH forms and in that order. Both are exact: x.dx is 1, so
+            % the emitted `cada1f3.*cada1f1dx` is x(k-1)*1 and the reference's
+            % x(k-1) are the same double. Today's emission additionally adds a
+            % full-width vector every iteration, so row j also receives an
+            % exact +0.0 from every iteration in which it is inactive - which
+            % changes nothing, since a + 0.0 == a bit-exactly for finite a.
+            % (So this is NOT "same operands, same order" as at nz_k = 1; it is
+            % "same live operands, same order, plus exact zeros".)
             tc.verifyEqual(Grd, Gsc, 'AbsTol', 0, ...
                 ['R21: the scatter form must reproduce the rolled emission ', ...
                  'bit-exactly at nz_k = 2 with a non-identity position map, ', ...
@@ -250,15 +259,39 @@ classdef IScatterPrototypeTest < AdigatorTestCase
             tc.verifyEqual(Gsc(:), Gfd(:), 'AbsTol', 1e-5, ...
                 'the nz_k = 2 reference must survive a finite-difference check');
 
-            % The premise: this anchor's map really is width 2 and really is
-            % not the identity, or it is not testing what the name says.
-            col = IScatterPrototypeTest.pairPositionMap(3);
-            tc.verifyEqual(numel(col), 2, 'the pair anchor must have nz_k = 2');
-            tc.verifyNotEqual(col(:).', [3 3], 'a column must not be degenerate');
-            tc.verifyEqual(numel(unique(col)), 2, ...
-                ['HZ-1 is not reachable here: [c; c+1] has distinct rows. The ', ...
-                 'RUNFLAG-1 census (ANALYSIS section 2.5) is what covers ', ...
-                 'duplicate columns - 2130 observations, none found.']);
+            % PREMISE, read off the emitted artifact rather than restated from
+            % the reference's own helper - otherwise it could only fail if
+            % someone edited pairPositionMap, and would say nothing about the
+            % generation.
+            %
+            % Today's emission reaches those rows in TWO stages, which is
+            % exactly the indirection R21 collapses: a per-iteration mask
+            % (Index1/Index2 column c) selects a slot in the loop-overmap-wide
+            % vector, and a FIXED whole-vector scatter (Index3/Index4) maps
+            % slots to accumulator rows. Composing them gives iteration c's
+            % actual target rows, and that composition must equal the
+            % reference's position map. Note Index3(c)/Index4(c) alone would
+            % agree only because the mask happens to put iteration c at slot c
+            % - the composition is the honest check.
+            S = load(fullfile(d,'pairAnchor_ADiGatorGrd.mat'));
+            G = S.pairAnchor_ADiGatorGrd.Gator1Data;
+            I1 = full(G.Index1); I2 = full(G.Index2);
+            I3 = full(G.Index3(:)); I4 = full(G.Index4(:));
+            for c = 1:n-1
+                s1 = find(I1(:,c));  s2 = find(I2(:,c));
+                tc.assertEqual([numel(s1) numel(s2)], [1 1], sprintf( ...
+                    ['each operand gather must select exactly one overmap ', ...
+                     'slot per iteration (c=%d)'], c));
+                emitted = sort([I3(s1); I4(s2)]);
+                tc.verifyEqual(emitted, sort(IScatterPrototypeTest.pairPositionMap(c)), ...
+                    sprintf(['the reference position map must be the rows the ', ...
+                             'emission actually targets at iteration c=%d'], c));
+                tc.verifyEqual(numel(unique(emitted)), 2, sprintf( ...
+                    ['HZ-1 is not reachable here: iteration c=%d targets two ', ...
+                     'DISTINCT rows. Duplicate columns are covered by the ', ...
+                     'RUNFLAG-1 census (ANALYSIS section 2.5) - 2130 ', ...
+                     'observations, none found - not by this test.'], c));
+            end
         end
     end
 

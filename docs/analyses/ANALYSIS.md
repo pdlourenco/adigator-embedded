@@ -1506,32 +1506,52 @@ loops. None produced a duplicate.
 
 **Why, structurally.** `lib/@cada/private/cadaunion.m` builds
 `sparse(rows, cols, …)` for each operand and reads the result back with `find`.
-MATLAB's `sparse` sums duplicate triplets and `find` returns each `(row, col)`
-exactly once, so a union's location list is **duplicate-free by construction**.
-A per-iteration column derived from that list inherits the property: distinct
-per-iteration nonzeros map to distinct overmap rows, because the overmap itself
-lists each location once.
+A sparse matrix holds **at most one entry per `(row, col)`** and `find`
+enumerates stored entries, so a union's location list is duplicate-free by
+construction. A per-iteration column derived from that list inherits the
+property: distinct per-iteration nonzeros map to distinct overmap rows, because
+the overmap itself lists each location once.
 
-**What this means for R21.**
+Worth flagging for whoever implements the scatter, because the same mechanism
+has a second edge: `cadaunion` tags the two operands `-1` and `+2` before
+adding them, so a location that appeared **twice within one operand** would sum
+to `-2`, and `-2 + 2 == 0` makes `find` drop it **silently**. Duplicate-freedom
+is therefore not merely observed downstream of the union — the union would
+destroy the evidence. That is a further reason to take the location list as
+given rather than to re-derive or hand-assemble one.
 
-1. HZ-1's recommended mitigation — prove per-column uniqueness at RUNFLAG 1 and
+**What this means for R21.** (A measurement record, not entries in §2's
+running list of optimization opportunities.)
+
+(a) HZ-1's recommended mitigation — prove per-column uniqueness at RUNFLAG 1 and
    **fall back to today's emission where it cannot be proven** — costs nothing
    on this corpus, because the proof always succeeds. The fail-closed fallback
    should still be built: it is what makes the rewrite a per-site opt-in rather
    than a big-bang, and 2130 observations are evidence, not a proof.
-2. The design constraint worth writing down is *where the column comes from*:
+(b) The design constraint worth writing down is *where the column comes from*:
    derive it from the union's own location list and uniqueness is inherited.
    A position map computed some other way — by re-deriving locations, or by
    concatenating per-operand lists without a union — would forfeit the
    guarantee. That is the line an implementer must not cross.
-3. **`nz_k = 1` is the minority case.** Median `nz_k` is 2 and **52% of
-   observations have `nz_k > 1`** on the real corpus. The allocation/loopbound
-   anchor that Tier 1, the padding penalty and E6 are all measured on is the
-   *narrow* end of the distribution, not the typical one. R21's benefit is
-   therefore not confined to that shape — but neither is its risk, and a
-   prototype validated only at `nz_k = 1` is validated on the easy case.
-   `tests/integration/IScatterPrototypeTest` now carries a second anchor at
-   `nz_k = 2` with a non-identity position map for that reason.
+(c) **The width figures above are NOT a per-iteration scatter-width
+   distribution, and must not be read as one.** The hook fires at every
+   FOR-overmap union, so an observation is (overmapped variable × iteration ×
+   variable of differentiation) — which includes the **accumulator**, whose
+   RUNFLAG-1 `nzlocs` is *cumulative* (1, 2, 3, … N) rather than a
+   per-iteration contribution. On this section's own pair anchor at n = 8 the
+   accumulator alone contributes widths 2…8. So `median 2` / `52% wider than
+   one` / `max 36` describe the derivative width of everything overmapped
+   inside a loop, accumulator states included; they say nothing about how wide
+   a *scattered contribution* typically is. A properly scoped distribution —
+   filtered to the sites `cadaPrintReMap` actually fires at — has not been
+   measured, and no scoping argument should lean on these numbers until it is.
+   The duplicate result is unaffected: a superset population makes a
+   zero-duplicate finding stronger, not weaker.
+
+   `tests/integration/IScatterPrototypeTest` gained a second anchor at
+   `nz_k = 2` for a coverage reason that stands on its own: a prototype
+   validated only at `nz_k = 1` with an identity map exercises neither a
+   multi-row column nor a position map that does anything.
 
 **Scope.** This measures what the *current* engine computes. The scatter form's
 columns would be built by new code, so the census constrains that code (point 2)
