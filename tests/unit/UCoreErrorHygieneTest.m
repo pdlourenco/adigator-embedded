@@ -71,6 +71,127 @@ classdef UCoreErrorHygieneTest < matlab.unittest.TestCase
             verifySessionClean(tc, g0, p0, f0, 'after a failed transformation');
         end
 
+        function generationSucceedsAfterAFailedGeneration(tc)
+            % RE-ENTRY: a failed generation must not break the NEXT one in the
+            % same session. erroringTransformLeavesSessionClean asserts the
+            % session looks clean after a failure; nothing asserted that a
+            % subsequent generation actually works, which is a different claim
+            % -- state can be released and still leave the engine unable to
+            % start over (a closed print FID being the obvious way).
+            %
+            % The gap surfaced while cataloguing the vectorized refusal
+            % boundary (2026-08-02 engine-v2 analysis, experiment E4): a
+            % single-process batch produced spurious MATLAB:FileIO:InvalidFid
+            % verdicts, and the natural explanation -- a failed generation
+            % leaving the print FID closed -- would have been a B16 gap. It
+            % measured clean, and the batch anomaly was a harness artifact of
+            % undetermined mechanism, not an engine defect. So
+            % this pins a property that HOLDS and was merely untested; it is a
+            % regression net, not a bug fix.
+            %
+            % Non-vacuous by construction: the failure is asserted to happen,
+            % and the recovered generation is checked against the analytic
+            % gradient rather than merely against "no error".
+            good = 'adigator_hyg_reentry_ok';
+            bad  = 'adigator_hyg_reentry_bad';
+            writeUserFunction(good, 'y = sum(sin(x));');
+            writeUserFunction(bad,  'y = sum(x) + thisVariableDoesNotExist;');
+            ax = adigatorCreateDerivInput([3 1], 'x');
+
+            tc.verifyError(@() adigatorGenJacFile(bad, {ax}, ...
+                struct('overwrite',1,'echo',0), 'Grd'), ?MException, ...
+                'the malformed fixture must error, or this test proves nothing');
+
+            % Snapshot AFTER the failure on purpose: this method scopes its
+            % hygiene check to the RECOVERING generation, keeping it orthogonal
+            % to erroringTransformLeavesSessionClean. Anything the failure
+            % itself leaked is baselined out here and is that method's job --
+            % do not "fix" this by moving the snapshot above the verifyError.
+            [g0, p0, f0] = snapshotSession();
+            adigatorGenJacFile(good, {ax}, struct('overwrite',1,'echo',0), 'Grd');
+            verifySessionClean(tc, g0, p0, f0, ...
+                'after a generation that followed a failed one');
+
+            % The recovered file must be correct, not merely produced.
+            clear([good '_Grd']);  rehash;
+            x = [0.3; -1.1; 2.4];
+            Grd = feval([good '_Grd'], x);
+            % Compared unflattened: the scalar-function gradient is 3x1 per
+            % contract C-1, so this also pins orientation.
+            tc.verifyEqual(Grd, cos(x), 'AbsTol', 1e-12, ...
+                'd/dx sum(sin(x)) = cos(x) after recovering from a failure');
+        end
+
+        function generationSucceedsAfterAFailureWithHandlesOpen(tc)
+            % The OTHER failure mode, and the one the re-entry hazard is
+            % actually about. Every failure injected elsewhere in this repo --
+            % this class's undefined-variable fixture and all three
+            % `mcGenNegative` variants -- dies in adigator's INITIAL TEST
+            % EVALUATION of the user function (`adigator.m:242`), which happens
+            % before `Tfid` (`:556`) and `Dfid` (`:748`) are ever opened.
+            % Measured, not assumed: that fixture's stack is
+            % `badfx:2 -> adigator:242`. So none of them leaves adigator's own
+            % handles open, and none of them can reach a closed-print-FID
+            % hazard -- the very thing that motivated pinning re-entry.
+            %
+            % `sort` has no `@cada` overload (see ANALYSIS §1.3n/B40), so this
+            % fixture evaluates fine on the numeric test inputs and then dies
+            % INSIDE the transformation pass, at `adigator:775`, with both
+            % handles open. Measured stack: `adigatortempfunc1:5 ->
+            % adigator:775`.
+            %
+            % TWO ways this could silently stop testing its mode, and both are
+            % guarded below. (a) `sort` starts working -- caught by requiring
+            % the failure at all. (b) `sort` starts failing EARLIER: if a named
+            % refusal for unoverloaded operations lands during the initial scan
+            % -- a plausible near-term change, since B40's own fix direction is
+            % adding named refusals -- the failure site moves back into the
+            % `:242` region and this method degrades into a duplicate of
+            % `generationSucceedsAfterAFailedGeneration` while staying green.
+            % That is precisely the failure this method was added to fix, one
+            % step removed, so it is guarded by the stack rather than assumed:
+            % `adigatortempfunc1` is the file adigator writes through `Tfid`,
+            % so it cannot appear on the stack before that handle is open. That
+            % is a direct test of "handles were open" and is less brittle than
+            % pinning `:775`.
+            good = 'adigator_hyg_midfail_ok';
+            mid  = 'adigator_hyg_midfail_bad';
+            writeUserFunction(good, 'y = sum(sin(x));');
+            writeUserFunction(mid,  'y = sort(x);');
+            ax = adigatorCreateDerivInput([3 1], 'x');
+
+            % try/catch rather than verifyError: the exception's STACK is the
+            % subject here, and verifyError does not hand the MException back.
+            midErr = MException.empty;
+            try
+                adigatorGenJacFile(mid, {ax}, struct('overwrite',1,'echo',0), 'Grd');
+            catch caught
+                midErr = caught;
+            end
+            tc.assertNotEmpty(midErr, ...
+                ['`sort` must still have no @cada overload, or this method no ', ...
+                 'longer injects a MID-TRANSFORMATION failure. Pick another ', ...
+                 'unoverloaded operation rather than deleting this test.']);
+            tc.assertTrue(any(strcmp({midErr.stack.name}, 'adigatortempfunc1')), ...
+                ['this fixture must fail INSIDE the transformation pass, with ', ...
+                 'the handles open - adigatortempfunc1 does not exist until ', ...
+                 'Tfid is open. If this fires, the failure site moved back to ', ...
+                 'the initial evaluation and this method is now a duplicate of ', ...
+                 'generationSucceedsAfterAFailedGeneration: pick another ', ...
+                 'operation that survives the initial eval.']);
+
+            [g0, p0, f0] = snapshotSession();
+            adigatorGenJacFile(good, {ax}, struct('overwrite',1,'echo',0), 'Grd');
+            verifySessionClean(tc, g0, p0, f0, ...
+                'after a generation that followed a failure with handles open');
+
+            clear([good '_Grd']);  rehash;
+            x = [0.7; -0.2; 1.3];
+            Grd = feval([good '_Grd'], x);
+            tc.verifyEqual(Grd, cos(x), 'AbsTol', 1e-12, ...
+                'd/dx sum(sin(x)) = cos(x) after a mid-transformation failure');
+        end
+
         function strayTransformGlobalAlwaysCaught(tc)
             % Guard the strict invariant predicate so it cannot pass vacuously:
             % after R11/#54 (ADR-0015) ANY surviving transformation global is a
