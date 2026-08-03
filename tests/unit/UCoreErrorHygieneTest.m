@@ -122,6 +122,51 @@ classdef UCoreErrorHygieneTest < matlab.unittest.TestCase
                 'd/dx sum(sin(x)) = cos(x) after recovering from a failure');
         end
 
+        function generationSucceedsAfterAFailureWithHandlesOpen(tc)
+            % The OTHER failure mode, and the one the re-entry hazard is
+            % actually about. Every failure injected elsewhere in this repo --
+            % this class's undefined-variable fixture and all three
+            % `mcGenNegative` variants -- dies in adigator's INITIAL TEST
+            % EVALUATION of the user function (`adigator.m:242`), which happens
+            % before `Tfid` (`:556`) and `Dfid` (`:748`) are ever opened.
+            % Measured, not assumed: that fixture's stack is
+            % `badfx:2 -> adigator:242`. So none of them leaves adigator's own
+            % handles open, and none of them can reach a closed-print-FID
+            % hazard -- the very thing that motivated pinning re-entry.
+            %
+            % `sort` has no `@cada` overload (see ANALYSIS §1.3n/B40), so this
+            % fixture evaluates fine on the numeric test inputs and then dies
+            % INSIDE the transformation pass, at `adigator:775`, with both
+            % handles open. Measured stack: `adigatortempfunc1:5 ->
+            % adigator:775`.
+            %
+            % If someone later adds a `sort` overload this method fails at its
+            % assertNotEmpty rather than passing vacuously, and the message
+            % says to pick another unoverloaded operation.
+            good = 'adigator_hyg_midfail_ok';
+            mid  = 'adigator_hyg_midfail_bad';
+            writeUserFunction(good, 'y = sum(sin(x));');
+            writeUserFunction(mid,  'y = sort(x);');
+            ax = adigatorCreateDerivInput([3 1], 'x');
+
+            tc.verifyError(@() adigatorGenJacFile(mid, {ax}, ...
+                struct('overwrite',1,'echo',0), 'Grd'), ?MException, ...
+                ['`sort` must still have no @cada overload, or this method no ', ...
+                 'longer injects a MID-TRANSFORMATION failure. Pick another ', ...
+                 'unoverloaded operation rather than deleting this test.']);
+
+            [g0, p0, f0] = snapshotSession();
+            adigatorGenJacFile(good, {ax}, struct('overwrite',1,'echo',0), 'Grd');
+            verifySessionClean(tc, g0, p0, f0, ...
+                'after a generation that followed a failure with handles open');
+
+            clear([good '_Grd']);  rehash;
+            x = [0.7; -0.2; 1.3];
+            Grd = feval([good '_Grd'], x);
+            tc.verifyEqual(Grd, cos(x), 'AbsTol', 1e-12, ...
+                'd/dx sum(sin(x)) = cos(x) after a mid-transformation failure');
+        end
+
         function strayTransformGlobalAlwaysCaught(tc)
             % Guard the strict invariant predicate so it cannot pass vacuously:
             % after R11/#54 (ADR-0015) ANY surviving transformation global is a
