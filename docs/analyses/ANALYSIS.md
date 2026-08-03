@@ -1473,6 +1473,126 @@ lower-order derivatives* of every intermediate. When the user only consumes
     derivative/`.mat`/data-function triplets can be detected at load time —
     a real failure mode once files are committed into firmware repos.
 
+### 2.5 R21 scatter: the HZ-1 duplicate-target census (E3)
+
+**The question.** R21's target emission scatters each iteration's contribution
+into the accumulator through a position map,
+`yd(Ix(:,c)) = yd(Ix(:,c)) + contrib`. MATLAB's indexed assignment **drops
+duplicate writes** — `yd([1 1]) = yd([1 1]) + [a b]` adds only `b` — so if any
+position-map column can carry the same overmap row twice, the scatter form is
+silently wrong. That is hazard **HZ-1** of the engine-v2 analysis, and it is the
+hazard that decides the R21 design: it is a wrong derivative, principle 1, not
+an error.
+
+**The measurement (2026-08-03).** The overmap run (RUNFLAG 1) was instrumented
+on a *scratch copy* of the engine at the FOR-overmap union in
+`lib/@cada/cadaOverMap.m` — the point where an iteration's own pattern is
+unioned into the loop overmap. For every variable of differentiation it records
+the per-iteration `nzlocs`, duplicates within that list, and duplicates in the
+position-map column (the overmap rows the iteration's nonzeros map to). Two
+passes:
+
+| pass | observations | max `nz_k` | dup within an iteration | **dup position-map columns** |
+|---|---:|---:|---:|---:|
+| repository unit + integration suites (370 tests, all passing under instrumentation) | 1626 | 36 | 0 | **0** |
+| adversarial shapes written to force a duplicate | 504 | 35 | 0 | **0** |
+| **total** | **2130** | **36** | **0** | **0** |
+
+The adversarial pass is the one that matters for a negative result: it includes
+`x(k)*x(k)`, `x(k)^3`, the same target assigned twice in one iteration
+(`y(k) = x(k); y(k) = y(k) + x(k)^2`), overlapping windows
+(`x(k-1)*x(k)*x(k+1)`), a whole-vector reduction inside the loop, and nested
+loops. None produced a duplicate.
+
+**Why — and this splits into one structural half and one empirical half.** A
+position-map column carries a duplicate iff *either*
+
+  * **(1)** two **distinct** per-iteration nonzeros map to the same overmap
+    row, *or*
+  * **(2)** the iteration's own `nzlocs` already lists the same location twice.
+
+**(1) is ruled out structurally.** `lib/@cada/private/cadaunion.m` builds
+`sparse(rows, cols, …)` for each operand and reads the result back with `find`;
+a sparse matrix holds **at most one entry per `(row, col)`** and `find`
+enumerates stored entries, so the overmap lists each location exactly once and
+location → overmap-row is injective. Distinct nonzeros cannot collide.
+
+**(2) is empirical only.** A per-iteration `nzlocs` is *not* necessarily a union
+output — `cadaRepDers`' scalar expansion and the subsref/subsasgn index
+arithmetic build location lists by direct construction. So nothing structural
+forbids a per-iteration list from repeating a location; what rules it out here
+is the measurement: the `dup within an iteration` column is **0 across all 2130
+observations**, including on shapes written specifically to force one.
+
+That distinction is why the adversarial pass matters rather than being
+ceremony. If the whole property were structural, `x(k)*x(k)` and "the same
+target assigned twice in one iteration" could not have been informative. They
+were the right experiment precisely because (2) was open — and they are the
+reason (a)'s "build the fallback anyway" is prudence rather than theatre.
+
+**A second edge in the same mechanism, for whoever implements the scatter.**
+`cadaunion` tags the operands `-1` and `+2` before adding, and `sparse` sums
+duplicates, so a location repeated *within* one operand does not merely
+collapse — it is **misread**:
+
+| x copies | y copies | sum | `find` / classification |
+|---:|---:|---:|---|
+| 1 | 1 | `+1` | both operands — correct |
+| 2 | 1 | `0` | **dropped entirely** (a zero is not stored) |
+| 3 | 1 | `-1` | **survives, tagged x-only** — `zyind = find(zind>0)` silently loses y's claim |
+
+So the failure mode is "dropped **or corrupted**", not only dropped: the union
+would destroy the very evidence a duplicate ever existed. That is a further
+reason for (b) — take the union's location list as given rather than
+re-deriving or hand-assembling one.
+
+**What this means for R21.** (A measurement record, not entries in §2's
+running list of optimization opportunities.)
+
+(a) HZ-1's recommended mitigation — prove per-column uniqueness at RUNFLAG 1 and
+   **fall back to today's emission where it cannot be proven** — costs nothing
+   on this corpus, because the proof always succeeds. The fail-closed fallback
+   should still be built: it is what makes the rewrite a per-site opt-in rather
+   than a big-bang, and 2130 observations are evidence, not a proof.
+(b) The design constraint worth writing down is *where the column comes from*:
+   derive it from the union's own location list and uniqueness is inherited.
+   A position map computed some other way — by re-deriving locations, or by
+   concatenating per-operand lists without a union — would forfeit the
+   guarantee. That is the line an implementer must not cross.
+(c) **The width figures above are NOT a per-iteration scatter-width
+   distribution, and must not be read as one.** The hook fires at every
+   FOR-overmap union, so an observation is (overmapped variable × iteration ×
+   variable of differentiation) — which includes the **accumulator**, whose
+   RUNFLAG-1 `nzlocs` is *cumulative* (1, 2, 3, … N) rather than a
+   per-iteration contribution. On this section's own pair anchor at n = 8 the
+   accumulator alone contributes widths 2…8. So `median 2` / `52% wider than
+   one` / `max 36` describe the derivative width of everything overmapped
+   inside a loop, accumulator states included; they say nothing about how wide
+   a *scattered contribution* typically is. A properly scoped distribution —
+   filtered to the sites `cadaPrintReMap` actually fires at — has not been
+   measured, and no scoping argument should lean on these numbers until it is.
+   The duplicate result is unaffected: a superset population makes a
+   zero-duplicate finding stronger, not weaker.
+
+   `tests/integration/IScatterPrototypeTest` gained a second anchor at
+   `nz_k = 2` for a coverage reason that stands on its own: a prototype
+   validated only at `nz_k = 1` with an identity map exercises neither a
+   multi-row column nor a position map that does anything.
+
+**Scope.** This measures what the *current* engine computes. The scatter form's
+columns would be built by new code, so the census constrains that code (point 2)
+rather than certifying it. Reverse mode is not covered — it requires unrolled
+loops, so it has no FOR overmap to instrument. The instrumentation is not retained in the tree. To reproduce: copy the repo,
+insert a logger in `lib/@cada/cadaOverMap.m` immediately after the FOR-overmap
+union (`xOver = cadaUnionVars(xOver,x)` under `if fOverLoc`, in the
+`RUNFLAG == 1` branch), recording per variable of differentiation
+`size(x.deriv(V).nzlocs,1)` (`nz_k`), the count of repeated rows in that list,
+and the count of repeated entries in `ismember(x.deriv(V).nzlocs,
+xOver.deriv(V).nzlocs,'rows')`; append and **close** per call, since B16
+handle hygiene closes stray handles on every generation exit. Then run the
+`tests/unit` + `tests/integration` suites against the instrumented copy. It is
+~25 lines at one call site.
+
 ---
 
 ## 3. A path to reverse-mode differentiation

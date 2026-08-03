@@ -32,25 +32,45 @@ classdef IScatterPrototypeTest < AdigatorTestCase
     % When R21 lands this test keeps its meaning unchanged -- the generated file
     % should then BE this shape, and must still equal the reference.
     %
-    % SCOPE, stated because the headline would otherwise overreach it. This
-    % pins the SIMPLEST instance of the target shape: `nz_k = 1`, and a position
-    % map that is the identity family `col(c) = c`. Two consequences follow, and
-    % neither is a defect in the test so much as a boundary on what it proves:
+    % TWO ANCHORS, because one was not enough to make the claim.
     %
-    %   * **HZ-1 is unreachable here.** Duplicate rows within a position-map
-    %     column cannot occur when every column has exactly one entry, so the
-    %     silent-wrongness hazard that decides the R21 design is NOT exercised.
-    %   * An identity map never exercises the position-map machinery at all.
+    %   * The **allocation** anchor (`scatterAnchor`, `nz_k = 1`, position map
+    %     the identity family `col(c) = c`) -- the simplest instance, and the
+    %     one Tier 1 is measured on.
+    %   * The **pair** anchor (`pairAnchor`, `y = sum_k x(k)*x(k-1)`,
+    %     `nz_k = 2`, position map `col(c) = [c; c+1]`) -- width greater than
+    %     one and genuinely NOT the identity, so the reference is a genuine
+    %     gather/compute/scatter rather than degenerating into a straight
+    %     indexed update. (R21's machinery does not exist yet; what is
+    %     exercised is the hand-written target emission.)
     %
-    % So this is a genuine regression net for the allocation anchor and a real
-    % acceptance gate for "the new shape agrees with the old one there" -- but
-    % it is not evidence that scatter is correct where the correctness risk
-    % actually lives. A second anchor with `nz_k > 1` (a rolled Hessian, or
-    % `y = y + x(k)*x(k+1)` for a two-nonzero column) is OWED when R21 is
-    % scoped; it is deliberately not added now, because hand-writing a second
-    % reference against emission that is about to change would pin the wrong
-    % thing. That anchor would also give the E3 duplicate-target question a live
-    % fixture instead of a bounded static census.
+    % SCOPE, stated because the headline would otherwise overreach it. Neither
+    % anchor reaches **HZ-1** -- duplicate rows within one position-map column,
+    % the silent-wrongness hazard that decides the R21 design. `[c; c+1]` has
+    % distinct rows, so a duplicate cannot arise here either.
+    %
+    % That is not a gap left open: the RUNFLAG-1 census (E3, run 2026-08-03 on
+    % an instrumented scratch engine) found **no** duplicate position-map column
+    % anywhere -- not in the repository's own unit + integration suites, and not
+    % in deliberately adversarial shapes written to force one (`x(k)*x(k)`,
+    % `x(k)^3`, the same target assigned twice in one iteration, overlapping
+    % windows).
+    %
+    % That result is half structural and half empirical, and the halves matter
+    % (`ANALYSIS.md` §2.5). Two DISTINCT nonzeros cannot collide on one row --
+    % `cadaunion` reads its result off a sparse matrix, which holds at most one
+    % entry per (row,col), so the overmap lists each location once and the map
+    % is injective. But an iteration's own nzlocs repeating a location is NOT
+    % structurally excluded: those lists are not always union outputs
+    % (`cadaRepDers` scalar expansion, subsref/subsasgn index arithmetic build
+    % them directly). Only measurement rules that out -- which is exactly why
+    % the adversarial shapes were worth running, and why the fail-closed
+    % fallback R21 carries is prudence rather than theatre.
+    %
+    % So the honest boundary is: these anchors pin that the target emission
+    % reproduces today's values exactly at `nz_k = 1` and `nz_k = 2`; HZ-1 is
+    % not exercised because nothing in the engine appears able to produce it,
+    % which is a census finding rather than a test one.
     %
     %   Copyright 2026 Pedro Lourenço and GMV. Distributed under the GNU General
     %   Public License version 3.0.
@@ -193,9 +213,116 @@ classdef IScatterPrototypeTest < AdigatorTestCase
                  'landing is the expected cause - re-derive this guard ', ...
                  'against the new table layout. Do not delete it.']);
         end
+
+        function widePositionMapAlsoMatchesTheRolledEmission(tc)
+            % The nz_k > 1 anchor. y = sum_{k=2..n} x(k)*x(k-1) puts TWO
+            % nonzeros in each iteration's derivative - rows k-1 and k - so the
+            % position map is `col(c) = [c; c+1]`: width two, and not the
+            % identity. This is the case the allocation anchor cannot reach,
+            % where the scatter form has to gather narrow, compute, and scatter
+            % back through a real map rather than collapsing into `yd(c) += …`.
+            %
+            % Plain rolled loop, and that is why `loopbound` is not used here:
+            % the trip count is n-1, which would match no declared bound and be
+            % refused (B39, #213 route 4a). Nothing is refused as written -
+            % no bound is declared and numel(x) is a compile-time literal.
+            % Padded semantics are the other anchor's job; this one is width.
+            n = 8;
+            tc.writePairAnchor();
+            d = tc.genPairGrd(n);
+            rng(23);
+            xf = 0.5*randn(n,1);
+            [Grd, Fun] = tc.runIn(d, 'pairAnchor_Grd', xf);
+            [Gsc, Fsc] = IScatterPrototypeTest.pairScatterReference(xf, n);
+
+            % Bit-exact, and for a structural reason rather than "it measured
+            % equal once" - the justification style #216 punished.
+            %
+            % Row j has exactly two live contributions, at iterations j-1 and
+            % j, in BOTH forms and in that order. Both are exact: x.dx is 1, so
+            % the emitted `cada1f3.*cada1f1dx` is x(k-1)*1 and the reference's
+            % x(k-1) are the same double. Today's emission additionally adds a
+            % full-width vector every iteration, so row j also receives an
+            % exact +0.0 from every iteration in which it is inactive - which
+            % changes nothing, since a + 0.0 == a bit-exactly for finite a.
+            % (So this is NOT "same operands, same order" as at nz_k = 1; it is
+            % "same live operands, same order, plus exact zeros".)
+            tc.verifyEqual(Grd, Gsc, 'AbsTol', 0, ...
+                ['R21: the scatter form must reproduce the rolled emission ', ...
+                 'bit-exactly at nz_k = 2 with a non-identity position map, ', ...
+                 'not only in the trivial identity case.']);
+            tc.verifyEqual(Fun, Fsc, 'AbsTol', 0, ...
+                'R21: function values must agree exactly at nz_k = 2');
+
+            % Principle 1: both agreeing is worthless if both are wrong.
+            want = zeros(n,1);
+            want(1)     = xf(2);
+            want(2:n-1) = xf(1:n-2) + xf(3:n);
+            want(n)     = xf(n-1);
+            tc.verifyEqual(Gsc, want, 'AbsTol', 1e-12, 'RelTol', 1e-12, ...
+                'd/dx_j sum_k x_k x_{k-1} = x_{j-1} + x_{j+1} (edges one-sided)');
+            Gfd = fdcheck('jac', @(v) pairAnchor(v), xf);
+            tc.verifyEqual(Gsc(:), Gfd(:), 'AbsTol', 1e-5, ...
+                'the nz_k = 2 reference must survive a finite-difference check');
+
+            % PREMISE, read off the emitted artifact rather than restated from
+            % the reference's own helper - otherwise it could only fail if
+            % someone edited pairPositionMap, and would say nothing about the
+            % generation.
+            %
+            % Today's emission reaches those rows in TWO stages, which is
+            % exactly the indirection R21 collapses: a per-iteration mask
+            % (Index1/Index2 column c) selects a slot in the loop-overmap-wide
+            % vector, and a FIXED whole-vector scatter (Index3/Index4) maps
+            % slots to accumulator rows. Composing them gives iteration c's
+            % actual target rows, and that composition must equal the
+            % reference's position map. Note Index3(c)/Index4(c) alone would
+            % agree only because the mask happens to put iteration c at slot c
+            % - the composition is the honest check.
+            S = load(fullfile(d,'pairAnchor_ADiGatorGrd.mat'));
+            G = S.pairAnchor_ADiGatorGrd.Gator1Data;
+            I1 = full(G.Index1); I2 = full(G.Index2);
+            I3 = full(G.Index3(:)); I4 = full(G.Index4(:));
+            for c = 1:n-1
+                s1 = find(I1(:,c));  s2 = find(I2(:,c));
+                tc.assertEqual([numel(s1) numel(s2)], [1 1], sprintf( ...
+                    ['each operand gather must select exactly one overmap ', ...
+                     'slot per iteration (c=%d)'], c));
+                emitted = sort([I3(s1); I4(s2)]);
+                tc.verifyEqual(emitted, sort(IScatterPrototypeTest.pairPositionMap(c)), ...
+                    sprintf(['the reference position map must be the rows the ', ...
+                             'emission actually targets at iteration c=%d'], c));
+                tc.verifyEqual(numel(unique(emitted)), 2, sprintf( ...
+                    ['HZ-1 is not reachable here: iteration c=%d targets two ', ...
+                     'DISTINCT rows. Duplicate columns are covered by the ', ...
+                     'RUNFLAG-1 census (ANALYSIS section 2.5) - 2130 ', ...
+                     'observations, none found - not by this test.'], c));
+            end
+        end
     end
 
     methods (Access = private)
+        function writePairAnchor(~)
+            % The nz_k = 2 shape: each iteration touches x(k) AND x(k-1), so
+            % the per-iteration derivative has two nonzeros and the position
+            % map is a genuine [2 x niters] table rather than the identity.
+            % Uses writeFixtureFile (single input, unlike the padded anchor).
+            writeFixtureFile('pairAnchor', { ...
+                'y = 0;', ...
+                'for k = 2:numel(x)', ...
+                '    y = y + x(k)*x(k-1);', ...
+                'end'});
+        end
+
+        function d = genPairGrd(~, n)
+            % Plain rolled gradient at a fixed n, classic mode so the .mat
+            % survives. No loopbound - see the method comment.
+            d = fullfile(pwd, sprintf('pairAnchor_n%d', n));
+            adigatorGenJacFile('pairAnchor', ...
+                {adigatorCreateDerivInput([n 1],'x')}, ...
+                adigatorOptions('overwrite',1,'echo',0,'path',d), 'Grd');
+        end
+
         function writeAnchor(~)
             % The allocation/loopbound shape: a scalar cost accumulated over a
             % subscripted read, with a RUNTIME trip count. Mirrors
@@ -231,16 +358,49 @@ classdef IScatterPrototypeTest < AdigatorTestCase
         end
 
         function varargout = runIn(~, d, wrapper, xf, n)
+            % `n` is the padded anchor's runtime trip count; the pair anchor's
+            % wrapper is single-input, so it is omitted there.
             old = cd(d);
             restore = onCleanup(@() cd(old));
             adi = strrep(wrapper,'_Grd','_ADiGatorGrd');
             clear(wrapper); clear(adi); clear('global',['ADiGator_',adi]);
             rehash;
-            [varargout{1:nargout}] = feval(wrapper, xf, n);
+            if nargin < 5
+                [varargout{1:nargout}] = feval(wrapper, xf);
+            else
+                [varargout{1:nargout}] = feval(wrapper, xf, n);
+            end
         end
     end
 
     methods (Static)
+        function col = pairPositionMap(c)
+            % The pair anchor's position map: iteration c touches rows c and
+            % c+1 (i.e. k-1 and k for k = c+1). Width 2, not the identity, and
+            % - the point for HZ-1 - its two rows are always distinct.
+            col = [c; c+1];
+        end
+
+        function [yd, yf] = pairScatterReference(x, n)
+            % THE §3.2 TARGET EMISSION at nz_k = 2.
+            %
+            % d/dx(k)  [x(k)*x(k-1)] = x(k-1)
+            % d/dx(k-1)[x(k)*x(k-1)] = x(k)
+            %
+            % so each iteration computes a 2-vector at per-iteration width and
+            % scatters it through its position-map column. Contrast the
+            % allocation anchor, where the column is a single row and the
+            % update degenerates into `yd(c) = yd(c) + contrib`.
+            yf = 0;
+            yd = zeros(n,1);
+            for c = 1:n-1
+                k   = c + 1;
+                col = IScatterPrototypeTest.pairPositionMap(c);   % [k-1; k]
+                yd(col) = yd(col) + [x(k); x(k-1)];
+                yf = yf + x(k)*x(k-1);
+            end
+        end
+
         function [yd, yf] = scatterReference(x, N, Nmax)
             % THE §3.2 TARGET EMISSION, by hand.
             %
