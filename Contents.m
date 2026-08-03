@@ -2,7 +2,7 @@
 % via operator overloading tool for automatic differentiation of MATLAB
 % functions.
 %
-% Version 2.0 (2026-07-11) — GMV embedded fork
+% Version 2.0 (unreleased) — GMV embedded fork
 %
 % Copyright 2011-2015 Matthew J. Weinstein and Anil V. Rao
 % Copyright 2025-2026 Pedro Lourenço and GMV (embedded fork additions)

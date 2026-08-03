@@ -196,7 +196,16 @@ up-to-date `master`:
 
 1. **Cut the CHANGELOG section.** Rename `## [Unreleased]` to
    `## [X.Y] — YYYY-MM-DD` (today's date), leaving a fresh empty `[Unreleased]`
-   above it. Confirm the version matches the `version` constant in
+   above it. **The renamed section is published verbatim as the GitHub release
+   body** — `extract` strips only link definitions, not blockquotes, prose or
+   HTML comments — so before renaming:
+   - move the `<!-- Add user-facing changes here … -->` maintainer comment up
+     into the new empty `[Unreleased]`, where it belongs (a plain rename carries
+     it *into* the release notes, as the first thing a reader sees);
+   - delete any `[Unreleased]` framing blockquote;
+   - put forward-looking prose ("this will be…") into the past tense.
+
+   Confirm the version matches the `version` constant in
    [`adigator.m`](../adigator.m). Optionally dry-run the gate:
 
    ```bash

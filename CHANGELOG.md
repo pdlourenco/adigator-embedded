@@ -15,6 +15,26 @@ below); it is not a patch of upstream 1.x.
      workflow (.github/workflows/release.yml) requires this section to be empty
      and the new version to have its own dated section below. -->
 
+This will be the fork's **first release**. Everything below is new relative to the
+upstream 1.x baseline; the core source-transformation differentiation algorithm is
+unchanged. **`Fixed` entries describe corrections made during development against
+pre-release behaviour** — there is no released baseline to have broken, so they
+matter only if you have been tracking `master`.
+
+> **Not released yet — and 2.0 never was.** An earlier `## [2.0] — 2026-07-26`
+> heading was written before any tag existed, and the work continued past it: the
+> repository has never been tagged, so there is no 2.0 to compare against and no
+> released baseline. Its entries and everything since are consolidated here, and
+> become the dated 2.0 section when the tag actually lands. Nothing is renumbered
+> — 2.0 is still the target version, and `adigator.m` already reports it.
+>
+> *When the release section is cut: delete this note, past-tense the paragraph
+> above, and move the maintainer comment at the top of this section back up
+> into the new empty `[Unreleased]`. `extract` publishes everything here
+> verbatim as the release body — blockquotes, prose and HTML comments alike;
+> it strips only link definitions. See `docs/CONTRIBUTING.md` §"Cutting a
+> release".*
+
 ### Added
 
 - **`adigatorCoderConfig` — the Embedded Coder configuration this project
@@ -32,6 +52,48 @@ below); it is not a patch of upstream 1.x.
   Note that code generation succeeding is **necessary but not sufficient** for
   embeddability: it rejects *unbounded* sizes, but a bounded-but-large
   derivative can still overflow a small stack. See ADR-0033.
+
+- **Embeddable derivative files + MATLAB Coder / Embedded Coder codegen.** A new
+  `embed_mode` option produces derivative files that code-generate to embedded C:
+  - `'i'` (inline, the default for `adigatorGenDerFile_embedded`) — a single,
+    fully self-contained file with the static index data inlined as source: no
+    `global` variables, no runtime `load`, no `.mat`. This is the embeddable form.
+  - `'c'` (classic) — the original three-file form (wrapper + `.mat` + derivative
+    file) for interactive/host use.
+- **Reverse-mode gradients and matrix-free products.** `adigatorGenRevGradFile`
+  produces a reverse-mode (adjoint) gradient `<fn>_RGrd`, and `adigatorGenJtVFile`
+  produces a `J'·v` (transposed-Jacobian-times-vector) product `<fn>_JtV` — both
+  carrying near-zero static data for a vectorized scalar cost. Reverse gradients
+  are also a first-class embeddable `DerType` through the `c`/`l`/`i` pipeline.
+- **Struct and cell inputs.** The variable of differentiation may live inside a
+  `struct` or `cell` input (including nested fields); the generators locate it
+  and differentiate its numeric field.
+- **N-D declared parameters.** Auxiliary inputs may be declared with more than two
+  dimensions and sliced by loop counters, so time-`×`-actuator effectiveness
+  tensors (and similar) index naturally.
+- **`loopbound` — one file for a range of runtime sizes.** With
+  `loopbound = 'N'`, a derivative file generated at a maximum trip count `Nmax`
+  serves any runtime `n <= Nmax` (padded-program semantics): the loop prints with
+  the runtime bound and an `assert(N <= Nmax)` guard, and the executed prefix
+  agrees exactly with a file generated directly at `n`. Composes with nested
+  runtime bounds and N-D parameters, and supports gradient, Jacobian, and
+  (scalar-cost) Hessian.
+- **Compressed-sparse-column output (`der_output = 'csc'`).** Returns the
+  derivative's structurally-possible-nonzero vector in CSC order, with the
+  constant pattern exported once as compressed-sparse-column metadata
+  `output.{Jacobian|Gradient|Hessian}CSC` (`Size`/`ColPtr`/`RowIdx`/`Nnz`/
+  `IndexBase`) — the single canonical sparse-pattern representation, used in both
+  `matrix` and `csc` modes. A downstream (embedded) solver consumes the value
+  vector and constant `ColPtr`/`RowIdx` directly, assembling — or never forming —
+  the dense matrix itself. Host-only `adigatorCSCToLocs` / `adigatorCSCToSparse`
+  reconstruct coordinate / MATLAB-sparse forms when needed.
+- **Derivative-level selection (`der_levels`).** The Hessian file's returned
+  outputs can be trimmed to a requested subset of `{Hessian, gradient, function}`.
+- **`slim_embed` dead-code slicing.** Trims unread `_location`/`_size` chains and
+  their index tables from the generated file, shrinking the embedded artifact.
+- **Options helper (`adigatorOptions`)** covering all of the above, and derivative
+  file generators (`adigatorGenJacFile`, `adigatorGenHesFile`,
+  `adigatorGenDerFile_embedded`) that take the user function's own input signature.
 
 ### Changed
 
@@ -51,6 +113,17 @@ below); it is not a patch of upstream 1.x.
   embeddable — pin the size at build time (`coder.Constant`), or declare a
   maximum with the `loopbound` option. `lb_alloc` gained the matching contrast:
   a runtime bound is not itself a barrier, an *undeclared* one is.
+
+- Derivative output shapes follow a documented set of conventions (see
+  `adigatorDerivativeConventions.m` and the user guide): the Jacobian is `m×n`,
+  the scalar-cost gradient is a column, and the wrapper outputs use canonical
+  names and order.
+- The derivative-file generators require the differentiated function to return a
+  **single numeric array**; a `struct`/`cell` *output* through these generators
+  raises an actionable error (struct/cell *inputs* are fully supported).
+- Unsupported constructs (data-dependent indexing, induced/spectral matrix norms,
+  and similar) raise a clear, actionable error naming the construct and a
+  supported rewrite, rather than producing an incorrect derivative.
 
 ### Fixed
 
@@ -187,71 +260,6 @@ below); it is not a patch of upstream 1.x.
   every other shipped example, they are not expected to be embeddable. See
   ADR-0037.
 
-## [2.0] — 2026-07-26
-
-First release of the embedded fork. Everything below is new relative to the
-upstream 1.x baseline; the core source-transformation differentiation algorithm
-is unchanged.
-
-### Added
-
-- **Embeddable derivative files + MATLAB Coder / Embedded Coder codegen.** A new
-  `embed_mode` option produces derivative files that code-generate to embedded C:
-  - `'i'` (inline, the default for `adigatorGenDerFile_embedded`) — a single,
-    fully self-contained file with the static index data inlined as source: no
-    `global` variables, no runtime `load`, no `.mat`. This is the embeddable form.
-  - `'c'` (classic) — the original three-file form (wrapper + `.mat` + derivative
-    file) for interactive/host use.
-- **Reverse-mode gradients and matrix-free products.** `adigatorGenRevGradFile`
-  produces a reverse-mode (adjoint) gradient `<fn>_RGrd`, and `adigatorGenJtVFile`
-  produces a `J'·v` (transposed-Jacobian-times-vector) product `<fn>_JtV` — both
-  carrying near-zero static data for a vectorized scalar cost. Reverse gradients
-  are also a first-class embeddable `DerType` through the `c`/`l`/`i` pipeline.
-- **Struct and cell inputs.** The variable of differentiation may live inside a
-  `struct` or `cell` input (including nested fields); the generators locate it
-  and differentiate its numeric field.
-- **N-D declared parameters.** Auxiliary inputs may be declared with more than two
-  dimensions and sliced by loop counters, so time-`×`-actuator effectiveness
-  tensors (and similar) index naturally.
-- **`loopbound` — one file for a range of runtime sizes.** With
-  `loopbound = 'N'`, a derivative file generated at a maximum trip count `Nmax`
-  serves any runtime `n <= Nmax` (padded-program semantics): the loop prints with
-  the runtime bound and an `assert(N <= Nmax)` guard, and the executed prefix
-  agrees exactly with a file generated directly at `n`. Composes with nested
-  runtime bounds and N-D parameters, and supports gradient, Jacobian, and
-  (scalar-cost) Hessian.
-- **Compressed-sparse-column output (`der_output = 'csc'`).** Returns the
-  derivative's structurally-possible-nonzero vector in CSC order, with the
-  constant pattern exported once as compressed-sparse-column metadata
-  `output.{Jacobian|Gradient|Hessian}CSC` (`Size`/`ColPtr`/`RowIdx`/`Nnz`/
-  `IndexBase`) — the single canonical sparse-pattern representation, used in both
-  `matrix` and `csc` modes. A downstream (embedded) solver consumes the value
-  vector and constant `ColPtr`/`RowIdx` directly, assembling — or never forming —
-  the dense matrix itself. Host-only `adigatorCSCToLocs` / `adigatorCSCToSparse`
-  reconstruct coordinate / MATLAB-sparse forms when needed.
-- **Derivative-level selection (`der_levels`).** The Hessian file's returned
-  outputs can be trimmed to a requested subset of `{Hessian, gradient, function}`.
-- **`slim_embed` dead-code slicing.** Trims unread `_location`/`_size` chains and
-  their index tables from the generated file, shrinking the embedded artifact.
-- **Options helper (`adigatorOptions`)** covering all of the above, and derivative
-  file generators (`adigatorGenJacFile`, `adigatorGenHesFile`,
-  `adigatorGenDerFile_embedded`) that take the user function's own input signature.
-
-### Changed
-
-- Derivative output shapes follow a documented set of conventions (see
-  `adigatorDerivativeConventions.m` and the user guide): the Jacobian is `m×n`,
-  the scalar-cost gradient is a column, and the wrapper outputs use canonical
-  names and order.
-- The derivative-file generators require the differentiated function to return a
-  **single numeric array**; a `struct`/`cell` *output* through these generators
-  raises an actionable error (struct/cell *inputs* are fully supported).
-- Unsupported constructs (data-dependent indexing, induced/spectral matrix norms,
-  and similar) raise a clear, actionable error naming the construct and a
-  supported rewrite, rather than producing an incorrect derivative.
-
-### Deprecated
-
 - **`embed_mode = 'l'` (coderload).** It does not code-generate under Embedded
   Coder, and its compiled footprint converges with inline `'i'`. Prefer `'i'`;
   `'l'` is retained for now with removal planned in a later release.
@@ -284,9 +292,10 @@ documented workaround — none produces an incorrect derivative silently.
   raises a raw `MATLAB:badsubscript` instead of the actionable
   data-dependent-index error.
 - **The inherited `adigatorGenFiles4{Fminunc,Fsolve,Fmincon,Ipopt,gpops2}`
-  solver wrappers** are host-only and not at embedded feature parity (no
-  `embed_mode`, `path`, `der_output='csc'`, or reverse mode). They are retained
-  for drop-in compatibility with upstream ADiGator; use the core generators
+  solver wrappers** are **deprecated** (see `Deprecated` above and ADR-0037):
+  host-only and not at embedded feature parity (no `embed_mode`, `path`,
+  `der_output='csc'`, or reverse mode). They are retained for drop-in
+  compatibility with upstream ADiGator; use the core generators
   (`adigatorGenJacFile` / `adigatorGenHesFile` / `adigatorGenDerFile_embedded`)
   for embeddable derivatives.
 
@@ -294,5 +303,3 @@ documented workaround — none produces an incorrect derivative silently.
 
 Preserves the upstream copyright (© Matthew J. Weinstein and Anil V. Rao) and the
 GNU GPL v3; adds the fork's contributions (© Pedro Lourenço and GMV).
-
-[2.0]: https://github.com/pdlourenco/adigator-embedded/releases/tag/v2.0
