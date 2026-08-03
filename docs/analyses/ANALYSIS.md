@@ -1473,6 +1473,73 @@ lower-order derivatives* of every intermediate. When the user only consumes
     derivative/`.mat`/data-function triplets can be detected at load time —
     a real failure mode once files are committed into firmware repos.
 
+### 2.5 R21 scatter: the HZ-1 duplicate-target census (E3)
+
+**The question.** R21's target emission scatters each iteration's contribution
+into the accumulator through a position map,
+`yd(Ix(:,c)) = yd(Ix(:,c)) + contrib`. MATLAB's indexed assignment **drops
+duplicate writes** — `yd([1 1]) = yd([1 1]) + [a b]` adds only `b` — so if any
+position-map column can carry the same overmap row twice, the scatter form is
+silently wrong. That is hazard **HZ-1** of the engine-v2 analysis, and it is the
+hazard that decides the R21 design: it is a wrong derivative, principle 1, not
+an error.
+
+**The measurement (2026-08-03).** The overmap run (RUNFLAG 1) was instrumented
+on a *scratch copy* of the engine at the FOR-overmap union in
+`lib/@cada/cadaOverMap.m` — the point where an iteration's own pattern is
+unioned into the loop overmap. For every variable of differentiation it records
+the per-iteration `nzlocs`, duplicates within that list, and duplicates in the
+position-map column (the overmap rows the iteration's nonzeros map to). Two
+passes:
+
+| pass | observations | max `nz_k` | dup within an iteration | **dup position-map columns** |
+|---|---:|---:|---:|---:|
+| repository unit + integration suites (370 tests, all passing under instrumentation) | 1626 | 36 | 0 | **0** |
+| adversarial shapes written to force a duplicate | 504 | 35 | 0 | **0** |
+| **total** | **2130** | **36** | **0** | **0** |
+
+The adversarial pass is the one that matters for a negative result: it includes
+`x(k)*x(k)`, `x(k)^3`, the same target assigned twice in one iteration
+(`y(k) = x(k); y(k) = y(k) + x(k)^2`), overlapping windows
+(`x(k-1)*x(k)*x(k+1)`), a whole-vector reduction inside the loop, and nested
+loops. None produced a duplicate.
+
+**Why, structurally.** `lib/@cada/private/cadaunion.m` builds
+`sparse(rows, cols, …)` for each operand and reads the result back with `find`.
+MATLAB's `sparse` sums duplicate triplets and `find` returns each `(row, col)`
+exactly once, so a union's location list is **duplicate-free by construction**.
+A per-iteration column derived from that list inherits the property: distinct
+per-iteration nonzeros map to distinct overmap rows, because the overmap itself
+lists each location once.
+
+**What this means for R21.**
+
+1. HZ-1's recommended mitigation — prove per-column uniqueness at RUNFLAG 1 and
+   **fall back to today's emission where it cannot be proven** — costs nothing
+   on this corpus, because the proof always succeeds. The fail-closed fallback
+   should still be built: it is what makes the rewrite a per-site opt-in rather
+   than a big-bang, and 2130 observations are evidence, not a proof.
+2. The design constraint worth writing down is *where the column comes from*:
+   derive it from the union's own location list and uniqueness is inherited.
+   A position map computed some other way — by re-deriving locations, or by
+   concatenating per-operand lists without a union — would forfeit the
+   guarantee. That is the line an implementer must not cross.
+3. **`nz_k = 1` is the minority case.** Median `nz_k` is 2 and **52% of
+   observations have `nz_k > 1`** on the real corpus. The allocation/loopbound
+   anchor that Tier 1, the padding penalty and E6 are all measured on is the
+   *narrow* end of the distribution, not the typical one. R21's benefit is
+   therefore not confined to that shape — but neither is its risk, and a
+   prototype validated only at `nz_k = 1` is validated on the easy case.
+   `tests/integration/IScatterPrototypeTest` now carries a second anchor at
+   `nz_k = 2` with a non-identity position map for that reason.
+
+**Scope.** This measures what the *current* engine computes. The scatter form's
+columns would be built by new code, so the census constrains that code (point 2)
+rather than certifying it. Reverse mode is not covered — it requires unrolled
+loops, so it has no FOR overmap to instrument. The instrumentation is not
+retained in the tree; it is ~25 lines at one call site, reproducible from this
+description.
+
 ---
 
 ## 3. A path to reverse-mode differentiation
