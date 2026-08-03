@@ -273,22 +273,38 @@ jobs:
         uses: matlab-actions/run-command@v2
         with: { command: "addpath(genpath('tests')); ci_lint" }
       - name: Unit tests (TS-U-01..08)
-        uses: matlab-actions/run-tests@v2
-        with:
-          select-by-folder: tests/unit
-          test-results-junit: results/unit.xml
-          code-coverage-cobertura: results/coverage-unit.xml
+        uses: matlab-actions/run-command@v2
+        with: { command: "addpath('tests'); ci_gate('unit', 'results/unit.xml')" }
       - name: Integration tests (TS-I-01..04)
         if: success()
-        uses: matlab-actions/run-tests@v2
-        with:
-          select-by-folder: tests/integration
-          test-results-junit: results/integration.xml
-          code-coverage-cobertura: results/coverage-integration.xml
+        uses: matlab-actions/run-command@v2
+        with: { command: "addpath('tests'); ci_gate('integration', 'results/integration.xml')" }
       - uses: actions/upload-artifact@v4
         if: always()           # JUnit+coverage always; generated files on failure
         with: { name: ci-results, path: results }
 ```
+
+**Why `run-command`/`ci_gate` and not `run-tests`.** The action cannot put
+`tests/` on the MATLAB path, and a test class whose base class
+(`AdigatorTestCase`) will not resolve is dropped from the suite **silently** —
+it does not fail and it is not filtered, it disappears, and the run still
+reports `0 Failed, 0 Incomplete` against a smaller total. That is not
+hypothetical: **every `AdigatorTestCase` subclass was missing from both gated
+folders — 16 tests across 5 classes** (unit 201 → 195, integration 170 → 160),
+including TS-I-29/30/31 (the #217/B37 regression net, the R21 acceptance
+references, the B40 tripwire) and, pointedly, `UTestPathHygieneTest` — the #82
+meta-test that exists to catch a class forgetting its `PathFixture`. The guard
+against path-related silent test loss was itself silently lost to a path
+problem. Several PRs asserted hosted CI covered these. The coverage step was no
+backstop: it adds the path but `ci_coverage` discards the run result and errors
+only on a coverage-rate regression.
+
+`ci_gate` adds **only** `tests/` — never `genpath`, so per-class `PathFixture`
+declarations stay load-bearing (ADR-0017, the #81 clean-path lesson) — and
+calls `ci_suiteGuard`, which fails if any test class file contributes no tests.
+That guard is per class rather than a suite-size count: a count needs bumping
+on every added test and still misses "class A vanished while class B grew".
+`ci_local` runs the same guard, so it cannot hold on CI and not locally.
 
 (`cache: true` additionally caches the MATLAB installation across runs of
 the same release, cutting the remaining setup time.)
