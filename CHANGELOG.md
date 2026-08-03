@@ -17,7 +17,9 @@ below); it is not a patch of upstream 1.x.
 
 This will be the fork's **first release**. Everything below is new relative to the
 upstream 1.x baseline; the core source-transformation differentiation algorithm is
-unchanged.
+unchanged. **`Fixed` entries describe corrections made during development against
+pre-release behaviour** — there is no released baseline to have broken, so they
+matter only if you have been tracking `master`.
 
 > **Not released yet — and 2.0 never was.** An earlier `## [2.0] — 2026-07-26`
 > heading was written before any tag existed, and the work continued past it: the
@@ -25,6 +27,10 @@ unchanged.
 > released baseline. Its entries and everything since are consolidated here, and
 > become the dated 2.0 section when the tag actually lands. Nothing is renumbered
 > — 2.0 is still the target version, and `adigator.m` already reports it.
+>
+> *When the release section is cut: delete this note and put the paragraph
+> above in the past tense. `extract` publishes this text verbatim as the
+> release body — see `docs/CONTRIBUTING.md` §"Cutting a release".*
 
 ### Added
 
@@ -283,9 +289,10 @@ documented workaround — none produces an incorrect derivative silently.
   raises a raw `MATLAB:badsubscript` instead of the actionable
   data-dependent-index error.
 - **The inherited `adigatorGenFiles4{Fminunc,Fsolve,Fmincon,Ipopt,gpops2}`
-  solver wrappers** are host-only and not at embedded feature parity (no
-  `embed_mode`, `path`, `der_output='csc'`, or reverse mode). They are retained
-  for drop-in compatibility with upstream ADiGator; use the core generators
+  solver wrappers** are **deprecated** (see `Deprecated` above and ADR-0037):
+  host-only and not at embedded feature parity (no `embed_mode`, `path`,
+  `der_output='csc'`, or reverse mode). They are retained for drop-in
+  compatibility with upstream ADiGator; use the core generators
   (`adigatorGenJacFile` / `adigatorGenHesFile` / `adigatorGenDerFile_embedded`)
   for embeddable derivatives.
 

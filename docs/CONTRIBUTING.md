@@ -196,7 +196,9 @@ up-to-date `master`:
 
 1. **Cut the CHANGELOG section.** Rename `## [Unreleased]` to
    `## [X.Y] — YYYY-MM-DD` (today's date), leaving a fresh empty `[Unreleased]`
-   above it. Confirm the version matches the `version` constant in
+   above it. **Delete any `[Unreleased]` framing note and put forward-looking
+   prose into the past tense first** — the section is published verbatim as the
+   GitHub release body, and `extract` strips only link definitions. Confirm the version matches the `version` constant in
    [`adigator.m`](../adigator.m). Optionally dry-run the gate:
 
    ```bash
