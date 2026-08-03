@@ -28,9 +28,12 @@ matter only if you have been tracking `master`.
 > become the dated 2.0 section when the tag actually lands. Nothing is renumbered
 > — 2.0 is still the target version, and `adigator.m` already reports it.
 >
-> *When the release section is cut: delete this note and put the paragraph
-> above in the past tense. `extract` publishes this text verbatim as the
-> release body — see `docs/CONTRIBUTING.md` §"Cutting a release".*
+> *When the release section is cut: delete this note, past-tense the paragraph
+> above, and move the maintainer comment at the top of this section back up
+> into the new empty `[Unreleased]`. `extract` publishes everything here
+> verbatim as the release body — blockquotes, prose and HTML comments alike;
+> it strips only link definitions. See `docs/CONTRIBUTING.md` §"Cutting a
+> release".*
 
 ### Added
 
