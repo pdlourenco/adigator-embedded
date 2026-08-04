@@ -10,6 +10,14 @@ addpath(thisDir);
 
 ci_lint();
 
+% Same guard the CI gate runs (ci_gate -> ci_suiteGuard): a test class that
+% cannot load vanishes from the suite silently rather than failing, so a green
+% run can mean "fewer tests" instead of "all passing". Run it here too, or the
+% pre-push check is weaker than the gate it stands in for.
+ci_suiteGuard('unit');
+ci_suiteGuard('integration');
+ci_suiteGuard('system');   % three AdigatorTestCase subclasses live here too
+
 % system tests skip via assumption when licensed products are unavailable
 results = runtests({fullfile(thisDir,'unit'), fullfile(thisDir,'integration'), ...
     fullfile(thisDir,'system')});

@@ -124,7 +124,7 @@ push and pull request.
 | TS-U-13 | `UPeepholeTest` — the R7c union-copy peephole (issue #21; ANALYSIS §2.3(6)): `adigatorPeepholeUnionCopy` collapsing `v = zeros(K,1); v(idx)=src;` to `v = reshape(src,K,1);` only when `idx` resolves (Gator-index or literal range) to the ordered identity `1:K`; the ordered-vs-permuted and partial-fill distinctions, the self-reference / vectorized-form skips, and the bail-outs. | R7c core (issue #21) |
 | TS-U-14 | `UParseBlockTest` — the opt-in rolled-`for…end`-as-a-unit parsing in `adigatorParseTape` (roadmap R7b/#44): a rolled loop collapses into one atomic `.block` statement whose `.writes` is the union of bases it assigns and whose `.deps` are the externally defined bases it reads (loop variables and loop-local temporaries excluded; loop-carried bases also initialised outside kept); the line span, nested control-flow swallowing, and that strict mode (the default) and top-level non-`for` control flow stay rejected. | #44 (R7b rolled-loop coverage) |
 | TS-U-15 | `USlimDerivFileTest` — the interprocedural field-slice `adigatorSlimDerivFile` (issue #44 item 1; ADR-0009): splitting a multi-subfunction generated `_ADiGator*` file into per-function blocks, the forward worklist that propagates a callee's demand from the result-struct fields the caller reads at a kept call site, the per-function closure-gated slice and whole-file reassembly (dead value chains / unread output fields dropped in every function), single-derivative-function delegation to `adigatorSlimDerivBody`, the **block-aware** call-site / result-field scans that slice a rolled `for…end` in a multi-subfunction file (R10(a): a subfunction call or callee-result read nested in a kept loop is seen and its demand propagated — both the call-in-loop and read-in-loop cases), and the conservative whole-file bails (no demanded fields; an in-loop call whose result is not a plain whole-struct assignment). Text-in / text-out on hand-written snippets. | #44 item 1 (ADR-0009) |
-| TS-U-16 | `UTestPathHygieneTest` (subclasses `AdigatorTestCase`) — meta-test guard (ADR-0017, issue #82): scans every `tests/{unit,integration}` class and reports by name any that has **neither** a base class **nor** a `TestClassSetup`, i.e. relies on a globally-`genpath`'d (dirty) path. Catches in the suite itself — so CI and the clean-path pre-push hook both flag it — the PR #81 failure mode (a new class calling `embedding/`/`util/` without a `PathFixture` passes on a dirty interactive path, errors on CI's clean path). Checks setup *presence*, not path correctness (the clean-path run catches that). | REQ-C-11 |
+| TS-U-16 | `UTestPathHygieneTest` (subclasses `AdigatorTestCase`) — meta-test guard (ADR-0017, issue #82): scans every `tests/{unit,integration}` class and reports by name any that has **neither** a base class **nor** a `TestClassSetup`, i.e. relies on a globally-`genpath`'d (dirty) path. Catches in the suite itself — so CI and the clean-path pre-push hook both flag it — the PR #81 failure mode (a new class calling `embedding/`/`util/` without a `PathFixture` passes on a dirty interactive path, errors on CI's clean path). Checks setup *presence*, not path correctness (the clean-path run catches that). **Note (2026-08-03):** this guard was itself silently absent from the gate for as long as the steps used `matlab-actions/run-tests` — as an `AdigatorTestCase` subclass it could not resolve its base class and was dropped from the suite without failing. Fixed by §3.1's `ci_gate`, and the generalisation of that lesson is `ci_suiteGuard`. | REQ-C-11 |
 | TS-U-17 | `UNormTest` — the `@cada/norm` overload + `isnan`/`isinf`/`isfinite` predicates (issue #28): vector p-norm gradients (2/1/Inf/`fro`, row + column) vs FD, the induced/matrix norms raise `adigator:norm:matrixNorm` rather than mis-differentiating, and the predicates are derivative-free. | REQ-C-01 |
 | TS-U-18 | `UStripDeadOutputIndicesTest` — the output-index-metadata strip (#80/#81, approach D): the `_size`/`_location` output-field index tables are removed from the embeddable-mode generated data while retained tables/values are unchanged. | REQ-T-04 |
 | TS-U-19 | `ULoopboundGuardTest` — lockstep pin for the shared loopbound guard shape (`util/adigatorLoopboundGuard`, #181): what the emitter template prints, the recognizer regex matches with `{name, bound}` tokens (consumers: `adigatorForInitialize` emit, `adigatorPrintTempFiles` drop/rediff, `adigatorParseTape` slim keep-always); user-assert lookalikes (non-numeric bound, wrong operator, missing semicolon) must NOT match — they take the fail-loud `adigator:loopbound:rediff` path. util/-only path fixture by design. | REQ-T-02 (loopbound) |
@@ -271,24 +271,40 @@ jobs:
         with: { release: latest, cache: true }
       - name: Lint (TS-U-09)
         uses: matlab-actions/run-command@v2
-        with: { command: "addpath(genpath('tests')); ci_lint" }
+        with: { command: "addpath('tests'); ci_lint" }
       - name: Unit tests (TS-U-01..08)
-        uses: matlab-actions/run-tests@v2
-        with:
-          select-by-folder: tests/unit
-          test-results-junit: results/unit.xml
-          code-coverage-cobertura: results/coverage-unit.xml
+        uses: matlab-actions/run-command@v2
+        with: { command: "addpath('tests'); ci_gate('unit', 'results/unit.xml')" }
       - name: Integration tests (TS-I-01..04)
         if: success()
-        uses: matlab-actions/run-tests@v2
-        with:
-          select-by-folder: tests/integration
-          test-results-junit: results/integration.xml
-          code-coverage-cobertura: results/coverage-integration.xml
+        uses: matlab-actions/run-command@v2
+        with: { command: "addpath('tests'); ci_gate('integration', 'results/integration.xml')" }
       - uses: actions/upload-artifact@v4
         if: always()           # JUnit+coverage always; generated files on failure
         with: { name: ci-results, path: results }
 ```
+
+**Why `run-command`/`ci_gate` and not `run-tests`.** The action cannot put
+`tests/` on the MATLAB path, and a test class whose base class
+(`AdigatorTestCase`) will not resolve is dropped from the suite **silently** —
+it does not fail and it is not filtered, it disappears, and the run still
+reports `0 Failed, 0 Incomplete` against a smaller total. That is not
+hypothetical: **every `AdigatorTestCase` subclass was missing from both gated
+folders — 16 tests across 5 classes** (unit 201 → 195, integration 170 → 160),
+including TS-I-29/30/31 (the #217/B37 regression net, the R21 acceptance
+references, the B40 tripwire) and, pointedly, `UTestPathHygieneTest` — the #82
+meta-test that exists to catch a class forgetting its `PathFixture`. The guard
+against path-related silent test loss was itself silently lost to a path
+problem. Several PRs asserted hosted CI covered these. The coverage step was no
+backstop: it adds the path but `ci_coverage` discards the run result and errors
+only on a coverage-rate regression.
+
+`ci_gate` adds **only** `tests/` — never `genpath`, so per-class `PathFixture`
+declarations stay load-bearing (ADR-0017, the #81 clean-path lesson) — and
+calls `ci_suiteGuard`, which fails if any test class file contributes no tests.
+That guard is per class rather than a suite-size count: a count needs bumping
+on every added test and still misses "class A vanished while class B grew".
+`ci_local` runs the same guard, so it cannot hold on CI and not locally.
 
 (`cache: true` additionally caches the MATLAB installation across runs of
 the same release, cutting the remaining setup time.)

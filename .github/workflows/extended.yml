@@ -32,17 +32,18 @@ jobs:
         with:
           release: ${{ matrix.release }}
           cache: true
+      # run-command + ci_gate, not run-tests: the action cannot put `tests/` on
+      # the path, and a class that cannot resolve AdigatorTestCase is dropped
+      # from the suite SILENTLY (0 Failed, 0 Incomplete, smaller total).
       - name: Unit tests
-        uses: matlab-actions/run-tests@v2
+        uses: matlab-actions/run-command@v2
         with:
-          select-by-folder: tests/unit
-          test-results-junit: results/unit-${{ matrix.release }}.xml
+          command: addpath('tests'); ci_gate('unit', 'results/unit-${{ matrix.release }}.xml')
       - name: Integration tests
         if: success()
-        uses: matlab-actions/run-tests@v2
+        uses: matlab-actions/run-command@v2
         with:
-          select-by-folder: tests/integration
-          test-results-junit: results/integration-${{ matrix.release }}.xml
+          command: addpath('tests'); ci_gate('integration', 'results/integration-${{ matrix.release }}.xml')
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -65,16 +66,17 @@ jobs:
             Optimization_Toolbox
             MATLAB_Coder
       - name: Integration tests (Coder-enabled, runs TS-I-02 numeric l/i checks)
-        uses: matlab-actions/run-tests@v2
+        uses: matlab-actions/run-command@v2
         with:
-          select-by-folder: tests/integration
-          test-results-junit: results/integration-products.xml
+          command: addpath('tests'); ci_gate('integration', 'results/integration-products.xml')
+      # tests/system holds three AdigatorTestCase subclasses - SCasadiOracleTest,
+      # SRolledErtCodegenTest, SStackScalingTest - so before ci_gate this step
+      # silently ran none of them.
       - name: System tests (examples + codegen)
         if: success()
-        uses: matlab-actions/run-tests@v2
+        uses: matlab-actions/run-command@v2
         with:
-          select-by-folder: tests/system
-          test-results-junit: results/system.xml
+          command: addpath('tests'); ci_gate('system', 'results/system.xml')
       - name: Monte-Carlo smoke (TS-S-04)
         # Selected here, not in the PR gate or the ci_local sweep: the
         # random-seed harness must never gate a PR (ADR-0007). NOTE: this job
@@ -83,10 +85,9 @@ jobs:
         # base-MATLAB oracles actually run (docs/CI_PLAN.md §3.2 "CI cannot
         # verify codegen").
         if: success()
-        uses: matlab-actions/run-tests@v2
+        uses: matlab-actions/run-command@v2
         with:
-          select-by-folder: tests/montecarlo
-          test-results-junit: results/montecarlo.xml
+          command: addpath('tests'); ci_gate('montecarlo', 'results/montecarlo.xml')
       # V&V per-folder coverage floor (ADR-0032). Re-runs the full suite under
       # coverage instrumentation and enforces the per-folder no-regression
       # ratchet in tests/coverage_baseline_folders.txt. Deliberately a fresh

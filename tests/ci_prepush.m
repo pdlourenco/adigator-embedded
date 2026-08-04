@@ -27,6 +27,15 @@ addpath(thisDir);
 
 ci_lint();
 
+% The same guard the CI gate runs. This is the file .githooks/pre-push invokes
+% (ADR-0017), so it is the last chance to catch a class that has stopped
+% loading before the push - and a class that cannot load does not fail, it
+% vanishes, leaving a green run over a smaller suite.
+ci_suiteGuard('unit');
+ci_suiteGuard('integration');
+ci_suiteGuard('system');   % not RUN here, but a silently-lost class should
+                           % not wait for a post-merge Extended run to surface
+
 results = runtests({fullfile(thisDir,'unit'), fullfile(thisDir,'integration')});
 disp(table(results));
 assertSuccess(results);
