@@ -38,6 +38,11 @@ local diff using `docs/CONTRIBUTING.md` §"Pre-push self-review", seeded with
 findings before pushing; record the outcome in the PR description. The narrow
 exceptions (one-line typo, formatting-only, pure revert) are listed there.
 
+`REVIEW_CONTEXT.md` §"Evidence discipline" binds the **author**, not only the
+reviewer. Where review did catch those instances, it caught them late — after
+the claim had reached a merged document or the PR body. A measurement is
+cheapest to check where it is taken.
+
 ## 3. Implementation is bound to the derivative contracts
 
 The binding cross-surface conventions are in [`docs/DESIGN.md`](docs/DESIGN.md)
