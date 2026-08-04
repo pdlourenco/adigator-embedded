@@ -6,7 +6,8 @@ function out = adigatorDemoteGeneratedHeader(lines, marker)
 % Inline (`embed_mode='i'`) mode joins the wrapper, the derivative function and
 % the static data into ONE file. Each was generated separately and each carried
 % a full header, so the joined artifact repeated the licence, the disclaimer and
-% the provenance stamp once per part - a 58-line file was 57% comments before
+% the provenance stamp once per part - the licence and disclaimer appeared once
+% per joined part before
 % this, and the richer #200 header made that worse, not better.
 %
 % The file keeps ONE header, at the top, from the wrapper. Every part appended

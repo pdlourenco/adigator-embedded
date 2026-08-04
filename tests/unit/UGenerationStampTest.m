@@ -240,6 +240,23 @@ classdef UGenerationStampTest < matlab.unittest.TestCase
                 ['a wrapper generator must not claim to reconstruct an ', ...
                  'embedded artifact it did not finish producing']);
 
+            % SIGNED BUT NOT PRINTED is its own defect: auxdata shapes the
+            % artifact (it switches auxiliary inputs between fixed-value and
+            % fixed-pattern), so a recipe omitting it silently constant-folds
+            % them and rebuilds a different derivative. The printed and signed
+            % exclusion lists must not drift apart.
+            aux = strjoin(adigatorReconstructCall('f','f_Jac', ...
+                struct('embed_mode','c','auxdata',1),'adigatorGenJacFile','Jac'), ' ');
+            tc.verifySubstring(aux, 'auxdata', ...
+                'an option that moves the generation id must appear in the recipe');
+
+            % The recipe has to RUN. Every wrapper/embedded entry point forces
+            % overwrite only when the caller passes no overwrite field, and a
+            % printed adigatorOptions(...) always has one - so without this the
+            % line dies on "file already exists", beside the file it came from.
+            tc.verifySubstring(aux, '''overwrite'',1', ...
+                'the reconstruct call must be runnable over the existing file');
+
             % A plain Jacobian is the one case that needs no appendix.
             jac = strjoin(adigatorReconstructCall('f','f_Jac',classic, ...
                 'adigatorGenJacFile','Jac'), ' ');

@@ -232,3 +232,9 @@ Contracts section (binding conventions), or for purely mechanical choices
   future release. Supersedes ADR-0026's "keep but flag"; also exempts the four
   `*Ex` examples from the rule that a shipped example's user function must itself
   ERT-codegen.
+- [ADR-0038](ADR-0038-generated-files-carry-a-wall-clock.md) — **Accepted**:
+  generated wrapper and derivative files carry an ISO 8601 timestamp, so
+  REQ-T-06 means **byte-reproducible modulo timestamp lines** (TS-I-03) rather
+  than byte-identical. Narrows the promise #21 made for those files; the
+  embedded **data functions** keep the stricter property. Corollary: a
+  generation id must never be hashed over a file that carries a timestamp.

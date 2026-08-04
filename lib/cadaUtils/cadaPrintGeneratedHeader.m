@@ -25,7 +25,7 @@ function cadaPrintGeneratedHeader(fid, fileName, stamp, reconstruct)
 %
 %   ONE HEADER PER FILE. The inline (`'i'`) mode joins wrapper, derivative and
 %   data into a single file, and previously each part brought its own full
-%   block: a 58-line generated file was 57% comments, carrying the disclaimer
+%   block: the joined inline file carried the disclaimer
 %   twice and four copyright lines. Parts now carry a one-line marker and the
 %   file carries one header.
 %

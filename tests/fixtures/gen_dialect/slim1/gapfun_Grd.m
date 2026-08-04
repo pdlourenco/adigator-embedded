@@ -5,12 +5,12 @@
 % gapfun_Grd -- GENERATED FILE. Do not edit; regenerate instead.
 % Edits are lost the next time this file is generated.
 %
-% ADiGator 2.0 (GMV embedded fork) -- generated 2026-08-04T18:14:36Z
+% ADiGator 2.0 (GMV embedded fork) -- generated 2026-08-04T18:57:31Z
 % Generation id: b2bf631c9003dd35  (tool version + options + source contents)
 %
 % Reconstruct with:
 %   adigatorGenDerFile_embedded('gradient', 'gapfun', <inputs>, ...
-%       adigatorOptions('embed_mode','i', 'slim_embed',1))
+%       adigatorOptions('embed_mode','i', 'slim_embed',1, 'overwrite',1))
 %
 %   where <inputs> is the cell of adigatorCreateDerivInput /
 %   adigatorCreateAuxInput arguments the function was differentiated at.

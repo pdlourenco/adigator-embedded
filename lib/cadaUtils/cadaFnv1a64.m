@@ -20,6 +20,15 @@ function h = cadaFnv1a64(str)
 % Determinism across releases and platforms is the whole requirement, so the
 % input is encoded as UTF-8 explicitly rather than left to the platform default.
 %
+% COST. This is a per-byte MATLAB loop, so it is slow in absolute terms and the
+% quantity that governs it is the DEPENDENCY-CLOSURE SOURCE, not the size of
+% the generated artifact. Measured 2026-08-04, R2024a / PCWIN64, by timing
+% cadaGenerationStamp over file lists under examples/: 242 kB/s; a typical
+% single-function closure (5 files, ~7 kB) costs 0.027 s per stamp, and an
+% artificial 460 kB closure costs 1.9 s. Immaterial against generation time at
+% realistic sizes. If a pathological closure ever makes it matter, inlining
+% mul64's five operations into the loop is the cheap first move.
+%
 %   Copyright 2026 Pedro Lourenço and GMV. Distributed under the GNU General
 %   Public License version 3.0.
 

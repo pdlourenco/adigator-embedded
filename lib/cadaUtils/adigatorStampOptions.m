@@ -22,6 +22,18 @@ function sopts = adigatorStampOptions(opts)
 % rather than error, so an older or partially-populated options struct still
 % yields a stamp.
 %
+% KNOWN OVER-SIGNING, stated rather than silently carried: an UNSET flag ([])
+% and an explicitly-default one (0) sign differently, because [] is how the
+% options struct says "resolve me per entry point" and the resolution is not
+% always visible here. In classic mode nothing resolves `slim_embed`, so
+% leaving it unset and setting it to 0 emit identical code under different ids
+% - a false staleness alarm, the same class as signing a flag's spelling.
+% Deliberately not "fixed" by folding [] into 0: in the embedded driver [] and
+% 0 resolve to DIFFERENT values (unset -> on), so collapsing them here would
+% under-sign the mode this fork cares most about. Over-signing produces a
+% spurious regeneration; under-signing produces a wrong answer, and only one of
+% those is recoverable. Whoever narrows this must key it on the resolved value.
+%
 %   Copyright 2026 Pedro Lourenço and GMV. Distributed under the GNU General
 %   Public License version 3.0.
 

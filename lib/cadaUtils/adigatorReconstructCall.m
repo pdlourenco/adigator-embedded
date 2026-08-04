@@ -60,13 +60,14 @@ switch entryPoint
         if isempty(derType); lines = {}; return; end
         head = sprintf('adigatorGenDerFile_embedded(''%s'', ''%s'', <inputs>', ...
             derType, userFunName);
-        lines = closeCall(head, optArg);
+        lines = closeCall(head, forceOverwrite(optStr));
     case {'adigatorGenJacFile','adigatorGenHesFile'}
         if embeddedArtifact(opts)
             % See ENTRY POINT above: these did not produce the final file.
             lines = {}; return
         end
         head = sprintf('%s(''%s'', <inputs>', entryPoint, userFunName);
+        optArg = forceOverwrite(optStr);
         tail = '';
         % The appendix is positional and follows the options, so it can only be
         % printed when the options are.
@@ -87,6 +88,19 @@ lines{end+1} = 'adigatorCreateAuxInput arguments the function was differentiated
 end
 
 %% ---------------------------------------------------------------------- %%
+function optArg = forceOverwrite(optStr)
+% Print `'overwrite',1`, which is what the wrapper and embedded entry points
+% actually use. They force it only when the caller passes NO overwrite field -
+% and a printed adigatorOptions(...) always has one, defaulted to 0 - so a
+% recipe echoing the resolved options back would refuse to run with "the file
+% already exists", right next to the file that printed it.
+if isempty(optStr)
+    optArg = 'adigatorOptions(''overwrite'',1)';
+else
+    optArg = sprintf('adigatorOptions(%s, ''overwrite'',1)', optStr);
+end
+end
+
 function lines = closeCall(head, optArg, tail)
 % Render the call, wrapping onto a second line only when there are options.
 if nargin < 3; tail = ''; end
@@ -98,8 +112,16 @@ end
 end
 
 function tf = embeddedArtifact(opts)
-% True when the emitted file went through the embed pipeline, i.e. when naming a
-% plain wrapper generator would misdescribe it.
+% True when the options say this file MAY have been finished by the embed
+% pipeline, in which case naming a plain wrapper generator could misdescribe it.
+%
+% Deliberately over-broad, and worth being honest about: calling
+% adigatorGenJacFile directly with embed_mode='i' is a real path
+% (ICscOutputTest does it) and is NOT post-processed, so there the generator
+% really is the entry point and the recipe would have been correct. We suppress
+% it anyway, because from here the two cases are indistinguishable and the costs
+% are not symmetric - a missing recipe is an inconvenience, a recipe that
+% rebuilds a different file is the failure this whole header exists to avoid.
 tf = false;
 if ~isstruct(opts) || ~isfield(opts,'embed_mode'); return; end
 try
@@ -125,8 +147,14 @@ parts = {};
 for f = sort(fieldnames(opts)).'
     name = f{1};
     if ~isfield(dflt, name); continue; end
-    if any(strcmp(name, {'echo','overwrite','keyboard','path','auxdata'}))
-        continue    % do not shape the artifact; see adigatorStampOptions
+    if any(strcmp(name, {'echo','overwrite','path'}))
+        continue    % cannot shape the artifact; same exclusions the generation
+                    % id uses, and the two lists must not drift - an option
+                    % that is SIGNED but not PRINTED makes the recipe rebuild a
+                    % different file (auxdata switches auxiliary inputs between
+                    % fixed-value and fixed-pattern, so omitting it silently
+                    % constant-folds them). `overwrite` is the one deliberate
+                    % asymmetry, forced below.
     end
     v = opts.(name); d = dflt.(name);
     % Compare canonical forms where a canonicaliser exists. adigatorOptions
