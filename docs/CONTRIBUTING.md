@@ -169,6 +169,18 @@ Two audiences, two conventions (ADR-0029, REVIEW_CONTEXT principle 8):
 
 ## Commit & branch conventions
 
+**Line endings are LF, enforced by `.gitattributes`** (`* text=auto eol=lf`) —
+you should not have to think about it, which is the point. If you ever see a
+diff far larger than your edit, check the endings first:
+
+```
+git ls-files --eol
+```
+
+That reports the whole tree and separates the *index* blob from your *working*
+copy, which `grep` structurally cannot. `.gitattributes` carries the why.
+
+
 - Feature branches: `claude/<topic>-<short-hash>` for agent work,
   `<user>/<topic>` for humans.
 - Commits: imperative subject line, ≤70 chars; follow the existing `git log`

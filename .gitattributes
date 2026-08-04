@@ -1,5 +1,34 @@
-# Shell scripts and git hooks must stay LF-terminated regardless of the
-# checkout platform / core.autocrlf, or they fail to execute under sh
-# (a CRLF shebang line is not a valid interpreter path). (#82)
+# Line endings are LF everywhere, decided in the repository rather than left to
+# each contributor's core.autocrlf (#212).
+#
+# Why this exists: nine files carried CRLF in the index — adigator.m plus eight
+# under lib/ and examples/ — with nothing declaring or protecting them. Any tool
+# that rewrote one of those wholesale with LF turned a small change into a
+# full-file diff (a 60-line change once appeared as ~3,100 lines), and under
+# squash-merge that collapses `git blame` for the whole file onto one unrelated
+# commit. It was also awkward to undo: with core.autocrlf=input, `git add`
+# normalises CRLF→LF into the index regardless of the working tree, so restoring
+# the endings needed a hash-object/update-index incantation that lived only in
+# whoever remembered it.
+#
+# `text=auto eol=lf` ends that class of problem: git normalises to LF in the
+# index and checks out LF on every platform, so no tool can reintroduce the
+# churn and no contributor needs to know the recipe.
+* text=auto eol=lf
+
+# Explicit rather than merely implied by the rule above: these must be LF or
+# they fail to execute under sh — a CRLF shebang is not a valid interpreter
+# path. Kept so the requirement survives an edit to the line above. (#82)
 .githooks/** text eol=lf
 *.sh text eol=lf
+
+# Binary artefacts: never normalise, never diff as text. `text=auto` already
+# detects these correctly today, but stating them means a mis-detection cannot
+# corrupt a PDF or an image by "normalising" it.
+*.pdf binary
+*.png binary
+*.jpg binary
+# .mat especially: the tool GENERATES these routinely in 'c'/'l' modes, so a
+# committed fixture is plausible and a mis-detection would corrupt it silently.
+*.mat binary
+*.mex* binary
