@@ -168,8 +168,17 @@ classdef IEmbedSlimTest < matlab.unittest.TestCase
 
         function classicGenerationIsUnaffected(tc)
             % slim_embed in classic mode is a no-op (the loop never runs);
-            % generation still succeeds and the wrapper is byte-for-byte the
-            % same as without the option
+            % generation still succeeds and the EMITTED CODE is identical with
+            % and without the option.
+            %
+            % Compared modulo the generated header since #200. The two files are
+            % now genuinely produced by different option sets, and the header
+            % records that: different generation id (slim_embed is signed) and
+            % different timestamps. That is the provenance stamp working, not a
+            % regression - claiming byte-identity across different options would
+            % mean the header was not describing what produced the file. The
+            % code below the header is what "unaffected" ever meant, and it is
+            % still compared in full.
             writeFcn('es_cl', { ...
                 'function y = es_cl(x)', ...
                 'y = x(1)^2 + sin(x(2));', ...
@@ -182,8 +191,9 @@ classdef IEmbedSlimTest < matlab.unittest.TestCase
             adigatorGenDerFile_embedded('jacobian','es_cl', ...
                 {adigatorCreateDerivInput([2 1],'x')}, ...
                 struct('embed_mode','c','path',sDir,'echo',0,'slim_embed',1));
-            tc.verifyEqual(readlines(fullfile(sDir,'es_cl_Jac.m')), ...
-                readlines(fullfile(cDir,'es_cl_Jac.m')));
+            tc.verifyEqual(codeAfterHeader(fullfile(sDir,'es_cl_Jac.m')), ...
+                codeAfterHeader(fullfile(cDir,'es_cl_Jac.m')), ...
+                'classic-mode slim_embed must not change the emitted code');
         end
     end
 end
@@ -215,4 +225,15 @@ fid = fopen([name '.m'], 'w');
 fprintf(fid, '%s\n', lines{:});
 fclose(fid);
 rehash;
+end
+
+%% ---------------------------------------------------------------------- %%
+function code = codeAfterHeader(p)
+% Lines from the first code line onward, i.e. everything below the generated
+% header. The header carries a timestamp and a generation id by design (#200),
+% so two files made with different options differ there legitimately; the code
+% is what a "generation is unaffected" claim is about.
+L = readlines(p);
+first = find(~(strlength(strtrim(L)) == 0 | startsWith(strtrim(L), "%")), 1);
+if isempty(first); code = L; else; code = L(first:end); end
 end
