@@ -38,7 +38,7 @@ function [Outputs,varargout] = adigator(UserFunName,UserFunInputs,DerFileName,va
 % https://github.com/pdlourenco/adigator-embedded/issues
 %
 % Upstream ADiGator (Weinstein and Rao) lives at
-% https://sourceforge.net/projects/adigator/ — issues with THIS fork belong
+% https://sourceforge.net/projects/adigator/ -- issues with THIS fork belong
 % above, not there.
 %
 % See also adigatorCreateDerivInput, adigatorCreateAuxInput, adigatorOptions
@@ -263,14 +263,30 @@ if NUMcf > 1
   NUMcf = length(CalledFunctions);
 end
 
-% Provenance stamp (#200), computed ONCE here so every file of this generation
-% carries the same id - which is what makes a mismatch across a
+% Provenance stamp (#200), computed ONCE per RUN so every file of this
+% generation carries the same id - which is what makes a mismatch across a
 % derivative/.mat/data-function triplet mean "mixed vintages". CalledFunctions
 % is the dependency closure, so the id moves when any source that entered the
-% transformation changes. Only emission-affecting options are signed: echo,
-% overwrite, keyboard and path do not change the artifact, and signing them
-% would invalidate stamps for reasons a reader cannot see in the file.
-ADiGatorStamp = cadaGenerationStamp(version, adigatorStampOptions(opts), CalledFunctions);
+% transformation changes. Which options are signed is decided by
+% adigatorStampOptions.
+%
+% "Per run", not "per adigator() call": adigatorGenHesFile differentiates TWICE,
+% feeding the generated first-derivative file back in. Stamping that second pass
+% from its own closure would be wrong twice over. It would give <fn>_ADiGatorHes
+% a different id from the <fn>_Hes wrapper that calls it - so a single coherent
+% generation would read as mixed vintages, exactly the alarm this id exists to
+% raise, firing 100% of the time on second-order output. And its closure
+% contains a file we just generated, whose header carries a wall clock, so the
+% id would change on every run from identical sources - breaking the
+% machine-independence this stamp promises. The outer entry point therefore
+% passes its stamp down through an internal option field, which is invisible to
+% both the signature (adigatorStampOptions reads adigatorOptions' own field
+% list) and the reconstruct line (it prints known options only).
+if isfield(opts,'inherited_stamp') && ~isempty(opts.inherited_stamp)
+  ADiGatorStamp = opts.inherited_stamp;
+else
+  ADiGatorStamp = cadaGenerationStamp(version, adigatorStampOptions(opts), CalledFunctions);
+end
 
 
 FunctionInfo = struct('File',{},'Input',{},'Output',{},'VARINFO',...

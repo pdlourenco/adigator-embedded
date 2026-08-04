@@ -113,13 +113,19 @@ opts.embed_mode = adigatorNormalizeEmbedMode(opts.embed_mode); % v2.0 (B11 fix)
 varargin = {opts};
 
 %% --------------------- Call the ADiGator wrappers ---------------------%%
+% #200: tell the wrapper generators that WE are the entry point. They write the
+% file but do not finish it - the prune, data inlining, %#codegen patch and join
+% below are ours - so a "Reconstruct with: adigatorGenJacFile(...)" line in an
+% embedded artifact would name a call that produces a different, unprocessed
+% file. See adigatorReconstructCall.
+reconstructAs = {'adigatorGenDerFile_embedded', DerType};
 switch DerType
     case 'jacobian'
-        info = adigatorGenJacFile(UserFunName,UserFunInputs,varargin{:});
+        info = adigatorGenJacFile(UserFunName,UserFunInputs,varargin{:},'Jac',reconstructAs);
     case 'hessian'
-        info = adigatorGenHesFile(UserFunName,UserFunInputs,varargin{:});
+        info = adigatorGenHesFile(UserFunName,UserFunInputs,varargin{:},reconstructAs);
     case 'gradient'
-        info = adigatorGenJacFile(UserFunName,UserFunInputs,varargin{:},'Grd');
+        info = adigatorGenJacFile(UserFunName,UserFunInputs,varargin{:},'Grd',reconstructAs);
     case 'gradient-reverse'
         % R16b (issue #73): reverse-mode gradient through the embed pipeline.
         % adigatorGenRevGradFile emits a SELF-CONTAINED <fn>_RGrd.m (the wrapper

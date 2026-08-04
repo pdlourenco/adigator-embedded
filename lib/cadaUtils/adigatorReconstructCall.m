@@ -1,12 +1,34 @@
-function lines = adigatorReconstructCall(userFunName, derFileName, opts, entryPoint)
+function lines = adigatorReconstructCall(userFunName, derFileName, opts, entryPoint, nameAppendix)
 %ADIGATORRECONSTRUCTCALL  "Reconstruct with:" lines for a generated header (#200).
 %
 %   lines = adigatorReconstructCall(userFun, derFile, opts)
-%   lines = adigatorReconstructCall(userFun, derFile, opts, 'adigatorGenJacFile')
+%   lines = adigatorReconstructCall(userFun, derFile, opts, 'adigatorGenJacFile', 'Grd')
+%   lines = adigatorReconstructCall(userFun, derFile, opts, ...
+%                                   {'adigatorGenDerFile_embedded','gradient'})
 %
 % Answers the question a hash cannot: not *whether* a generated file matches its
 % source, but *how* it was produced - so a maintainer holding an unfamiliar
 % artifact can regenerate it rather than reverse-engineer the options.
+%
+% THE LINE MUST REPRODUCE THE FILE IT IS PRINTED IN. That is the whole value of
+% it, and it is easy to get subtly wrong in two ways this function exists to
+% prevent:
+%
+%   NAME. adigatorGenJacFile's 4th argument selects the output name and role -
+%   with 'Grd' it emits <fn>_Grd (a gradient, output name Grd), without it
+%   <fn>_Jac. Printing the call without the appendix names a DIFFERENT file with
+%   a different signature, which is worse than printing nothing.
+%
+%   ENTRY POINT. In embed_mode 'l'/'i' the artifact is produced by
+%   adigatorGenDerFile_embedded - prune, data inlining, %#codegen patch, join.
+%   adigatorGenJacFile does none of that; it only forwards opts to adigator. So
+%   the wrapper generators cannot name themselves for an embedded file even
+%   though they wrote it, and the embedded driver passes its own identity down.
+%
+% The caller must therefore say who it really is. When it does not, and the
+% options say the file went through the embed pipeline, the reconstruct block is
+% OMITTED rather than guessed: a recipe that silently produces a different file
+% is worse than no recipe (REVIEW_CONTEXT principle 1, applied to claims).
 %
 % The input specification is deliberately NOT reproduced. It can be a struct or
 % cell of arbitrary depth, and a half-rendered version would be worse than an
@@ -19,28 +41,73 @@ function lines = adigatorReconstructCall(userFunName, derFileName, opts, entryPo
 %   Copyright 2026 Pedro Lourenço and GMV. Distributed under the GNU General
 %   Public License version 3.0.
 
-if nargin < 4 || isempty(entryPoint); entryPoint = 'adigator'; end
+if nargin < 4 || isempty(entryPoint);   entryPoint   = 'adigator'; end
+if nargin < 5;                          nameAppendix = '';         end
 
-optStr = nonDefaultOptions(opts);
-
-switch entryPoint
-    case 'adigatorGenJacFile'
-        head = sprintf('adigatorGenJacFile(''%s'', <inputs>', userFunName);
-    case 'adigatorGenHesFile'
-        head = sprintf('adigatorGenHesFile(''%s'', <inputs>', userFunName);
-    otherwise
-        head = sprintf('adigator(''%s'', <inputs>, ''%s''', userFunName, derFileName);
+derType = '';
+if iscell(entryPoint)
+    if numel(entryPoint) > 1; derType = entryPoint{2}; end
+    entryPoint = entryPoint{1};
 end
 
-if isempty(optStr)
-    lines = {[head ')']};
-else
-    lines = {[head ', ...'], sprintf('    adigatorOptions(%s))', optStr)};
+optStr = nonDefaultOptions(opts);
+optArg = '';
+if ~isempty(optStr); optArg = sprintf('adigatorOptions(%s)', optStr); end
+
+switch entryPoint
+    case 'adigatorGenDerFile_embedded'
+        % Options are the LAST argument here, and the derivative type the first.
+        if isempty(derType); lines = {}; return; end
+        head = sprintf('adigatorGenDerFile_embedded(''%s'', ''%s'', <inputs>', ...
+            derType, userFunName);
+        lines = closeCall(head, optArg);
+    case {'adigatorGenJacFile','adigatorGenHesFile'}
+        if embeddedArtifact(opts)
+            % See ENTRY POINT above: these did not produce the final file.
+            lines = {}; return
+        end
+        head = sprintf('%s(''%s'', <inputs>', entryPoint, userFunName);
+        tail = '';
+        % The appendix is positional and follows the options, so it can only be
+        % printed when the options are.
+        if strcmp(entryPoint,'adigatorGenJacFile') && ~isempty(nameAppendix) ...
+                && ~strcmp(nameAppendix,'Jac')
+            if isempty(optArg); optArg = 'adigatorOptions()'; end
+            tail = sprintf(', ''%s''', nameAppendix);
+        end
+        lines = closeCall(head, optArg, tail);
+    otherwise
+        head = sprintf('adigator(''%s'', <inputs>, ''%s''', userFunName, derFileName);
+        lines = closeCall(head, optArg);
 end
 
 lines{end+1} = '';
 lines{end+1} = 'where <inputs> is the cell of adigatorCreateDerivInput /';
 lines{end+1} = 'adigatorCreateAuxInput arguments the function was differentiated at.';
+end
+
+%% ---------------------------------------------------------------------- %%
+function lines = closeCall(head, optArg, tail)
+% Render the call, wrapping onto a second line only when there are options.
+if nargin < 3; tail = ''; end
+if isempty(optArg)
+    lines = {[head tail ')']};
+else
+    lines = {[head ', ...'], sprintf('    %s%s)', optArg, tail)};
+end
+end
+
+function tf = embeddedArtifact(opts)
+% True when the emitted file went through the embed pipeline, i.e. when naming a
+% plain wrapper generator would misdescribe it.
+tf = false;
+if ~isstruct(opts) || ~isfield(opts,'embed_mode'); return; end
+try
+    m = adigatorNormalizeEmbedMode(opts.embed_mode);
+catch
+    return
+end
+tf = ischar(m) && any(strcmp(m, {'l','i'}));
 end
 
 %% ---------------------------------------------------------------------- %%
@@ -86,12 +153,14 @@ function lit = literal(v)
 % rather than approximated - an option shown wrong is worse than one absent,
 % because the header claims to be a reconstruction recipe.
 lit = '';
+% Render a flag the same way whichever type it arrived as: a user's 1 and an
+% entry point's resolved `true` are the same option, and printing them
+% differently would make two identical generations look different.
+if islogical(v) && isscalar(v); v = double(v); end
 if ischar(v)
     lit = ['''' v ''''];
 elseif isstring(v) && isscalar(v)
     lit = ['''' char(v) ''''];
-elseif islogical(v) && isscalar(v)
-    lit = mat2str(v);
 elseif isnumeric(v) && isscalar(v) && isfinite(v)
     lit = num2str(v);
 elseif iscellstr(v) && ~isempty(v)

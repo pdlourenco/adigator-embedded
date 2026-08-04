@@ -171,14 +171,29 @@ classdef IEmbedSlimTest < matlab.unittest.TestCase
             % generation still succeeds and the EMITTED CODE is identical with
             % and without the option.
             %
-            % Compared modulo the generated header since #200. The two files are
-            % now genuinely produced by different option sets, and the header
-            % records that: different generation id (slim_embed is signed) and
-            % different timestamps. That is the provenance stamp working, not a
-            % regression - claiming byte-identity across different options would
-            % mean the header was not describing what produced the file. The
-            % code below the header is what "unaffected" ever meant, and it is
-            % still compared in full.
+            % Compared modulo TIMESTAMP LINES ONLY since #200.
+            %
+            % An earlier version of this comment claimed the two files differ
+            % because they are produced by different option sets, and that the
+            % differing generation id was the stamp working. That was wrong and
+            % worth recording: the cDir call below passes no slim_embed, and
+            % adigatorGenDerFile_embedded resolves an unset slim_embed to TRUE,
+            % so BOTH runs are slim. Same signed options, same closure, `path`
+            % excluded from the signature - therefore the same generation id.
+            % The only bytes that legitimately differ are the wall-clock lines.
+            %
+            % Asserting that turned up a real defect rather than confirming a
+            % guess: the ids DID differ, because one run had slim_embed as the
+            % user's numeric 1 and the other as the driver's resolved logical
+            % true, which the signature rendered '1' and 'true'. Two runs
+            % emitting byte-identical code were being reported as different
+            % generations. Fixed in cadaGenerationStamp by signing the value
+            % rather than its spelling; UGenerationStampTest pins it directly.
+            %
+            % So the comparison strips those and nothing else: the do-not-edit
+            % line, the reconstruct call and the id all stay under test, and the
+            % ids are additionally asserted EQUAL below - which is the true
+            % statement the previous version had inverted.
             writeFcn('es_cl', { ...
                 'function y = es_cl(x)', ...
                 'y = x(1)^2 + sin(x(2));', ...
@@ -191,9 +206,15 @@ classdef IEmbedSlimTest < matlab.unittest.TestCase
             adigatorGenDerFile_embedded('jacobian','es_cl', ...
                 {adigatorCreateDerivInput([2 1],'x')}, ...
                 struct('embed_mode','c','path',sDir,'echo',0,'slim_embed',1));
-            tc.verifyEqual(codeAfterHeader(fullfile(sDir,'es_cl_Jac.m')), ...
-                codeAfterHeader(fullfile(cDir,'es_cl_Jac.m')), ...
-                'classic-mode slim_embed must not change the emitted code');
+            a = fullfile(sDir,'es_cl_Jac.m');
+            b = fullfile(cDir,'es_cl_Jac.m');
+            tc.verifyEqual(stripTimestamps(a), stripTimestamps(b), ...
+                'classic-mode slim_embed must not change the emitted file');
+            tc.verifyEqual(idOf(a), idOf(b), ...
+                ['both runs resolve to the same signed options, so they must ', ...
+                 'share a generation id - a difference here would mean the ', ...
+                 'id is moving for a reason invisible in the file']);
+            tc.verifyNotEmpty(idOf(a), 'the header must carry a generation id');
         end
     end
 end
@@ -228,12 +249,18 @@ rehash;
 end
 
 %% ---------------------------------------------------------------------- %%
-function code = codeAfterHeader(p)
-% Lines from the first code line onward, i.e. everything below the generated
-% header. The header carries a timestamp and a generation id by design (#200),
-% so two files made with different options differ there legitimately; the code
-% is what a "generation is unaffected" claim is about.
+function L = stripTimestamps(p)
+% Drop only the wall-clock lines the #200 header carries by design. Everything
+% else - including the generation id and the reconstruct call - stays compared,
+% so this weakens the check by exactly the bytes that cannot be stable and no
+% more. Same approach as IReproTest (TS-I-03).
 L = readlines(p);
-first = find(~(strlength(strtrim(L)) == 0 | startsWith(strtrim(L), "%")), 1);
-if isempty(first); code = L; else; code = L(first:end); end
+L = L(~contains(L, regexpPattern('\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z')));
+end
+
+function id = idOf(p)
+% The generation id as printed in the header, or "" if absent.
+id = "";
+tok = regexp(fileread(p), 'Generation id:\s*([0-9a-f]+)', 'tokens', 'once');
+if ~isempty(tok); id = string(tok{1}); end
 end

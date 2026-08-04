@@ -120,13 +120,24 @@ matter only if you have been tracking `master`.
   firmware. It is not a tamper seal - it does not detect edits to the generated
   file itself, which is why the header asks you not to make them.
 
-  Deliberately excluded from the id: `echo`, `overwrite`, `path` and
-  `keyboard`. They do not change the artifact, and signing them would move the
-  id for reasons invisible in the file.
+  Everything `adigatorOptions` defines is signed **except** an explicit
+  exclusion list — `echo`, `overwrite` and `path`, which cannot change the
+  artifact and would move the id for reasons invisible in the file. The
+  direction matters: as an allow-list, every option added later would be
+  unsigned by default and silently, which is not a hypothetical — it had
+  already missed `auxdata` and `optoutput`. A test now fails if an option is
+  neither signed nor deliberately excluded.
 
   Inline (`embed_mode='i'`) files now carry **one** header rather than one per
-  joined part. A 58-line generated file was 57% comments with the disclaimer
-  twice; it is now 55 lines and 55%, while carrying provenance it never had.
+  joined part, so the licence and disclaimer appear once for the file instead
+  of once per part.
+
+  On size, the honest number rather than the flattering one: on
+  `tests/fixtures/gen_dialect/slim1/gapfun_Grd.m` this is 141 → 140 lines
+  (54 → 53 comment lines). Deduplicating the header saves roughly what the
+  added provenance costs, because the single header is richer than either of
+  the two it replaces. The gain is that the file now says what produced it —
+  not that it got smaller.
 
   The header states that ADiGator is GPL v3 and its output is provided as-is.
   It makes **no claim about the licence of the generated derivative** - that
@@ -168,11 +179,16 @@ matter only if you have been tracking `master`.
   "report to the sourceforge forums" - upstream ADiGator's support channels,
   which do not cover this fork. Two internal error messages
   (`@cada/ppval`, `@cadastruct/cadaPrintReMap`) and `help adigator` said the
-  same, and those fire exactly when a user needs help. All now point at this
-  repository's issues, and the two errors gained `adigator:` identifiers so
-  they can be caught programmatically. Upstream is still credited, and the
-  inherited `adigatorGenFiles4*` wrappers still point upstream deliberately -
-  they are unmaintained here (see `Deprecated`).
+  same, and those fire exactly when a user needs help. **Newly generated files
+  and both error messages** now point at this repository's issues, and the
+  errors gained `adigator:` identifiers so they can be caught programmatically.
+
+  Scope, stated precisely because the natural claim would be wrong: the
+  routing is fixed at the point of generation, so the 47 generated artifacts
+  committed under `examples/` still carry the old contact until they are
+  regenerated. Upstream is still credited, and the inherited
+  `adigatorGenFiles4*` wrappers still point upstream deliberately — they are
+  unmaintained here (see `Deprecated`).
 
 - **A Hessian differentiated through a rolled loop no longer carries an O(n²)
   stack temporary.** If you wrote a scalar cost as a subscripted loop —

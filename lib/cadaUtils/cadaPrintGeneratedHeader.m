@@ -63,7 +63,7 @@ if ~isempty(reconstruct)
 end
 
 p('%%\n');
-p('%% Issues and questions: https://github.com/pdlourenco/adigator-embedded\n');
+p('%% Issues and questions: https://github.com/pdlourenco/adigator-embedded/issues\n');
 p('%%\n');
 p('%% Produced by ADiGator, distributed under the GNU General Public License\n');
 p('%% version 3.0, in the hope that it is useful but with NO WARRANTIES OF ANY\n');

@@ -56,7 +56,7 @@ end
 src = src(~cellfun(@isempty, src));
 
 stamp = struct( ...
-    'id',      fnv1a64(strjoin([parts, sort(src)], char(31))), ...
+    'id',      cadaFnv1a64(strjoin([parts, sort(src)], char(31))), ...
     'when',    isoNowUTC(), ...
     'version', char(versionStr));
 end
@@ -78,6 +78,9 @@ function s = normaliseSource(s)
 if isempty(s); return; end
 s = regexprep(s, sprintf('\r\n?'), newline);   % endings
 s = regexprep(s, '[ \t]+\n', newline);         % trailing whitespace
+s = regexprep(s, '[ \t]+$', '');               % ...including on a file with no
+                                               % final newline, which the line
+                                               % rule above cannot reach
 end
 
 function sig = optionsSignature(opts)
@@ -89,9 +92,15 @@ f  = sort(fieldnames(opts));
 kv = cell(1, numel(f));
 for k = 1:numel(f)
     v = opts.(f{k});
+    % Sign the VALUE, not how it was spelled. A flag reaches us as numeric 1
+    % when a user set it and as logical true when an entry point resolved a
+    % default, and mat2str renders those '1' and 'true' - which would move the
+    % generation id between two runs that produce byte-identical code. The id
+    % must move when the artifact changes, and only then.
+    if islogical(v); v = double(v); end
     if ischar(v) || isstring(v)
         vs = char(v);
-    elseif islogical(v) || isnumeric(v)
+    elseif isnumeric(v)
         vs = mat2str(v);
     elseif iscell(v)
         vs = sprintf('cell%d', numel(v));
@@ -112,27 +121,4 @@ try
 catch
     t = [datestr(now, 'yyyy-mm-ddTHH:MM:SS') 'Z'];   %#ok<DATST,TNOW1> pre-datetime fallback
 end
-end
-
-function h = fnv1a64(str)
-% FNV-1a, 64-bit. Deterministic across releases and platforms, which is the
-% whole requirement.
-b  = uint64(double(unicode2native(str, 'UTF-8')));
-hv = uint64(14695981039346656037);
-pr = uint64(1099511628211);
-for k = 1:numel(b)
-    hv = bitxor(hv, b(k));
-    hv = mul64(hv, pr);
-end
-h = lower(dec2hex(hv, 16));
-end
-
-function z = mul64(a, b)
-% 64-bit multiply with wraparound, in 32-bit halves: MATLAB saturates uint64
-% arithmetic rather than wrapping it, so a*b directly would peg at intmax.
-lo = bitand(a, uint64(4294967295)); hi = bitshift(a, -32);
-lb = bitand(b, uint64(4294967295)); hb = bitshift(b, -32);
-z0 = lo*lb;
-z1 = bitand(lo*hb + hi*lb + bitshift(z0, -32), uint64(4294967295));
-z  = bitor(bitshift(z1, 32), bitand(z0, uint64(4294967295)));
 end
