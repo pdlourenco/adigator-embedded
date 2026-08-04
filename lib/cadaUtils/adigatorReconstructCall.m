@@ -122,11 +122,22 @@ function tf = embeddedArtifact(opts)
 % it anyway, because from here the two cases are indistinguishable and the costs
 % are not symmetric - a missing recipe is an inconvenience, a recipe that
 % rebuilds a different file is the failure this whole header exists to avoid.
-tf = false;
-if ~isstruct(opts) || ~isfield(opts,'embed_mode'); return; end
+%
+% WHICH WAY THIS FAILS IS THE POINT. An earlier version defaulted to FALSE when
+% it could not canonicalise the mode - i.e. "not embedded, print the recipe" -
+% and that is the wrong direction for exactly the reason above. It also fired:
+% adigatorNormalizeEmbedMode lives in util/, a caller reached this with util/
+% off the path, the catch swallowed it, and an embedded artifact got a recipe
+% naming a generator that does not produce it. Silence is the safe default
+% here; printing is the one that can mislead.
+if ~isstruct(opts) || ~isfield(opts,'embed_mode'); tf = false; return; end
+m = opts.embed_mode;
 try
-    m = adigatorNormalizeEmbedMode(opts.embed_mode);
+    m = adigatorNormalizeEmbedMode(m);
 catch
+    % Cannot establish the mode - suppress rather than guess. Bare 'c' is the
+    % single exception: it is unambiguous without the canonicaliser.
+    tf = ~(ischar(m) && strcmp(m, 'c'));
     return
 end
 tf = ischar(m) && any(strcmp(m, {'l','i'}));

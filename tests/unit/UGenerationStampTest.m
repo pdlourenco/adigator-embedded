@@ -36,6 +36,13 @@ classdef UGenerationStampTest < matlab.unittest.TestCase
             root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
             tc.applyFixture(PathFixture(root));
             tc.applyFixture(PathFixture(fullfile(root,'lib','cadaUtils')));
+            % util/ holds adigatorNormalizeEmbedMode, which
+            % adigatorReconstructCall canonicalises embed_mode with. Omitting
+            % it passed locally (a startup.m had it on the path) and failed on
+            % the hosted runner's clean path - the #81/#82 failure mode, and
+            % the reason validation must run through ci_local rather than an
+            % ad-hoc addpath.
+            tc.applyFixture(PathFixture(fullfile(root,'util')));
         end
     end
 
@@ -257,6 +264,17 @@ classdef UGenerationStampTest < matlab.unittest.TestCase
             tc.verifySubstring(aux, '''overwrite'',1', ...
                 'the reconstruct call must be runnable over the existing file');
 
+            % An UNRECOGNISABLE mode must suppress too. This is the direction
+            % the guard fails in, and it is the whole safety property: the
+            % first version defaulted to "not embedded, print the recipe" when
+            % it could not canonicalise the mode, and that fired for real -
+            % the canonicaliser lives in util/, a caller reached it with util/
+            % off the path, the catch swallowed it, and an embedded artifact
+            % got a recipe naming a generator that does not produce it.
+            tc.verifyEmpty(adigatorReconstructCall('f','f_Jac', ...
+                struct('embed_mode','!!unrecognisable'),'adigatorGenJacFile'), ...
+                'an undeterminable embed mode must suppress the recipe, not print one');
+
             % A plain Jacobian is the one case that needs no appendix.
             jac = strjoin(adigatorReconstructCall('f','f_Jac',classic, ...
                 'adigatorGenJacFile','Jac'), ' ');
@@ -312,5 +330,15 @@ end
 function fcloseIfOpen(fid)
 % A failed verify must not leave a handle open: on Windows that makes
 % WorkingFolderFixture teardown fail too, turning one failure into a cascade.
-if ~isempty(fid) && fid > 2 && any(fopen('all') == fid); fclose(fid); end
+%
+% Just try to close it. Asking `fopen('all')` whether it is open is the obvious
+% form and the wrong one - that syntax is being removed, and on a newer release
+% it throws from inside an onCleanup destructor, which surfaces as a warning
+% attributed to whatever test happens to be finishing.
+if isempty(fid) || fid <= 2; return; end
+try
+    fclose(fid);
+catch
+    % already closed, which is the normal path
+end
 end
