@@ -33,6 +33,8 @@ ci_lint();
 % vanishes, leaving a green run over a smaller suite.
 ci_suiteGuard('unit');
 ci_suiteGuard('integration');
+ci_suiteGuard('system');   % not RUN here, but a silently-lost class should
+                           % not wait for a post-merge Extended run to surface
 
 results = runtests({fullfile(thisDir,'unit'), fullfile(thisDir,'integration')});
 disp(table(results));

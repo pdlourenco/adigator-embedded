@@ -30,11 +30,18 @@ function suite = ci_suiteGuard(folder)
 % and nothing said so.
 %
 % Deliberately NOT a count check: a number needs bumping on every added test,
-% and still misses "class A vanished while class B grew". Per class file needs
-% no maintenance and names what disappeared.
+% and a number that gets routinely bumped is one people bump without reading —
+% the same dynamic that let 195-vs-201 and 160-vs-170 sit unnoticed. Per class
+% file needs no maintenance and names what disappeared.
 %
-% Shared by `ci_gate` (the CI gate) and `ci_local` (the pre-push runner) so the
-% guard cannot hold in one and not the other.
+% Known gap, stated so it is not mistaken for coverage: a class that survives
+% but loses SOME of its methods still contributes >= 1 test and passes here. A
+% per-class count RATCHET (committed baseline, failing only on a drop, in the
+% idiom of coverage_baseline_folders.txt / ADR-0032) would catch that; tracked
+% separately rather than folded in.
+%
+% Shared by `ci_gate` (the CI gate), `ci_local` and `ci_prepush` (the pre-push
+% hook) so the guard cannot hold in one and not the others.
 %
 %   Copyright 2026 Pedro Lourenço and GMV. Distributed under the GNU General
 %   Public License version 3.0.
@@ -77,16 +84,36 @@ end
 
 %% ---------------------------------------------------------------------- %%
 function tf = isTestClassFile(p)
-% A classdef whose name contains Test. Read rather than executed, so a file
-% that is broken is still recognised as one that OUGHT to have contributed.
-% An abstract base (`classdef (Abstract) Foo`) does not match, which is what we
-% want - keep that in mind before relaxing the pattern.
+% A file that OUGHT to contribute tests: a classdef declaring a `methods (Test)`
+% block. Read rather than executed, so a class that is broken — the whole point
+% of this guard — is still recognised as one that should have contributed.
+%
+% Deliberately NOT keyed on the file name matching *Test*, for two reasons:
+%
+%   * a shared BASE class matches by name. `AdigatorTestCase` is not abstract
+%     and its name contains "Test", so a name-based check would report it as
+%     silently lost the moment such a base sat in a scanned folder — leaving
+%     file location as the only protection, which is not a property worth
+%     resting on. It declares no `methods (Test)`, so the block check excludes
+%     it by substance instead, wherever it lives.
+%   * a test class not following the naming convention would otherwise go
+%     unguarded — exactly the blind spot this function exists to remove.
+%
+% Verified across the four test folders: 64 classdefs, all 64 declare a
+% `methods (Test...)` block, and `AdigatorTestCase` declares none.
+%
+% The word boundary after Test is load-bearing, not decoration: without it
+% `methods (TestClassSetup)` matches, and `AdigatorTestCase` has one of those —
+% so dropping it silently reintroduces the very false positive this rewrite
+% removed. `\<Test\>` still admits attributes, e.g. `methods (Test, TestTags=…)`.
 tf = false;
 try
     txt = fileread(p);
 catch
     return
 end
-txt = regexprep(txt, '^\s*%[^\n]*$', '', 'lineanchors');   % drop comment lines
-tf = ~isempty(regexp(txt, '^\s*classdef\s+\w*Test\w*', 'once', 'lineanchors'));
+txt = regexprep(txt, '^[^\S\r\n]*%[^\r\n]*$', '', 'lineanchors');  % strip comments
+isClass  = ~isempty(regexp(txt, '^\s*classdef\>', 'once', 'lineanchors'));
+hasTests = ~isempty(regexp(txt, 'methods\s*\(\s*\<Test\>', 'once'));
+tf = isClass && hasTests;
 end
