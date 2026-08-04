@@ -50,13 +50,23 @@ function z = mul64(a, b)
 %
 % NOT a general-purpose 64x64 multiply, and the safety is a property of the
 % CALLER rather than of this function. The intermediate lo*hb + hi*lb + carry is
-% formed in saturating uint64 and is exact only because `b` here is always the
-% FNV prime: with low32 = 435 and high32 = 256 the intermediate is bounded by
-% (2^32-1)*256 + (2^32-1)*435 + 434 = 2967822401279, under 3e12 and so below
-% 2^42 - far under the 2^53 where doubles stop representing integers exactly,
-% and eleven orders below the uint64 ceiling. Reached with any larger multiplier it
-% saturates instead of wrapping, and because MATLAB saturates SILENTLY the
-% result would still look like a plausible hash. Do not lift this out of here.
+% exact only because `b` here is always the FNV prime: with low32 = 435 and
+% high32 = 256 it is bounded by
+%
+%     (2^32-1)*256 + (2^32-1)*435 + 434 = 2967822401279     (42 bits)
+%
+% THE CEILING THAT BINDS IS 2^64, not 2^53. Every operand here is uint64 (the
+% bitand/bitshift results are), so the arithmetic is exact integer arithmetic up
+% to intmax('uint64') and SATURATES past it - it does not wrap, which is the
+% whole reason this function exists. 2^53 is the double-exactness limit and does
+% not apply: nothing on this path is a double, since the only double in the file
+% is the per-byte conversion in the caller, which is immediately narrowed to
+% uint64. 42 bits clears both by a wide margin, but the risk being excluded is
+% uint64 saturation.
+%
+% Reached with any larger multiplier the intermediate saturates instead of
+% wrapping, and because MATLAB saturates SILENTLY the result would still look
+% like a plausible hash. Do not lift this out of here.
 lo = bitand(a, uint64(4294967295)); hi = bitshift(a, -32);
 lb = bitand(b, uint64(4294967295)); hb = bitshift(b, -32);
 z0 = lo*lb;
