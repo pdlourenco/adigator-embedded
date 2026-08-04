@@ -32,6 +32,15 @@ function filepath = structure_to_embed_mfile(funcName, dataStruct, outPath)
 %                  PR #10).
 %                  Drop the wall-clock timestamp from the header so
 %                  regenerated data functions are byte-reproducible (#21).
+%                  Note (#200): generated WRAPPER and DERIVATIVE files now
+%                  carry an ISO 8601 timestamp again, deliberately - a
+%                  provenance header that cannot say when it was made
+%                  answers only half the question it exists for. Those
+%                  files are byte-reproducible MODULO their timestamp
+%                  lines, which is what IReproTest (TS-I-03) compares. The
+%                  data functions this file writes keep the #21 property
+%                  unchanged: no timestamp, byte-identical on
+%                  regeneration.
 
 arguments
   funcName   (1,1) string

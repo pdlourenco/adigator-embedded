@@ -34,8 +34,12 @@ function [Outputs,varargout] = adigator(UserFunName,UserFunInputs,DerFileName,va
 % Copyright 2011-2014 Matthew J. Weinstein and Anil V. Rao
 % Distributed under the GNU General Public License version 3.0
 %
-% Please report any bugs/suggestions to the forums at 
-% https://sourceforge.net/projects/adigator/
+% Please report any bugs/suggestions at
+% https://github.com/pdlourenco/adigator-embedded/issues
+%
+% Upstream ADiGator (Weinstein and Rao) lives at
+% https://sourceforge.net/projects/adigator/ -- issues with THIS fork belong
+% above, not there.
 %
 % See also adigatorCreateDerivInput, adigatorCreateAuxInput, adigatorOptions
 % 
@@ -259,6 +263,31 @@ if NUMcf > 1
   NUMcf = length(CalledFunctions);
 end
 
+% Provenance stamp (#200), computed ONCE per RUN so every file of this
+% generation carries the same id - which is what makes a mismatch across a
+% derivative/.mat/data-function triplet mean "mixed vintages". CalledFunctions
+% is the dependency closure, so the id moves when any source that entered the
+% transformation changes. Which options are signed is decided by
+% adigatorStampOptions.
+%
+% "Per run", not "per adigator() call": adigatorGenHesFile differentiates TWICE,
+% feeding the generated first-derivative file back in. Stamping that second pass
+% from its own closure would be wrong twice over. It would give <fn>_ADiGatorHes
+% a different id from the <fn>_Hes wrapper that calls it - so a single coherent
+% generation would read as mixed vintages, exactly the alarm this id exists to
+% raise, firing 100% of the time on second-order output. And its closure
+% contains a file we just generated, whose header carries a wall clock, so the
+% id would change on every run from identical sources - breaking the
+% machine-independence this stamp promises. The outer entry point therefore
+% passes its stamp down through an internal option field, which is invisible to
+% both the signature (adigatorStampOptions reads adigatorOptions' own field
+% list) and the reconstruct line (it prints known options only).
+if isfield(opts,'inherited_stamp') && ~isempty(opts.inherited_stamp)
+  ADiGatorStamp = opts.inherited_stamp;
+else
+  ADiGatorStamp = cadaGenerationStamp(version, adigatorStampOptions(opts), CalledFunctions);
+end
+
 
 FunctionInfo = struct('File',{},'Input',{},'Output',{},'VARINFO',...
   {},'FORDATA',{},'DERNUMBER',{},'Iteration',{},'PreviousDerivData',{},...
@@ -460,6 +489,11 @@ for CFcount = 1:NUMcf
   end
 end
 FunctionInfo = FunctionInfo(1:FunCount);
+% The wrapper generators print their own header AFTER this function returns, by
+% which point B16's cleanup has cleared the transformation globals - so the
+% stamp rides out on FunctionInfo rather than living in a global. Same id, so
+% the wrapper and the derivative file are recognisably one generation.
+FunctionInfo(1).Stamp = ADiGatorStamp;
 % -----Check and make sure that no two functions are named the same thing
 % (either called functions or sub functions)-----
 FunStrChecks = cell(FunCount,1);
@@ -751,19 +785,10 @@ ADIGATOR.PRINT.FILEPATHS= ADiGator_GeneratedFiles;
 ADIGATOR.PRINT.FID      = Dfid;
 ADIGATOR.PRINT.FLAG     = 0;
 ADIGATOR.PRINT.INDENT   = [];
-% Print the derivative function header
-fprintf(Dfid,['%% This code was generated using ADiGator version ',version,'\n']);
-fprintf(Dfid,['%% ',char(169),'2010-2014 Matthew J. Weinstein and Anil V. Rao\n']);
-fprintf(Dfid,['%% ',char(169),'2025-2026 Pedro Lourenço and GMV\n']);
-fprintf(Dfid,'%% This version of ADiGator may be obtained at https://github.com/pdlourenco/adigator-embedded \n');
-fprintf(Dfid,'%% Contact: mweinstein@ufl.edu\n');
-fprintf(Dfid,'%% Bugs/suggestions may be reported to the github issues.\n');
-fprintf(Dfid,'%%                    DISCLAIMER\n');
-fprintf(Dfid,'%% ADiGator is a general-purpose software distributed under the GNU General\n');
-fprintf(Dfid,'%% Public License version 3.0. While the software is distributed with the\n');
-fprintf(Dfid,'%% hope that it will be useful, both the software and generated code are\n');
-fprintf(Dfid,'%% provided ''AS IS'' with NO WARRANTIES OF ANY KIND and no merchantability\n');
-fprintf(Dfid,'%% or fitness for any purpose or application.\n\n');
+% Print the derivative function header (#200: one shared emitter, so the
+% wrapper, the derivative file and the data function cannot drift apart)
+cadaPrintGeneratedHeader(Dfid, DerFileName, ADiGatorStamp, ...
+  adigatorReconstructCall(UserFunName, DerFileName, opts));
 %% ~~~~~~~~~ PREALLOCATION RUN (if Struc/Cell Assignments) ~~~~~~~~~~~~~ %%
 if ADIGATOR.OPTIONS.PREALLOCATE
   ADIGATOR.RUNFLAG = 0;

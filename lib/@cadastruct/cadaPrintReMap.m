@@ -93,7 +93,8 @@ yfields(yi) = [];
 % xfields not empty => y < x
 % yfields not empty => x < y
 if ~isempty(xfields) && ~isempty(yfields)
-  error('Remapping error - please report to sourceforge forums')
+  error('adigator:cadastruct:remap', ['Remapping error. Please report this at ' ...
+    'https://github.com/pdlourenco/adigator-embedded/issues']);
 end
 
 csize = min(xsize,ysize);

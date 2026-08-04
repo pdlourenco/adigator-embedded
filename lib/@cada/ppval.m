@@ -88,7 +88,9 @@ elseif isstruct(pp)
     if ~isempty(nameloc)
       ppnew.func.name = pp.breaks.func.name(1:nameloc(end)-1);
     else
-      error('Cannot find the name of the pp - please report error to sourceforge forums');
+      error('adigator:ppval:unnamedPP', ['Cannot determine the name of the ' ...
+        'piecewise-polynomial input. Please report this at ' ...
+        'https://github.com/pdlourenco/adigator-embedded/issues']);
     end
   end
   pp = ppnew;

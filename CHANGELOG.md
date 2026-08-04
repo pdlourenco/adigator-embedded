@@ -97,6 +97,53 @@ matter only if you have been tracking `master`.
 
 ### Changed
 
+- **Generated files carry a proper header, and say how to reproduce
+  themselves.** Every generated file now opens with a `GENERATED FILE - do not
+  edit` line, the tool version, an ISO 8601 timestamp, a **generation id**, and
+  the call that reconstructs it:
+
+  ```matlab
+  % myfun_Grd -- GENERATED FILE. Do not edit; regenerate instead.
+  % ADiGator 2.0 (GMV embedded fork) -- generated 2026-08-04T16:35:59Z
+  % Generation id: 5fa78f74d845a794  (tool version + options + source contents)
+  %
+  % Reconstruct with:
+  %   adigatorGenJacFile('myfun', <inputs>, ...
+  %       adigatorOptions('embed_mode','i','slim_embed',1))
+  ```
+
+  The id covers the tool version, the emission-affecting options, and the
+  **contents** of every source that entered the transformation - so it changes
+  when your function changes, and every file of one generation shares it. If a
+  wrapper and its derivative file disagree, they are from different runs: the
+  staleness case that bites once generated files are committed alongside
+  firmware. It is not a tamper seal - it does not detect edits to the generated
+  file itself, which is why the header asks you not to make them.
+
+  Everything `adigatorOptions` defines is signed **except** an explicit
+  exclusion list — `echo`, `overwrite` and `path`, which cannot change the
+  artifact and would move the id for reasons invisible in the file. The
+  direction matters: as an allow-list, every option added later would be
+  unsigned by default and silently, which is not a hypothetical — it had
+  already missed `auxdata` and `optoutput`. A test now fails if an option is
+  neither signed nor deliberately excluded.
+
+  Inline (`embed_mode='i'`) files now carry **one** header rather than one per
+  joined part, so the licence and disclaimer appear once for the file instead
+  of once per part.
+
+  On size, the honest number rather than the flattering one: on
+  `tests/fixtures/gen_dialect/slim1/gapfun_Grd.m` this is 141 → 140 lines
+  (54 → 53 comment lines). Deduplicating the header saves roughly what the
+  added provenance costs, because the single header is richer than either of
+  the two it replaces. The gain is that the file now says what produced it —
+  not that it got smaller.
+
+  The header states that ADiGator is GPL v3 and its output is provided as-is.
+  It makes **no claim about the licence of the generated derivative** - that
+  question is real but is not this fork's alone to answer, since ADiGator is
+  © Weinstein and Rao.
+
 - **The `polydatafit` example now builds its Vandermonde matrix the embeddable
   way, and the ODE examples say what stops them being embeddable.** `fit.m` grew
   the matrix by concatenation (`V = [V, x.^count]`), which differentiates fine
@@ -126,6 +173,22 @@ matter only if you have been tracking `master`.
   supported rewrite, rather than producing an incorrect derivative.
 
 ### Fixed
+
+- **Generated files and error messages no longer send you to the wrong
+  project.** Every generated file carried `Contact: mweinstein@ufl.edu` and
+  "report to the sourceforge forums" - upstream ADiGator's support channels,
+  which do not cover this fork. Two internal error messages
+  (`@cada/ppval`, `@cadastruct/cadaPrintReMap`) and `help adigator` said the
+  same, and those fire exactly when a user needs help. **Newly generated files
+  and both error messages** now point at this repository's issues, and the
+  errors gained `adigator:` identifiers so they can be caught programmatically.
+
+  Scope, stated precisely because the natural claim would be wrong: the
+  routing is fixed at the point of generation, so the 47 generated artifacts
+  committed under `examples/` still carry the old contact until they are
+  regenerated. Upstream is still credited, and the inherited
+  `adigatorGenFiles4*` wrappers still point upstream deliberately — they are
+  unmaintained here (see `Deprecated`).
 
 - **A Hessian differentiated through a rolled loop no longer carries an O(n²)
   stack temporary.** If you wrote a scalar cost as a subscripted loop —

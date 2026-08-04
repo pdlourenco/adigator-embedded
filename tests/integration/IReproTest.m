@@ -3,9 +3,12 @@ classdef IReproTest < matlab.unittest.TestCase
     %
     % CI plan: TS-I-03, verifies REQ-T-06. Covers the regeneration contract of
     % adigatorGenDerFile_embedded:
-    %  - regenerating the same fixture twice is byte-identical (modulo any
-    %    timestamp line; the generator currently emits none, so the strip is a
-    %    forward-looking safeguard);
+    %  - regenerating the same fixture twice is byte-identical MODULO
+    %    timestamp lines. Since #200 the generator does emit one (an ISO 8601
+    %    line in the provenance header), so this strip is load-bearing rather
+    %    than forward-looking, and it is what docs/CI_PLAN.md REQ-T-06 now
+    %    means by reproducible. The embedded data functions keep the stricter
+    %    byte-identity #21 established - they carry no timestamp;
     %  - regeneration over an already-populated folder succeeds BY DEFAULT --
     %    like the other wrapper-generation entry points, OVERWRITE defaults to 1
     %    here (adigatorOptions NOTES: the default differs for the wrapper
