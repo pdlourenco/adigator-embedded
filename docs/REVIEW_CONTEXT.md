@@ -35,56 +35,6 @@ Two review modes; the reviewer can run either or both.
 A bundled review covers both. Narrow with "review in verification mode" /
 "validation mode" for tighter findings at lower cost.
 
-## Evidence discipline — fact, or artifact of the measurement?
-
-The principles below are about the **artifact**; this one is about **method**.
-It is a failure this project has repeatedly paid for, in reviews as well as in
-PRs. What makes it catchable is that the unverified thing is usually **the
-instrument, not the subject** — the number is real, but it measures something
-other than what the sentence says.
-
-**Prefer a mechanical guard to vigilance** — principle 6 applied to claims
-rather than to code. Where a claim can be pinned, pin it. This is for the rest.
-
-**Tells that a measurement is an artifact rather than a result:**
-
-1. **stderr discarded** where stdout is treated as data.
-   `git show missing:path 2>/dev/null | tr -cd '\r' | wc -c` returns `0` — so
-   does a genuine LF file. Worse than one bad number: a *set* of these can look
-   coherent while some entries are failures, and that coherence is what stops
-   the question being asked.
-2. **unchecked tool state** — a shallow clone's boundary commit behaves exactly
-   like a root commit (`git rev-parse --is-shallow-repository`).
-3. **"CI is green"** — a claim about *what ran*; a suite that silently shrank
-   still reports `0 Failed`.
-4. **an inferred relationship between two verified facts** — both line numbers
-   right, the execution order between them never checked; the error identifier
-   real, the overload it implied never confirmed to exist (#230, §1.3n).
-5. **a statistic whose population was never stated** — "median 2, 52% wider
-   than one" counted every overmapped variable, accumulators included, which is
-   not the quantity the sentence claimed (#234, §2.5(c)).
-
-**A claim that will outlive the PR** — quoted into a document, a ROADMAP row, an
-ADR — carries how it was measured, so the next reader can re-run it instead of
-trusting it. `ANALYSIS.md` §2.5's *"To reproduce:"* is the shape.
-
-### Instances (this project)
-
-- **ADR-0019's O(n²) unrolled-stack figure**: quoted un-attributed into
-  `CI_PLAN.md` REQ-T-10 and ADR-0033 §Context, did not reproduce, retracted from
-  both (#216). `IScatterPrototypeTest` / `SGenericBoundFoldingTest` are live
-  tests rather than `bench/` scripts so their figures cannot go the same way.
-- **16 tests across 5 classes absent from the hosted gate**, across several PRs
-  that treated them as covered because they were license-free (#235).
-  `tests/ci_suiteGuard.m` is the mechanical answer.
-- **A missing file read as an LF file** (tell 1) and **a shallow clone's
-  boundary read as a root** (tell 2) produced opposite wrong conclusions about
-  the same question in one review round (#237) — one author-side, one
-  reviewer-side.
-
-Review caught some of these, but late — after the claim had reached a merged
-document or the PR body. A measurement is cheapest to check where it is taken.
-
 ## Core principles (review against these)
 
 1. **A wrong derivative is worse than an error.** When a rule cannot be
@@ -132,6 +82,59 @@ document or the PR body. A measurement is cheapest to check where it is taken.
    change's version *tag* names the release it ships in. Release-to-release
    change history lives in the user-facing `CHANGELOG.md`. See
    [ADR-0029](decisions/ADR-0029-v2-release-versioning-doc-cleanliness.md).
+
+## Evidence discipline — fact, or artifact of the measurement?
+
+The principles above are about the **artifact**; this one is about **method**.
+It is a failure this project has repeatedly paid for, in reviews as well as in
+PRs. What makes it catchable is that the unverified thing is usually **the
+instrument, not the subject** — the number is real, but it measures something
+other than what the sentence says.
+
+**Prefer a mechanical guard to vigilance** — principle 6 applied to claims
+rather than to code. Where a claim can be pinned, pin it. This is for the rest.
+
+**Tells that a measurement is an artifact rather than a result:**
+
+1. **stderr discarded** where stdout is treated as data.
+   `git show missing:path 2>/dev/null | tr -cd '\r' | wc -c` returns `0` — so
+   does a genuine LF file. Worse than one bad number: a *set* of these can look
+   coherent while some entries are failures, and that coherence is what stops
+   the question being asked.
+2. **unchecked tool state** — the tool is not showing what you assume. A
+   shallow clone's boundary commit behaves exactly like a root commit
+   (`git rev-parse --is-shallow-repository`); a stale working tree answers for
+   a revision you did not ask about (`git show <ref>:<path>`, not `grep` over
+   the checkout).
+3. **"CI is green"** — a claim about *what ran*; a suite that silently shrank
+   still reports `0 Failed`.
+4. **an inferred relationship between two verified facts** — both line numbers
+   right, the execution order between them never checked; the error identifier
+   real, the overload it implied never confirmed to exist (#230, §1.3n).
+5. **a statistic whose population was never stated** — "median 2, 52% wider
+   than one" counted every overmapped variable, accumulators included, which is
+   not the quantity the sentence claimed (#234, §2.5(c)).
+
+**A claim that will outlive the PR** — quoted into a document, a ROADMAP row, an
+ADR — carries how it was measured, so the next reader can re-run it instead of
+trusting it. `ANALYSIS.md` §2.5's *"To reproduce:"* is the shape.
+
+### Instances (this project)
+
+- **ADR-0019's O(n²) unrolled-stack figure**: quoted un-attributed into
+  `CI_PLAN.md` REQ-T-10 and ADR-0033 §Context, did not reproduce, retracted from
+  both (#216). `IScatterPrototypeTest` / `SGenericBoundFoldingTest` are live
+  tests rather than `bench/` scripts so their figures cannot go the same way.
+- **16 tests across 5 classes absent from the hosted gate**, across several PRs
+  that treated them as covered because they were license-free (#235).
+  `tests/ci_suiteGuard.m` is the mechanical answer.
+- **A missing file read as an LF file** (tell 1) and **a shallow clone's
+  boundary read as a root** (tell 2) produced opposite wrong conclusions about
+  the same question in one review round (#237) — one author-side, one
+  reviewer-side.
+
+Review caught some of these, but late — after the claim had reached a merged
+document or the PR body. A measurement is cheapest to check where it is taken.
 
 ## Terminology (enforce consistency)
 
