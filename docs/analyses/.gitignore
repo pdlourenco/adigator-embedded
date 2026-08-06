@@ -1,8 +1,19 @@
 # Proprietary bug reports (GMV source snippets) — never commit.
 # Repo-derived review reports (no proprietary content) are whitelisted
 # explicitly, one line per file, so the default stays never-commit.
+#
+# Adding a file to this folder does NOTHING until it is listed here. That is
+# the point (deny by default), but it fails silently: the file is simply absent
+# from the commit, with no error. If a doc you wrote here is missing from a
+# diff, check this list first.
 *
 !.gitignore
+!README.md
+# The two below were committed before this whitelist existed. Tracked files are
+# unaffected by .gitignore, so they persist either way; listed for honesty, so
+# this file describes the folder's actual contents rather than a subset of them.
+!ANALYSIS.md
+!SEED_ADOPTION_ANALYSIS.md
 !2026-07-04-code-quality-review.md
 !2026-07-09-objective-reassessment.md
 !2026-08-02-engine-v2-r6-r21-implementation-analysis.md
