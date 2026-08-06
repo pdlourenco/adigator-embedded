@@ -289,6 +289,28 @@ Two audiences, two conventions (ADR-0029, REVIEW_CONTEXT principle 8):
   release it ships in** (current unreleased work → `v2.0`; later work → its own
   release).
 
+**Within the dev docs, kind decides whether history belongs: a record states
+what is; guidance may keep history where it teaches.** The bullet above says
+where an audit trail *may* live, not where it *earns* its place — and the two
+kinds want opposite defaults.
+
+- **Records** — `DISCIPLINE_ADOPTION.md`, the ADR index, a status table — are
+  consulted for the current state. Correct them in place. That a row once said
+  something else is not information the reader needs, and git already has it.
+  Where a mistake produced a durable rule, state the *rule*, forward, rather
+  than the incident that produced it.
+- **Guidance** — this document, `REVIEW_CONTEXT.md`, `decisions/README.md` —
+  may keep history, and should when **the wrong version was plausible**. A rule
+  that is easy to nod at and easy to un-learn is held in place by the concrete
+  case where the plausible-looking thing was wrong; §"Deferral sweep" above is
+  written that way on purpose.
+
+The test is whether the history changes what the reader **does**. "This scan
+was first written narrowly and matched 10 of 32" does — it is why the pattern
+is broad. "This file documented the wrong command until <date>" does not — the
+reader needs the right command. Where it does not change behaviour, cut it;
+`REVIEW_CONTEXT.md` principle 8 carries the same test for review.
+
 ## Commit & branch conventions
 
 **Line endings are LF, enforced by `.gitattributes`** (`* text=auto eol=lf`) —

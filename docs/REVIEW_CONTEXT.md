@@ -82,6 +82,12 @@ A bundled review covers both. Narrow with "review in verification mode" /
    change's version *tag* names the release it ships in. Release-to-release
    change history lives in the user-facing `CHANGELOG.md`. See
    [ADR-0029](decisions/ADR-0029-v2-release-versioning-doc-cleanliness.md).
+   **Within the dev docs, kind decides:** a *record* (an adoption table, an
+   index, a status log) states what is — correct it in place; *guidance* (this
+   file, `CONTRIBUTING.md`, `decisions/README.md`) may keep history, and should
+   where the wrong version was plausible enough that the rule alone would not
+   stick. The test is whether the history changes what the reader **does**;
+   flag narration that does not. See `CONTRIBUTING.md` §"Documentation".
 
 ## Evidence discipline — fact, or artifact of the measurement?
 
