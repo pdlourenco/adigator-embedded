@@ -103,26 +103,24 @@ for triggers that named it or fired during it:
   convention's own `README.md`; the rest are real ADRs. Reading two known
   non-hits is cheaper than missing a deferral.
 
-  **This pattern was wrong twice, and both are worth keeping visible**, because
-  they are the same failure at two depths — `REVIEW_CONTEXT.md`
-  §"Evidence discipline" tell 6, a negative result whose search space was
-  narrower than the claim:
+  Three bolded spellings are in use (`**Revisit when:**`, `**Revisit if:**`, a
+  bare `**Revisit**`), a clause can be written in prose with no markers at all,
+  and nothing in `ADR-TEMPLATE.md` mandates a form. A pattern that requires the
+  formatting is a pattern that trusts every future author to apply it — per
+  §"Drift hardening", a rule two idioms can both satisfy will drift, so
+  conformance must not be load-bearing.
 
-  1. It shipped as `'**Revisit when:**'`, which matched **10 of the 32** ADRs
-     carrying a bolded clause — three spellings are in use (`**Revisit when:**`,
-     `**Revisit if:**`, bare `**Revisit**`) and nothing mandates one. It missed
-     almost the whole ADR-0001..0024 block: the *oldest* deferrals, the ones
-     most likely to have already fired.
-  2. Corrected to `-E '\*\*Revisit'` it reached 32 — and still missed
-     ADR-0038, whose condition was written in prose without bold markers. A
-     pattern that requires the formatting is a pattern that trusts every future
-     author to use it.
+  **Worth keeping, because the narrow versions looked right.** This scan was
+  first written as `'**Revisit when:**'`, which matched **10 of the 32** ADRs
+  then carrying a bolded clause — missing almost the whole ADR-0001..0024
+  block, i.e. the *oldest* deferrals, the ones most likely to have already
+  fired. Broadened to any bolded clause it matched 32, and still missed one ADR
+  whose condition was prose. Each version ran clean and returned a larger
+  number than the last, which is what made it convincing: a command that runs
+  and returns more is still not a command shown to cover the claim. That is
+  `REVIEW_CONTEXT.md` §"Evidence discipline" tell 6, and it is why the pattern
+  above matches the word;
 
-  Each fix verified that the command *ran* and returned a bigger number, which
-  is not the same as verifying it covers the claim. ADR-0038's clause has since
-  been bolded to match the convention, but the pattern stays broad on purpose:
-  per §"Drift hardening", a rule two idioms can both satisfy will drift, so
-  conformance must not be load-bearing;
 - `ROADMAP.md` future rows and their gates;
 - `ANALYSIS.md` residual routes and open `Bnn` entries;
 - `CI_PLAN.md` rows marked deferred or non-gating;
@@ -290,6 +288,28 @@ Two audiences, two conventions (ADR-0029, REVIEW_CONTEXT principle 8):
   you keep writing them. The only rule: a change's **version tag names the
   release it ships in** (current unreleased work → `v2.0`; later work → its own
   release).
+
+**Within the dev docs, kind decides whether history belongs: a record states
+what is; guidance may keep history where it teaches.** The bullet above says
+where an audit trail *may* live, not where it *earns* its place — and the two
+kinds want opposite defaults.
+
+- **Records** — `DISCIPLINE_ADOPTION.md`, the ADR index, a status table — are
+  consulted for the current state. Correct them in place. That a row once said
+  something else is not information the reader needs, and git already has it.
+  Where a mistake produced a durable rule, state the *rule*, forward, rather
+  than the incident that produced it.
+- **Guidance** — this document, `REVIEW_CONTEXT.md`, `decisions/README.md` —
+  may keep history, and should when **the wrong version was plausible**. A rule
+  that is easy to nod at and easy to un-learn is held in place by the concrete
+  case where the plausible-looking thing was wrong; §"Deferral sweep" above is
+  written that way on purpose.
+
+The test is whether the history changes what the reader **does**. "This scan
+was first written narrowly and matched 10 of 32" does — it is why the pattern
+is broad. "This file documented the wrong command until <date>" does not — the
+reader needs the right command. Where it does not change behaviour, cut it;
+`REVIEW_CONTEXT.md` principle 8 carries the same test for review.
 
 ## Commit & branch conventions
 

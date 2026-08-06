@@ -66,7 +66,14 @@ and this is a living record.
 | Date | Seed ref range | Taken | Skipped (reason) |
 |---|---|---|---|
 | 2026-06-18 | initial assessment (pre-0.4.0), seed as of 2026-06-17 | the §3.1/§3.2 slice — see the table above and `SEED_ADOPTION_ANALYSIS.md` | the §3.3 drops, each with a recorded reason |
-| 2026-08-04 | v0.4.0 (2026-07-21) .. v0.4.1 (`49860ad`, 2026-07-22) | the six items [#242](https://github.com/pdlourenco/adigator-embedded/issues/242) enumerated — analyses README, reviewer-invocation convention, deferral sweep, drift doctrine, campaign-row floor, this file — **plus** 0.4.1's correction to the in-flight ADR-collision scan (`in:files` is a no-op qualifier), applied to `docs/decisions/README.md` | nothing skipped. The `in:files` fix was initially missed: #242 triaged the seed CHANGELOG's `### Added` entries and not its `### Fixed` ones, so a live broken command in this repo went unnoticed while the caveat written to accompany it (*"a recorded command is a claim, not a fact"*) was adopted. Caught in pre-push review. **When triaging a future release, read every CHANGELOG section, not just `Added`.** |
+| 2026-08-04 | v0.4.0 (2026-07-21) .. v0.4.1 (`49860ad`, 2026-07-22) | the six items [#242](https://github.com/pdlourenco/adigator-embedded/issues/242) enumerated — analyses README, reviewer-invocation convention, deferral sweep, drift doctrine, campaign-row floor, this file — **plus** 0.4.1's correction to the in-flight ADR-collision scan (`in:files` is a no-op qualifier), applied to `docs/decisions/README.md` | nothing skipped |
+
+**Triaging a release.** Read **every** section of the seed's `meta/CHANGELOG.md`
+between the two pinned versions, not just `### Added`. A `### Fixed` entry can
+correct a convention this repo already adopted — a documented command that
+turns out not to do what it reads as, for instance — in which case the
+correction has to be carried here too, and nothing about this repo's own files
+will indicate that it is missing.
 
 ## Backport log
 
@@ -75,8 +82,16 @@ proposed upstream to the seed.
 
 | Date | What | Upstream issue / PR |
 |---|---|---|
-| 2026-08-04 | `REVIEW_CONTEXT.md` §"Evidence discipline — fact, or artifact of the measurement?" — six tells that a measurement is an artifact rather than a result, written as generic body + `### Instances (this project)` so lifting it upstream is a deletion rather than a rewrite. No seed counterpart exists. ([#238](https://github.com/pdlourenco/adigator-embedded/pull/238), [#241](https://github.com/pdlourenco/adigator-embedded/issues/241)) | not yet proposed |
-| 2026-08-04 | Red flag: *a guard whose failure direction is documented but not asserted* — the same shape as the seed's generic red-flag categories, instantiated here by the #200 embed-mode guard. Unlike the row above it is **not** written as generic-body-plus-instances (§Red flags is project-specific throughout in this repo), so lifting it upstream is a rewrite rather than a deletion — the generic category is one sentence, the rest is local evidence. ([#241](https://github.com/pdlourenco/adigator-embedded/issues/241) Gap C) | not yet proposed |
+| 2026-08-04 | `REVIEW_CONTEXT.md` §"Evidence discipline — fact, or artifact of the measurement?" — six tells that a measurement is an artifact rather than a result, structured as generic body + `### Instances (this project)`. No seed counterpart exists. ([#238](https://github.com/pdlourenco/adigator-embedded/pull/238), [#241](https://github.com/pdlourenco/adigator-embedded/issues/241)) | [seed #53](https://github.com/pdlourenco/disciplined-project-seed/issues/53) |
+| 2026-08-04 | Red flag: *a guard whose failure direction is documented but not asserted* — the same shape as the seed's generic red-flag categories, instantiated here by the #200 embed-mode guard. §Red flags is project-specific throughout in this repo, so the upstream version is a one-sentence generic category with the local evidence dropped. ([#241](https://github.com/pdlourenco/adigator-embedded/issues/241) Gap C) | [seed #53](https://github.com/pdlourenco/disciplined-project-seed/issues/53) |
+
+**Backporting notes.** The section is structured as a generic numbered body
+plus `### Instances (this project)`, so the citations live below the rules. That
+split is what makes a lift cheap, but it is not automatic: project-specific
+references leak into the numbered body too — cross-references to locally
+numbered principles, language- or toolchain-specific vocabulary, PR and section
+numbers inline in a tell, and the closing example. Genericise the body before
+proposing it; only the tells whose examples are plain `git` travel verbatim.
 
 **On why these are worth proposing.** Both came out of *agent-to-agent* review,
 where reviewer and author share reasoning habits and therefore share blind
