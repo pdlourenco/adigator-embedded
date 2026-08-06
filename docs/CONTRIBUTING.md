@@ -103,16 +103,23 @@ for triggers that named it or fired during it:
   convention's own `README.md`; the rest are real ADRs. Reading two known
   non-hits is cheaper than missing a deferral.
 
-  Three bolded spellings are in use
-  (`**Revisit when:**`, `**Revisit if:**`, a bare `**Revisit**`) and a clause
-  can be written in prose with no markers at all; nothing in `ADR-TEMPLATE.md`
-  mandates a form. A pattern that requires the formatting is a pattern that
-  trusts every future author to apply it — per §"Drift hardening", a rule two
-  idioms can both satisfy will drift, so conformance must not be load-bearing.
-  Narrower patterns here have twice returned a plausible number while missing
-  most of the surface, which is `REVIEW_CONTEXT.md` §"Evidence discipline"
-  tell 6: a command that runs and returns more than the last one has still not
-  been shown to cover the claim;
+  Three bolded spellings are in use (`**Revisit when:**`, `**Revisit if:**`, a
+  bare `**Revisit**`), a clause can be written in prose with no markers at all,
+  and nothing in `ADR-TEMPLATE.md` mandates a form. A pattern that requires the
+  formatting is a pattern that trusts every future author to apply it — per
+  §"Drift hardening", a rule two idioms can both satisfy will drift, so
+  conformance must not be load-bearing.
+
+  **Worth keeping, because the narrow versions looked right.** This scan was
+  first written as `'**Revisit when:**'`, which matched **10 of the 32** ADRs
+  then carrying a bolded clause — missing almost the whole ADR-0001..0024
+  block, i.e. the *oldest* deferrals, the ones most likely to have already
+  fired. Broadened to any bolded clause it matched 32, and still missed one ADR
+  whose condition was prose. Each version ran clean and returned a larger
+  number than the last, which is what made it convincing: a command that runs
+  and returns more is still not a command shown to cover the claim. That is
+  `REVIEW_CONTEXT.md` §"Evidence discipline" tell 6, and it is why the pattern
+  above matches the word;
 
 - `ROADMAP.md` future rows and their gates;
 - `ANALYSIS.md` residual routes and open `Bnn` entries;
