@@ -65,7 +65,11 @@ Rejected alternatives:
   produces a diff, even when the generated code is identical. This is the
   `docs/` PDF-churn pattern and is tolerable here only because that recapture
   is a deliberate, occasional act rather than something CI does on every push.
-  If it ever becomes automatic, revisit this ADR.
+
+**Revisit when:** fixture recapture becomes automatic (a CI step, a hook, or
+anything that regenerates `tests/fixtures/gen_dialect` without someone asking
+for it). At that point the timestamp turns every run into a diff, which is the
+`docs/` PDF-churn pattern this ADR accepted only because recapture is manual.
 - A generation id must never be computed over a file that carries a timestamp,
   or the id inherits the non-determinism. This is not hypothetical: the
   Hessian path differentiates twice and feeds its own generated output back in,

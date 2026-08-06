@@ -95,21 +95,34 @@ because nothing scans for them.
 **When closing a `ROADMAP.md` row**, scan the deferred-with-conditions surfaces
 for triggers that named it or fired during it:
 
-- ADR revisit clauses — **match on `Revisit`, not on one spelling of it**:
+- ADR revisit clauses — **match on the word, not on a formatting convention**:
   ```sh
-  git grep -lE '\*\*Revisit' -- docs/decisions/     # 32 ADRs as of 2026-08-04
+  git grep -liE 'revisit' -- docs/decisions/    # 35 files as of 2026-08-04
   ```
-  Three spellings are in use (`**Revisit when:**`, `**Revisit if:**` and a bare
-  `**Revisit**`), and nothing in `ADR-TEMPLATE.md` mandates one. The narrow
-  `'**Revisit when:**'` pattern this section shipped with matched **10 of the
-  32** — missing almost the whole ADR-0001..0024 block, i.e. the *oldest*
-  deferrals, the ones most likely to have had their trigger fire already. It is
-  left recorded here rather than quietly corrected because it is a worked
-  example of `REVIEW_CONTEXT.md` §"Evidence discipline" tell 6: the command was
-  verified to *run* and return a plausible number, without anyone enumerating
-  the forms the thing being searched for could take. If you normalise the
-  spelling, keep the broad pattern anyway — per §"Drift hardening", a rule two
-  idioms can both satisfy will drift;
+  Two of those hits are structural and expected — `ADR-TEMPLATE.md` and this
+  convention's own `README.md`; the rest are real ADRs. Reading two known
+  non-hits is cheaper than missing a deferral.
+
+  **This pattern was wrong twice, and both are worth keeping visible**, because
+  they are the same failure at two depths — `REVIEW_CONTEXT.md`
+  §"Evidence discipline" tell 6, a negative result whose search space was
+  narrower than the claim:
+
+  1. It shipped as `'**Revisit when:**'`, which matched **10 of the 32** ADRs
+     carrying a bolded clause — three spellings are in use (`**Revisit when:**`,
+     `**Revisit if:**`, bare `**Revisit**`) and nothing mandates one. It missed
+     almost the whole ADR-0001..0024 block: the *oldest* deferrals, the ones
+     most likely to have already fired.
+  2. Corrected to `-E '\*\*Revisit'` it reached 32 — and still missed
+     ADR-0038, whose condition was written in prose without bold markers. A
+     pattern that requires the formatting is a pattern that trusts every future
+     author to use it.
+
+  Each fix verified that the command *ran* and returned a bigger number, which
+  is not the same as verifying it covers the claim. ADR-0038's clause has since
+  been bolded to match the convention, but the pattern stays broad on purpose:
+  per §"Drift hardening", a rule two idioms can both satisfy will drift, so
+  conformance must not be load-bearing;
 - `ROADMAP.md` future rows and their gates;
 - `ANALYSIS.md` residual routes and open `Bnn` entries;
 - `CI_PLAN.md` rows marked deferred or non-gating;
