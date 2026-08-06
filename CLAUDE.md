@@ -10,8 +10,12 @@ authoritative.
 Source-of-truth documents:
 
 - [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) — contributor mechanics:
-  pre-push review, ADR policy, commit conventions, PR lifecycle, the
-  two-session workflow.
+  pre-push review, reviewing an open PR, ADR policy, commit conventions, PR
+  lifecycle, the two-session workflow, the deferral sweep, drift hardening.
+- [`DISCIPLINE_ADOPTION.md`](DISCIPLINE_ADOPTION.md) — which
+  disciplined-project-seed conventions this repo adopted, adapted or dropped,
+  plus the sync and backport logs. Consult before proposing a convention: it
+  may already be a recorded drop.
 - [`docs/CI_PLAN.md`](docs/CI_PLAN.md) — CI strategy, requirements, test
   traceability (the V-model left/right legs).
 - [`docs/DESIGN.md`](docs/DESIGN.md) — architecture rationale **and** the
@@ -25,8 +29,10 @@ Source-of-truth documents:
 
 ## 1. Follow `docs/CONTRIBUTING.md`
 
-It is authoritative for the pre-push review, ADR conventions, commit/branch
-naming, the PR lifecycle, and the two-session workflow. Read it before opening a
+It is authoritative for the pre-push review, the reviewer-invocation
+convention (§"Reviewing an open PR"), ADR conventions, commit/branch naming,
+the PR lifecycle, the two-session workflow, the deferral sweep, and the
+drift-hardening doctrine. Read it before opening a
 PR. Deviations need an explicit note in the PR description and, if structural,
 an ADR.
 

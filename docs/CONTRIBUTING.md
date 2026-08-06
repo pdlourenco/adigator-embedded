@@ -26,6 +26,130 @@ drift from the PR's stated purpose; (6) a decision that deserves an ADR.
 The ceremony costs more than the signal. Note the outcome in the PR description:
 `pre-push review: no findings` or `pre-push review flagged X, fixed in <sha>`.
 
+## Reviewing an open PR
+
+For a PR that already exists on GitHub, the call site collapses to
+*"review PR NN per `CONTRIBUTING.md` §Reviewing an open PR"* — the reviewer
+reads this section and the linked docs rather than having the invocation
+re-typed. Adopted from the seed at v0.4.1 (its ADR-0008), adapted per
+[`DISCIPLINE_ADOPTION.md`](../DISCIPLINE_ADOPTION.md).
+
+Distinct from §"Pre-push self-review" above: that one runs against the **local
+diff** before pushing and reports in-conversation; this one runs against the
+**remote PR**, has to deal with CI state, and posts publicly.
+
+### Parameters (defaults cover the common case)
+
+1. **PR number** (required).
+2. **Mode** — `bundled` (default: verification *and* validation, per
+   [`REVIEW_CONTEXT.md`](REVIEW_CONTEXT.md) §"Verification vs. validation"),
+   `verification-only`, or `validation-only`.
+3. **Output channel** — `comment` (default: **one** PR comment carrying all
+   findings) or `report` (in-conversation, nothing posted publicly). This is
+   the deliberate adaptation from the seed, whose default is inline review
+   comments: this repo's reviews are long-form and argue about a whole change,
+   and splitting that across line anchors loses the argument.
+4. **Context-doc set** — defaults to [`REVIEW_CONTEXT.md`](REVIEW_CONTEXT.md),
+   [`DESIGN.md`](DESIGN.md) §Contracts, [`ANALYSIS.md`](analyses/ANALYSIS.md),
+   [`ROADMAP.md`](ROADMAP.md). Extend for PRs adjacent to a recent ADR.
+5. **CI handling** — `check-or-run` (default, below) or `skip`.
+6. **Subscription** — `once` (default here) or `subscribe`. The seed defaults
+   to `subscribe`; in the two-session workflow the maintainer relays *"review
+   posted"*, so a watching reviewer would duplicate that channel.
+
+### CI handling
+
+Check the PR's checks **first**, and report what you find:
+
+- green → summarise in one line, and say which suites ran;
+- red → fetch the failing job logs and summarise the specific assertion or
+  step that failed, not "tests failed";
+- never ran → run the local equivalent (§"Local development & pre-push CI")
+  and label the result as local;
+- unreachable *and* not locally runnable → say so in the verdict. A review that
+  did not verify is a validation-only review and must be labelled as one.
+
+**A local pass does not substitute for a red gate.** If local and hosted
+disagree, that disagreement is the finding — see `REVIEW_CONTEXT.md`
+§"Evidence discipline" tell 3.
+
+### Invocation rules
+
+- **The reviewing session is comment-only.** It posts findings and never edits
+  or pushes; the authoring session applies fixes on the maintainer's *"review
+  posted"* (§"Two-session authoring / review workflow").
+- Findings follow `REVIEW_CONTEXT.md` §"Review output format", and each cites
+  the contract, principle, or `Verified by:` mechanism it rests on.
+- **A review that restates a claim has not checked it.** Carrying a number or
+  an inference from the PR body into the review makes it read as corroboration
+  when nothing was corroborated.
+- Nothing actionable is a result: say *"no findings; CI green; verdict
+  approve"* rather than going quiet.
+
+## Deferral sweep
+
+A named trigger only works if someone notices it fired. The documented failure
+is deferrals sitting unswept long after their condition came true — invisible,
+because nothing scans for them.
+
+**When closing a `ROADMAP.md` row**, scan the deferred-with-conditions surfaces
+for triggers that named it or fired during it:
+
+- ADR revisit clauses — **match on the word, not on a formatting convention**:
+  ```sh
+  git grep -liE 'revisit' -- docs/decisions/    # 35 files as of 2026-08-04
+  ```
+  Two of those hits are structural and expected — `ADR-TEMPLATE.md` and this
+  convention's own `README.md`; the rest are real ADRs. Reading two known
+  non-hits is cheaper than missing a deferral.
+
+  **This pattern was wrong twice, and both are worth keeping visible**, because
+  they are the same failure at two depths — `REVIEW_CONTEXT.md`
+  §"Evidence discipline" tell 6, a negative result whose search space was
+  narrower than the claim:
+
+  1. It shipped as `'**Revisit when:**'`, which matched **10 of the 32** ADRs
+     carrying a bolded clause — three spellings are in use (`**Revisit when:**`,
+     `**Revisit if:**`, bare `**Revisit**`) and nothing mandates one. It missed
+     almost the whole ADR-0001..0024 block: the *oldest* deferrals, the ones
+     most likely to have already fired.
+  2. Corrected to `-E '\*\*Revisit'` it reached 32 — and still missed
+     ADR-0038, whose condition was written in prose without bold markers. A
+     pattern that requires the formatting is a pattern that trusts every future
+     author to use it.
+
+  Each fix verified that the command *ran* and returned a bigger number, which
+  is not the same as verifying it covers the claim. ADR-0038's clause has since
+  been bolded to match the convention, but the pattern stays broad on purpose:
+  per §"Drift hardening", a rule two idioms can both satisfy will drift, so
+  conformance must not be load-bearing;
+- `ROADMAP.md` future rows and their gates;
+- `ANALYSIS.md` residual routes and open `Bnn` entries;
+- `CI_PLAN.md` rows marked deferred or non-gating;
+- issues labelled `deferred`.
+
+Each hit is either wired in or **explicitly re-deferred with a new trigger**.
+Silence is the one prohibited outcome. This repo has no phase-completion
+ceremony to hang the sweep on, so it attaches to roadmap-row closure — the
+nearest thing it has to a phase boundary.
+
+## Drift hardening
+
+Three lines, adopted from the seed at v0.4.1 (its ADR-0011). The full
+contract-gate catalogue is more than this repo needs; the doctrine is not.
+
+- **A mandate enforced only by an outcome test that two idioms both pass will
+  drift.** Replace it with a structural gate. `tests/ci_suiteGuard.m` and the
+  signed-vs-printed option drift test are the shape.
+- **Implementations conform to the contract, not to each other.** No
+  implementation is ground truth. Cross-checking one generator against another
+  is a check, not a proof: a bug in a shared helper makes every caller violate
+  `DESIGN.md` §Contracts the same way, invisibly.
+- **Prose points, doesn't restate.** Docs describing a contract link to it
+  rather than repeating it; a restatement falls behind within a version or two.
+  Live exposure: `CI_PLAN.md` rows restate `ANALYSIS.md` §1.3x content, and
+  #230 found one already stale.
+
 ## Local development & pre-push CI
 
 The code requires real MATLAB (R2022a+, [ADR-0003](decisions/ADR-0003-r2022a-minimum-release.md)).

@@ -107,13 +107,31 @@ rather than to code. Where a claim can be pinned, pin it. This is for the rest.
    a revision you did not ask about (`git show <ref>:<path>`, not `grep` over
    the checkout).
 3. **"CI is green"** — a claim about *what ran*; a suite that silently shrank
-   still reports `0 Failed`.
+   still reports `0 Failed`. **"It passes locally"** is the same tell mirrored:
+   a test count without an environment is a claim about what ran with the
+   *where* left out. A local harness broader than the real one — a `startup.m`,
+   an `addpath` of the repo root, `genpath` — answers a question the gate never
+   asks.
 4. **an inferred relationship between two verified facts** — both line numbers
    right, the execution order between them never checked; the error identifier
    real, the overload it implied never confirmed to exist (#230, §1.3n).
 5. **a statistic whose population was never stated** — "median 2, 52% wider
    than one" counted every overmapped variable, accumulators included, which is
    not the quantity the sentence claimed (#234, §2.5(c)).
+6. **a negative result whose search space was narrower than the claim.**
+   "I grepped and found nothing" answers the question you *typed*, not the one
+   you asked. Distinct from tell 4 (there is one fact, not a relationship) and
+   from tell 2 (the tool answered honestly — the *query* was under-specified).
+   Before concluding *X is absent*, enumerate the forms X could take and check
+   the pattern covers them: a dependency can be a filesystem call, a function
+   that has to resolve on the path, or ambient state, and a pattern list built
+   for one of those cannot express the others. Where the set can grow, prefer a
+   **deny-list with a drift test** to an allow-list — an allow-list omits
+   silently, which is the same failure with a longer fuse. (This is about
+   *search coverage*, not about deliberate allow-lists: a deny-by-default
+   security control like `docs/analyses/.gitignore` is correctly an allow-list.
+   The tell there is different — it fails silently on the entry you forgot to
+   write, so it needs a note saying so, which it now has.)
 
 **A claim that will outlive the PR** — quoted into a document, a ROADMAP row, an
 ADR — carries how it was measured, so the next reader can re-run it instead of
@@ -132,6 +150,25 @@ trusting it. `ANALYSIS.md` §2.5's *"To reproduce:"* is the shape.
   boundary read as a root** (tell 2) produced opposite wrong conclusions about
   the same question in one review round (#237) — one author-side, one
   reviewer-side.
+
+- **Tell 6, three times in one PR series (#240).** A reviewer grepped
+  `adigatorReconstructCall.m` for `pwd`/`filesep`/`fullfile`/`exist` and
+  concluded the CI failure was release-dependent rather than path-dependent —
+  but the dependence was *function resolution* (`adigatorNormalizeEmbedMode`
+  lives in `util/`, which the test never declared), which no pattern in that
+  list could express. The same PR's signed-option **allow-list** silently
+  omitted `auxdata` and `optoutput`: "the options I enumerated" is not "the
+  options that exist". And "`adigator.m` is the tree's only CRLF file" survived
+  several PRs because the per-PR checks were sound while the *global* claim was
+  never searched for at all (`git ls-files --eol`, #237).
+  `adigatorStampOptions`' inversion to a deny-list, plus the signed/printed
+  drift test beside it, is this repo's own mechanical answer to that reasoning.
+- **Tell 3 mirrored (#240)**: unit and integration reported green locally while
+  the hosted gate was red, because a `startup.m` supplied a path the test class
+  had not declared and an `addpath(root)` harness masked the omission the way
+  `genpath` does — the failure ADR-0017 and #81/#82 exist to prevent. The fix
+  is `restoredefaultpath` before the run, and naming the environment beside the
+  counts.
 
 Review caught some of these, but late — after the claim had reached a merged
 document or the PR body. A measurement is cheapest to check where it is taken.
@@ -174,6 +211,21 @@ document or the PR body. A measurement is cheapest to check where it is taken.
   `#issue` / roadmap `Rnn` / rev-date / `Bnn` / inline `ANALYSIS §` / `DESIGN §`
   citation woven into the user guide, `README`, `SHOWCASE.md`, or an emitted fragment; or a code-comment
   version tag that names a release other than the one the change ships in.
+
+- **A guard whose failure direction is documented but not asserted** — a
+  fallback that says which way it should fail when it cannot decide, with no
+  test that puts it in that state. The happy path passing says nothing about
+  the `catch`. Pin the *undeterminable* input, not just the good and the bad
+  ones. This project has a lot of fail-direction reasoning — B39's refusal,
+  #226's fail-closed declines, HZ-1's fallback, `cadaOverMapTargetNz`'s gate —
+  and only some of it is asserted. The instance: #200's embed-mode guard stated
+  in its own docstring that "a missing recipe is an inconvenience, a recipe that
+  rebuilds a different file is the failure this whole header exists to avoid",
+  and
+  then implemented `catch → print the recipe`. It was not latent; it fired on
+  CI and reproduced a defect that had already been fixed on the happy path, via
+  the error path. Nothing tested the direction until an `'!!unrecognisable'`
+  input was added.
 
 ## What to be lenient about
 
