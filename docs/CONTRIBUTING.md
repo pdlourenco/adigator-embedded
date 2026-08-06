@@ -103,26 +103,17 @@ for triggers that named it or fired during it:
   convention's own `README.md`; the rest are real ADRs. Reading two known
   non-hits is cheaper than missing a deferral.
 
-  **This pattern was wrong twice, and both are worth keeping visible**, because
-  they are the same failure at two depths — `REVIEW_CONTEXT.md`
-  §"Evidence discipline" tell 6, a negative result whose search space was
-  narrower than the claim:
+  Three bolded spellings are in use
+  (`**Revisit when:**`, `**Revisit if:**`, a bare `**Revisit**`) and a clause
+  can be written in prose with no markers at all; nothing in `ADR-TEMPLATE.md`
+  mandates a form. A pattern that requires the formatting is a pattern that
+  trusts every future author to apply it — per §"Drift hardening", a rule two
+  idioms can both satisfy will drift, so conformance must not be load-bearing.
+  Narrower patterns here have twice returned a plausible number while missing
+  most of the surface, which is `REVIEW_CONTEXT.md` §"Evidence discipline"
+  tell 6: a command that runs and returns more than the last one has still not
+  been shown to cover the claim;
 
-  1. It shipped as `'**Revisit when:**'`, which matched **10 of the 32** ADRs
-     carrying a bolded clause — three spellings are in use (`**Revisit when:**`,
-     `**Revisit if:**`, bare `**Revisit**`) and nothing mandates one. It missed
-     almost the whole ADR-0001..0024 block: the *oldest* deferrals, the ones
-     most likely to have already fired.
-  2. Corrected to `-E '\*\*Revisit'` it reached 32 — and still missed
-     ADR-0038, whose condition was written in prose without bold markers. A
-     pattern that requires the formatting is a pattern that trusts every future
-     author to use it.
-
-  Each fix verified that the command *ran* and returned a bigger number, which
-  is not the same as verifying it covers the claim. ADR-0038's clause has since
-  been bolded to match the convention, but the pattern stays broad on purpose:
-  per §"Drift hardening", a rule two idioms can both satisfy will drift, so
-  conformance must not be load-bearing;
 - `ROADMAP.md` future rows and their gates;
 - `ANALYSIS.md` residual routes and open `Bnn` entries;
 - `CI_PLAN.md` rows marked deferred or non-gating;
