@@ -75,8 +75,20 @@ proposed upstream to the seed.
 
 | Date | What | Upstream issue / PR |
 |---|---|---|
-| 2026-08-04 | `REVIEW_CONTEXT.md` §"Evidence discipline — fact, or artifact of the measurement?" — six tells that a measurement is an artifact rather than a result, written as generic body + `### Instances (this project)` so lifting it upstream is a deletion rather than a rewrite. No seed counterpart exists. ([#238](https://github.com/pdlourenco/adigator-embedded/pull/238), [#241](https://github.com/pdlourenco/adigator-embedded/issues/241)) | not yet proposed |
-| 2026-08-04 | Red flag: *a guard whose failure direction is documented but not asserted* — the same shape as the seed's generic red-flag categories, instantiated here by the #200 embed-mode guard. Unlike the row above it is **not** written as generic-body-plus-instances (§Red flags is project-specific throughout in this repo), so lifting it upstream is a rewrite rather than a deletion — the generic category is one sentence, the rest is local evidence. ([#241](https://github.com/pdlourenco/adigator-embedded/issues/241) Gap C) | not yet proposed |
+| 2026-08-04 | `REVIEW_CONTEXT.md` §"Evidence discipline — fact, or artifact of the measurement?" — six tells that a measurement is an artifact rather than a result, structured as generic body + `### Instances (this project)`. No seed counterpart exists. ([#238](https://github.com/pdlourenco/adigator-embedded/pull/238), [#241](https://github.com/pdlourenco/adigator-embedded/issues/241)) | [seed #53](https://github.com/pdlourenco/disciplined-project-seed/issues/53) |
+| 2026-08-04 | Red flag: *a guard whose failure direction is documented but not asserted* — the same shape as the seed's generic red-flag categories, instantiated here by the #200 embed-mode guard. §Red flags is project-specific throughout in this repo, so the upstream version is a one-sentence generic category with the local evidence dropped. ([#241](https://github.com/pdlourenco/adigator-embedded/issues/241) Gap C) | [seed #53](https://github.com/pdlourenco/disciplined-project-seed/issues/53) |
+
+**Correction, recorded rather than quietly fixed (2026-08-04).** The first row
+above originally claimed that lifting the section upstream would be *"a deletion
+rather than a rewrite"*. Preparing seed #53 falsified that: **seven**
+project-specific references sit inside the supposedly generic numbered body —
+a cross-reference to a locally-numbered principle, MATLAB-specific path
+vocabulary in tell 3, `(#230, §1.3n)` in tell 4, `(#234, §2.5(c))` plus its
+inline statistic in tell 5, `docs/analyses/.gitignore` in tell 6, and
+`ANALYSIS.md §2.5` in the closer. Tells 1 and 2 lift verbatim; the rest needed
+rewriting. The generic-body/Instances split is still the right structure and
+still made the backport cheap — but "a deletion" was a claim about the text
+nobody had tested by attempting the deletion. Tell 6, applied to this file.
 
 **On why these are worth proposing.** Both came out of *agent-to-agent* review,
 where reviewer and author share reasoning habits and therefore share blind
