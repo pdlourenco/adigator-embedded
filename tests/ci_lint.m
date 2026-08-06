@@ -80,29 +80,17 @@ end
 
 %% ---------------------------------------------------------------------- %%
 function warnIfPrePushGateNotArmed()
-% The pre-push gate (.githooks/pre-push -> ci_prepush) is opt-in PER CLONE via
-% `git config core.hooksPath .githooks`, and an unarmed hook is silent: pushes
-% simply succeed. Nothing in the repo can observe that state, so the notice
-% rides on ci_lint - the one step every local entry point runs (ci_prepush,
-% ci_local, and an ad-hoc lint run alike).
-%
-% This is the gap that let #240 reach CI. The failing assertion reproduced
-% perfectly on a plain local run, so the gate would have caught it; it never
-% ran, because it was never armed, and nothing said so.
-if ~isempty(getenv('CI')) || ~isempty(getenv('GITHUB_ACTIONS'))
-    return    % hooks are irrelevant on the runner
-end
+% Look up the two inputs; ci_gateArmedNotice decides and is unit-tested
+% (TS-U-22). Kept split so the notice's three states are assertable without
+% mutating anyone's git config or environment - the red flag in
+% REVIEW_CONTEXT.md §Red flags applies to advisory paths too.
+isCI = ~isempty(getenv('CI')) || ~isempty(getenv('GITHUB_ACTIONS'));
+hooksPath = '';
 try
     [rc, out] = system('git config core.hooksPath');
+    if rc == 0; hooksPath = out; end
 catch
     return    % no git, or not a working tree - not this function's business
 end
-if rc == 0 && contains(string(out), ".githooks")
-    return
+fprintf('%s', ci_gateArmedNotice(hooksPath, isCI));
 end
-fprintf(['ci_lint: NOTE - the pre-push gate is not armed in this clone.\n' ...
-         '         Pushes will not run tests/ci_prepush.m, so a suite that\n' ...
-         '         has not been re-run since the last edit can reach CI.\n' ...
-         '         Arm it once:  git config core.hooksPath .githooks\n']);
-end
-
