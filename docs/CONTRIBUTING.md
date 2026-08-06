@@ -95,8 +95,21 @@ because nothing scans for them.
 **When closing a `ROADMAP.md` row**, scan the deferred-with-conditions surfaces
 for triggers that named it or fired during it:
 
-- ADR `**Revisit when:**` clauses (`git grep -l '\*\*Revisit when:\*\*' docs/decisions/`
-  — 10 ADRs carry one as of 2026-08-04);
+- ADR revisit clauses — **match on `Revisit`, not on one spelling of it**:
+  ```sh
+  git grep -lE '\*\*Revisit' -- docs/decisions/     # 32 ADRs as of 2026-08-04
+  ```
+  Three spellings are in use (`**Revisit when:**`, `**Revisit if:**` and a bare
+  `**Revisit**`), and nothing in `ADR-TEMPLATE.md` mandates one. The narrow
+  `'**Revisit when:**'` pattern this section shipped with matched **10 of the
+  32** — missing almost the whole ADR-0001..0024 block, i.e. the *oldest*
+  deferrals, the ones most likely to have had their trigger fire already. It is
+  left recorded here rather than quietly corrected because it is a worked
+  example of `REVIEW_CONTEXT.md` §"Evidence discipline" tell 6: the command was
+  verified to *run* and return a plausible number, without anyone enumerating
+  the forms the thing being searched for could take. If you normalise the
+  spelling, keep the broad pattern anyway — per §"Drift hardening", a rule two
+  idioms can both satisfy will drift;
 - `ROADMAP.md` future rows and their gates;
 - `ANALYSIS.md` residual routes and open `Bnn` entries;
 - `CI_PLAN.md` rows marked deferred or non-gating;

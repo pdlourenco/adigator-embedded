@@ -33,11 +33,24 @@ Contracts section (binding conventions), or for purely mechanical choices
   the next number. Take `NNNN = 1 + max(merged, in-flight)`:
   ```sh
   git ls-tree --name-only origin/master docs/decisions/ | grep ADR-   # merged
-  gh pr list --state open --search 'ADR- in:files'                    # in-flight
+  gh pr list --state open --limit 200 --json number,title,files --jq '.[] | select([.files[].path] | any(contains("docs/decisions/ADR-")))'
   ```
   (e.g. ADR-0011 was taken precisely because master held 0001–0009 *and* an open
   PR already claimed 0010). If you must pick before an in-flight neighbour
   merges, leave its number reserved and take the one after.
+
+  **Filter on the changed-file path, not `in:files`.** This file documented
+  `gh pr list --state open --search 'ADR- in:files'` until 2026-08-04, and that
+  command does not do what it reads as: `in:files` is not a supported issue/PR
+  search qualifier — GitHub does not index PR changed files — so it is silently
+  ignored and the search degrades to a title/body text match. It therefore
+  misses exactly the in-flight ADR that does not name itself in its title or
+  body, which is the only case the scan exists for. Fixed upstream in seed
+  v0.4.1 (its issue #47); carried here as part of the 0.4.x flow-down. Two
+  residual limits worth knowing: `--limit 200` is there to defeat `gh pr list`'s
+  silent 30-PR default, and `--json files` returns only the first ~100 changed
+  files per PR without paginating, so an ADR buried in a very large PR is still
+  missable.
 - Use the shape in [`ADR-TEMPLATE.md`](ADR-TEMPLATE.md).
 - Link the ADR from the PR description; reference it inline beside tactical
   values (`% see ADR-NNNN` next to a magic number or a policy branch).

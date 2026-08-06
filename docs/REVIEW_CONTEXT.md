@@ -127,7 +127,11 @@ rather than to code. Where a claim can be pinned, pin it. This is for the rest.
    that has to resolve on the path, or ambient state, and a pattern list built
    for one of those cannot express the others. Where the set can grow, prefer a
    **deny-list with a drift test** to an allow-list — an allow-list omits
-   silently, which is the same failure with a longer fuse.
+   silently, which is the same failure with a longer fuse. (This is about
+   *search coverage*, not about deliberate allow-lists: a deny-by-default
+   security control like `docs/analyses/.gitignore` is correctly an allow-list.
+   The tell there is different — it fails silently on the entry you forgot to
+   write, so it needs a note saying so, which it now has.)
 
 **A claim that will outlive the PR** — quoted into a document, a ROADMAP row, an
 ADR — carries how it was measured, so the next reader can re-run it instead of
@@ -184,19 +188,6 @@ document or the PR body. A measurement is cheapest to check where it is taken.
 
 ## Red flags
 
-- **A guard whose failure direction is documented but not asserted** — a
-  fallback that says which way it should fail when it cannot decide, with no
-  test that puts it in that state. The happy path passing says nothing about
-  the `catch`. Pin the *undeterminable* input, not just the good and the bad
-  ones. This project has a lot of fail-direction reasoning — B39's refusal,
-  #226's fail-closed declines, HZ-1's fallback, `cadaOverMapTargetNz`'s gate —
-  and only some of it is asserted. The instance: #200's embed-mode guard stated
-  in its own docstring that "a missing recipe is an inconvenience, a recipe that
-  rebuilds a different file is the failure this header exists to avoid", and
-  then implemented `catch → print the recipe`. It was not latent; it fired on
-  CI and reproduced a defect that had already been fixed on the happy path, via
-  the error path. Nothing tested the direction until an `'!!unrecognisable'`
-  input was added.
 - **Contract drift** — wrapper output shape, `y.dX` layout, or Gator data
   semantics diverging from `DESIGN.md` §Contracts / `adigatorDerivativeConventions.m`.
   Those artifacts are authoritative; when code and contract disagree, *stop and
@@ -220,6 +211,21 @@ document or the PR body. A measurement is cheapest to check where it is taken.
   `#issue` / roadmap `Rnn` / rev-date / `Bnn` / inline `ANALYSIS §` / `DESIGN §`
   citation woven into the user guide, `README`, `SHOWCASE.md`, or an emitted fragment; or a code-comment
   version tag that names a release other than the one the change ships in.
+
+- **A guard whose failure direction is documented but not asserted** — a
+  fallback that says which way it should fail when it cannot decide, with no
+  test that puts it in that state. The happy path passing says nothing about
+  the `catch`. Pin the *undeterminable* input, not just the good and the bad
+  ones. This project has a lot of fail-direction reasoning — B39's refusal,
+  #226's fail-closed declines, HZ-1's fallback, `cadaOverMapTargetNz`'s gate —
+  and only some of it is asserted. The instance: #200's embed-mode guard stated
+  in its own docstring that "a missing recipe is an inconvenience, a recipe that
+  rebuilds a different file is the failure this whole header exists to avoid",
+  and
+  then implemented `catch → print the recipe`. It was not latent; it fired on
+  CI and reproduced a defect that had already been fixed on the happy path, via
+  the error path. Nothing tested the direction until an `'!!unrecognisable'`
+  input was added.
 
 ## What to be lenient about
 
