@@ -50,6 +50,158 @@ classdef IRevGradTest < matlab.unittest.TestCase
                 'AbsTol', 1e-5, 'RelTol', 1e-5);
         end
 
+        function repeatedIndexGatherAccumulatesAdjoints(tc)
+            % #206 priority cell: GATHER WITH DUPLICATE INDICES.
+            %
+            % The B24 class - a construct forward mode handles without
+            % comment, where reverse mode has a distinct obligation it can
+            % silently fail. Forward mode ASSIGNS through an index; reverse
+            % mode must ACCUMULATE, because x(1) feeding two outputs
+            % contributes twice to dL/dx(1). An adjoint that assigns instead
+            % of accumulating produces a gradient that is the right size, the
+            % right sign, smooth, and wrong only in the duplicated entries -
+            % which no smoke test and no shape check would catch.
+            %
+            % z = x([1 1 3]); y = sum(z.^2) => dy/dx = [4*x(1); 0; 2*x(3)].
+            % The 4 is the whole point: an assigning adjoint gives 2.
+            writeFcn('rg_dup', { ...
+                'function y = rg_dup(x)', ...
+                'z = x([1 1 3]);', ...
+                'y = sum(z.^2);', ...
+                'end'});
+            gx = adigatorCreateDerivInput([3 1],'x');
+            adigatorGenRevGradFile('rg_dup',{gx}, ...
+                adigatorOptions('overwrite',1,'echo',0));
+            rehash;
+
+            rng(4); x = randn(3,1);
+            [g,y] = rg_dup_RGrd(x);
+            tc.verifyEqual(y, sum(x([1 1 3]).^2), 'AbsTol',1e-14,'RelTol',1e-14);
+            ga = [4*x(1); 0; 2*x(3)];
+            tc.verifyEqual(g, ga, 'AbsTol',1e-12,'RelTol',1e-12, ...
+                'the duplicated index must accumulate both contributions');
+            tc.verifyEqual(g, fdgrad(@rg_dup, x), 'AbsTol',1e-5,'RelTol',1e-5);
+        end
+
+        function scatterThenReduceAccumulatesAdjoints(tc)
+            % #206 priority cell: SCATTER (subsasgn) into a zeroed buffer,
+            % then a reduction that reads the buffer twice.
+            %
+            % The scatter's adjoint must gather back only the written slots,
+            % and dot(z,z) reads z twice so each slot's adjoint is 2*z. Both
+            % halves are places a wrong-but-plausible gradient hides: a
+            % scatter adjoint that gathers the wrong slots is silently wrong
+            % on a permutation, and one that drops the double-read is wrong
+            % by exactly a factor of two.
+            writeFcn('rg_scat', { ...
+                'function y = rg_scat(x)', ...
+                'z = zeros(4,1);', ...
+                'z([1 3]) = x;', ...
+                'y = dot(z,z);', ...
+                'end'});
+            gx = adigatorCreateDerivInput([2 1],'x');
+            adigatorGenRevGradFile('rg_scat',{gx}, ...
+                adigatorOptions('overwrite',1,'echo',0));
+            rehash;
+
+            rng(5); x = randn(2,1);
+            [g,y] = rg_scat_RGrd(x);
+            tc.verifyEqual(y, sum(x.^2), 'AbsTol',1e-14,'RelTol',1e-14);
+            tc.verifyEqual(g, 2*x, 'AbsTol',1e-12,'RelTol',1e-12, ...
+                'each written slot is read twice by dot(z,z)');
+            tc.verifyEqual(g, fdgrad(@rg_scat, x), 'AbsTol',1e-5,'RelTol',1e-5);
+        end
+
+        function matrixDivisionIsRefusedNotMisdifferentiated(tc)
+            % B24 / R30, and principle 1 in its purest form. `/` with a
+            % NON-scalar denominator is mrdivide (A*inv(B)), not elementwise
+            % division. The elementwise adjoint would produce a gradient of
+            % plausible size and entirely wrong value - the failure mode B24
+            % actually shipped. Reverse mode refuses it at generation time.
+            %
+            % Pinned by ERROR ID, not by message text: the id is what a caller
+            % can catch, and #206 requires every `unsupported` matrix cell to
+            % name the id that earns it.
+            writeFcn('rg_mrd', { ...
+                'function y = rg_mrd(x,A)', ...
+                'y = sum(x''/A);', ...
+                'end'});
+            % x is 3x1 so x' is 1x3 and (1x3)/(3x3) is a WELL-FORMED
+            % mrdivide - the guard must be reached on a valid expression, not
+            % pre-empted by a dimension error.
+            gx = adigatorCreateDerivInput([3 1],'x');
+            gA = adigatorCreateAuxInput([3 3]);
+            tc.verifyError(@() adigatorGenRevGradFile('rg_mrd',{gx,gA}, ...
+                adigatorOptions('overwrite',1,'echo',0)), ...
+                'adigator:revgrad:unsupported', ...
+                'a non-scalar denominator must be refused, never approximated');
+        end
+
+        function activeExponentIsRefused(tc)
+            % `.^` with a non-constant exponent has no pullback rule here. The
+            % guard exists so the omission surfaces as a named error rather
+            % than as a missing term in the adjoint.
+            writeFcn('rg_pow', { ...
+                'function y = rg_pow(x)', ...
+                'y = sum(x.^x);', ...
+                'end'});
+            gx = adigatorCreateDerivInput([3 1],'x');
+            tc.verifyError(@() adigatorGenRevGradFile('rg_pow',{gx}, ...
+                adigatorOptions('overwrite',1,'echo',0)), ...
+                'adigator:revgrad:unsupported');
+        end
+
+        function nonScalarOutputIsRefused(tc)
+            % A reverse gradient is defined for a SCALAR objective; a vector
+            % output would need one sweep per component. Refused with its own
+            % id so the matrix can distinguish "no rule" from "wrong shape".
+            writeFcn('rg_vec', { ...
+                'function y = rg_vec(x)', ...
+                'y = x.^2;', ...
+                'end'});
+            gx = adigatorCreateDerivInput([3 1],'x');
+            tc.verifyError(@() adigatorGenRevGradFile('rg_vec',{gx}, ...
+                adigatorOptions('overwrite',1,'echo',0)), ...
+                'adigator:revgrad:outputs');
+        end
+
+        function operationWithNoPullbackRuleIsRefused(tc)
+            % The catch-all guard: an operation reached on the differentiation
+            % path that the reverse transformer classified as passive. Forward
+            % mode differentiates abs happily; reverse has no pullback rule for
+            % it, and the guard is what stops that difference becoming a
+            % missing term rather than an error - the asymmetry #206 exists to
+            % make visible.
+            writeFcn('rg_abs', { ...
+                'function y = rg_abs(x)', ...
+                'y = sum(abs(x));', ...
+                'end'});
+            gx = adigatorCreateDerivInput([3 1],'x');
+            tc.verifyError(@() adigatorGenRevGradFile('rg_abs',{gx}, ...
+                adigatorOptions('overwrite',1,'echo',0)), ...
+                'adigator:revgrad:unsupported', ...
+                'an op with no pullback rule must be refused, not skipped');
+        end
+
+        function numericLiteralInActiveConcatIsRefused(tc)
+            % The concat pullback resolves each operand's linear map by
+            % shadowing the operand VARIABLES with reference codes and
+            % re-evaluating the bracket text. A numeric literal has no
+            % variable to shadow, so its contribution cannot be mapped - and
+            % a silently dropped block would shift every later adjoint. Named
+            % refusal instead.
+            writeFcn('rg_lit', { ...
+                'function y = rg_lit(x)', ...
+                'z = [x; 1];', ...
+                'y = sum(z.^2);', ...
+                'end'});
+            gx = adigatorCreateDerivInput([3 1],'x');
+            tc.verifyError(@() adigatorGenRevGradFile('rg_lit',{gx}, ...
+                adigatorOptions('overwrite',1,'echo',0)), ...
+                'adigator:revgrad:unsupported', ...
+                'a literal in an active concatenation must be refused');
+        end
+
         function leastSquaresWithMtimes(tc)
             writeFcn('rg_ls', { ...
                 'function y = rg_ls(x,A,b)', ...
