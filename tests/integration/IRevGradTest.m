@@ -50,6 +50,68 @@ classdef IRevGradTest < matlab.unittest.TestCase
                 'AbsTol', 1e-5, 'RelTol', 1e-5);
         end
 
+        function repeatedIndexGatherAccumulatesAdjoints(tc)
+            % #206 priority cell: GATHER WITH DUPLICATE INDICES.
+            %
+            % The B24 class - a construct forward mode handles without
+            % comment, where reverse mode has a distinct obligation it can
+            % silently fail. Forward mode ASSIGNS through an index; reverse
+            % mode must ACCUMULATE, because x(1) feeding two outputs
+            % contributes twice to dL/dx(1). An adjoint that assigns instead
+            % of accumulating produces a gradient that is the right size, the
+            % right sign, smooth, and wrong only in the duplicated entries -
+            % which no smoke test and no shape check would catch.
+            %
+            % z = x([1 1 3]); y = sum(z.^2) => dy/dx = [4*x(1); 0; 2*x(3)].
+            % The 4 is the whole point: an assigning adjoint gives 2.
+            writeFcn('rg_dup', { ...
+                'function y = rg_dup(x)', ...
+                'z = x([1 1 3]);', ...
+                'y = sum(z.^2);', ...
+                'end'});
+            gx = adigatorCreateDerivInput([3 1],'x');
+            adigatorGenRevGradFile('rg_dup',{gx}, ...
+                adigatorOptions('overwrite',1,'echo',0));
+            rehash;
+
+            rng(4); x = randn(3,1);
+            [g,y] = rg_dup_RGrd(x);
+            tc.verifyEqual(y, sum(x([1 1 3]).^2), 'AbsTol',1e-14,'RelTol',1e-14);
+            ga = [4*x(1); 0; 2*x(3)];
+            tc.verifyEqual(g, ga, 'AbsTol',1e-12,'RelTol',1e-12, ...
+                'the duplicated index must accumulate both contributions');
+            tc.verifyEqual(g, fdgrad(@rg_dup, x), 'AbsTol',1e-5,'RelTol',1e-5);
+        end
+
+        function scatterThenReduceAccumulatesAdjoints(tc)
+            % #206 priority cell: SCATTER (subsasgn) into a zeroed buffer,
+            % then a reduction that reads the buffer twice.
+            %
+            % The scatter's adjoint must gather back only the written slots,
+            % and dot(z,z) reads z twice so each slot's adjoint is 2*z. Both
+            % halves are places a wrong-but-plausible gradient hides: a
+            % scatter adjoint that gathers the wrong slots is silently wrong
+            % on a permutation, and one that drops the double-read is wrong
+            % by exactly a factor of two.
+            writeFcn('rg_scat', { ...
+                'function y = rg_scat(x)', ...
+                'z = zeros(4,1);', ...
+                'z([1 3]) = x;', ...
+                'y = dot(z,z);', ...
+                'end'});
+            gx = adigatorCreateDerivInput([2 1],'x');
+            adigatorGenRevGradFile('rg_scat',{gx}, ...
+                adigatorOptions('overwrite',1,'echo',0));
+            rehash;
+
+            rng(5); x = randn(2,1);
+            [g,y] = rg_scat_RGrd(x);
+            tc.verifyEqual(y, sum(x.^2), 'AbsTol',1e-14,'RelTol',1e-14);
+            tc.verifyEqual(g, 2*x, 'AbsTol',1e-12,'RelTol',1e-12, ...
+                'each written slot is read twice by dot(z,z)');
+            tc.verifyEqual(g, fdgrad(@rg_scat, x), 'AbsTol',1e-5,'RelTol',1e-5);
+        end
+
         function leastSquaresWithMtimes(tc)
             writeFcn('rg_ls', { ...
                 'function y = rg_ls(x,A,b)', ...
