@@ -112,6 +112,59 @@ classdef IRevGradTest < matlab.unittest.TestCase
             tc.verifyEqual(g, fdgrad(@rg_scat, x), 'AbsTol',1e-5,'RelTol',1e-5);
         end
 
+        function matrixDivisionIsRefusedNotMisdifferentiated(tc)
+            % B24 / R30, and principle 1 in its purest form. `/` with a
+            % NON-scalar denominator is mrdivide (A*inv(B)), not elementwise
+            % division. The elementwise adjoint would produce a gradient of
+            % plausible size and entirely wrong value - the failure mode B24
+            % actually shipped. Reverse mode refuses it at generation time.
+            %
+            % Pinned by ERROR ID, not by message text: the id is what a caller
+            % can catch, and #206 requires every `unsupported` matrix cell to
+            % name the id that earns it.
+            writeFcn('rg_mrd', { ...
+                'function y = rg_mrd(x,A)', ...
+                'y = sum(x''/A);', ...
+                'end'});
+            % x is 3x1 so x' is 1x3 and (1x3)/(3x3) is a WELL-FORMED
+            % mrdivide - the guard must be reached on a valid expression, not
+            % pre-empted by a dimension error.
+            gx = adigatorCreateDerivInput([3 1],'x');
+            gA = adigatorCreateAuxInput([3 3]);
+            tc.verifyError(@() adigatorGenRevGradFile('rg_mrd',{gx,gA}, ...
+                adigatorOptions('overwrite',1,'echo',0)), ...
+                'adigator:revgrad:unsupported', ...
+                'a non-scalar denominator must be refused, never approximated');
+        end
+
+        function activeExponentIsRefused(tc)
+            % `.^` with a non-constant exponent has no pullback rule here. The
+            % guard exists so the omission surfaces as a named error rather
+            % than as a missing term in the adjoint.
+            writeFcn('rg_pow', { ...
+                'function y = rg_pow(x)', ...
+                'y = sum(x.^x);', ...
+                'end'});
+            gx = adigatorCreateDerivInput([3 1],'x');
+            tc.verifyError(@() adigatorGenRevGradFile('rg_pow',{gx}, ...
+                adigatorOptions('overwrite',1,'echo',0)), ...
+                'adigator:revgrad:unsupported');
+        end
+
+        function nonScalarOutputIsRefused(tc)
+            % A reverse gradient is defined for a SCALAR objective; a vector
+            % output would need one sweep per component. Refused with its own
+            % id so the matrix can distinguish "no rule" from "wrong shape".
+            writeFcn('rg_vec', { ...
+                'function y = rg_vec(x)', ...
+                'y = x.^2;', ...
+                'end'});
+            gx = adigatorCreateDerivInput([3 1],'x');
+            tc.verifyError(@() adigatorGenRevGradFile('rg_vec',{gx}, ...
+                adigatorOptions('overwrite',1,'echo',0)), ...
+                'adigator:revgrad:outputs');
+        end
+
         function leastSquaresWithMtimes(tc)
             writeFcn('rg_ls', { ...
                 'function y = rg_ls(x,A,b)', ...
