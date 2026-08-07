@@ -74,5 +74,23 @@ else
     fprintf(['ci_lint: no baseline committed (tests/lint_baseline.txt); ', ...
         'reporting only.\n']);
 end
+
+warnIfPrePushGateNotArmed();
 end
 
+%% ---------------------------------------------------------------------- %%
+function warnIfPrePushGateNotArmed()
+% Look up the two inputs; ci_gateArmedNotice decides and is unit-tested
+% (TS-U-22). Kept split so the notice's three states are assertable without
+% mutating anyone's git config or environment - the red flag in
+% REVIEW_CONTEXT.md §Red flags applies to advisory paths too.
+isCI = ~isempty(getenv('CI')) || ~isempty(getenv('GITHUB_ACTIONS'));
+hooksPath = '';
+try
+    [rc, out] = system('git config core.hooksPath');
+    if rc == 0; hooksPath = out; end
+catch
+    return    % no git, or not a working tree - not this function's business
+end
+fprintf('%s', ci_gateArmedNotice(hooksPath, isCI));
+end

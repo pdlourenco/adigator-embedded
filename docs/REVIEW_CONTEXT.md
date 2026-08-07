@@ -169,12 +169,20 @@ trusting it. `ANALYSIS.md` §2.5's *"To reproduce:"* is the shape.
   never searched for at all (`git ls-files --eol`, #237).
   `adigatorStampOptions`' inversion to a deny-list, plus the signed/printed
   drift test beside it, is this repo's own mechanical answer to that reasoning.
-- **Tell 3 mirrored (#240)**: unit and integration reported green locally while
-  the hosted gate was red, because a `startup.m` supplied a path the test class
-  had not declared and an `addpath(root)` harness masked the omission the way
-  `genpath` does — the failure ADR-0017 and #81/#82 exist to prevent. The fix
-  is `restoredefaultpath` before the run, and naming the environment beside the
-  counts.
+- **Tell 3 mirrored, and then the mirror itself misread (#240).** Unit and
+  integration reported green locally while the hosted gate was red. The
+  explanation given at the time — a `startup.m` supplying a path the test class
+  had not declared, an `addpath(root)` harness masking it the way `genpath`
+  does — was **wrong, and was never measured**: `util/` does not resolve under a
+  plain `matlab -batch` in that tree, `ci_lint` leaks nothing, fixtures tear
+  down cleanly, and restoring the pre-fix code reproduces the failure locally.
+  The real cause was that the suite was not re-run after the final edits and
+  the pre-push gate (ADR-0017) had never been armed in that clone — an unarmed
+  hook is silent, so nothing said so (#245 makes `ci_lint` say it). Two true
+  facts (a `startup.m` exists; an earlier local run was green) with an
+  unverified relationship asserted between them: **tell 4 wearing tell 3's
+  clothes**, and it survived a review round because it named a failure this
+  repo really has had.
 
 Review caught some of these, but late — after the claim had reached a merged
 document or the PR body. A measurement is cheapest to check where it is taken.
