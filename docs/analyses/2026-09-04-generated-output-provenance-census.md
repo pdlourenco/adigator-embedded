@@ -125,7 +125,7 @@ strictly worse for the licensing question, which is why it matters.)*
 **4b. Classic mode ships ~5 lines of upstream-authored executable loader
 code** (block 9). Trivial and purely functional (`global` + `load` + guard),
 but it is the one place upstream-authored *code* — not comments — lands in
-output. Embed modes (`'l'`/`'i'`), the modes this fork exists for, do not
+output. Embed modes do not
 emit it.
 
 ## 5. How CasADi handles the same problem (verified at source)
@@ -241,8 +241,10 @@ Coder-licensed session can confirm the classification empirically in
 minutes; recording the commands per the analyses-README rule (each was
 designed against `a4e24bc`, not run — there is no MATLAB here):
 
-1. Generate one artifact per mode — classic `'c'`, coderload `'l'`, inline
-   `'i'` × {`adigatorGenJacFile`, `adigatorGenHesFile`,
+1. Generate one artifact per mode — classic `'c'`, inline `'i'`, and
+   coderload `'l'` (**deprecated** per ADR-0021 — which still names it a
+   public option — and, per the maintainer on this PR, not presented
+   user-facing; kept here for completeness only) × {`adigatorGenJacFile`, `adigatorGenHesFile`,
    `adigatorGenRevGradFile`} — and diff every comment line against §2's
    inventory: any tool-authored line not in the table is a census miss.
 2. Generate a function calling `adigatorEvalInterp2pp` and confirm the
