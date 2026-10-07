@@ -138,7 +138,16 @@ without a GPL library function on the path — `interp2.m`'s own docstring says
 as much. This is sub-question 3 of #239 (the runtime-library-exception
 question) made concrete, and it is the *strongest* coupling found: not text
 similarity but an actual dependency. No emitted call to any other library
-function was found. *(The first committed draft claimed the scope was "only
+function was found: `git grep -n -E "(fprintf|emit)\s*\(.*'.*\b(adigator|cada)[A-Za-z0-9_]*\(" a4e24bc -- lib util embedding adigator.m`
+returns the six `adigatorEvalInterp2pp` sites and, outside them, only `Tfid`
+temp-file writes in `adigatorPrintTempFiles.m` (internal, never shipped),
+generation-time `cadamatprint(…)` literals (`interp1.m:116`,
+`@cadastruct/subsasgn.m:184`), a commented-out line (`interp2.m:152`) and a
+`Gator1Data.<field>` index (`adigatorGenRevGradFile.m:820`); `ppval` is a
+MATLAB builtin, not a library function; a second pass over quoted
+`adigator*(`/`cada*(` literals on any line found only generation-time `eval`
+strings (`lib/@cada/horzcat.m:24–25` and kin, `adigatorForInitialize.m:238`),
+`Tfid` writes and the header's reconstruct recipe. *(The first committed draft claimed the scope was "only
 user functions that call `adigatorEvalInterp2pp`" and recorded the very grep
 that disproves it without having run it as recorded — the analyses-README
 failure verbatim, caught by the §2 pre-push review. The corrected scope is
