@@ -105,9 +105,8 @@ them is a comment.** The only tool-authored *executable* content in this
 artifact is the ~6 trivial wrapper lines (block 10). No loader (embed mode),
 no library calls (no `interp2` in the user function). `slim0` (141 lines)
 differs only in the stamp lines, the reconstruct-options line
-(`'slim_embed',0`), and one index table. The two blocks a court would look at
-first — connected prose a person wrote — are the licensing header itself and
-the banners: **the largest tool-authored text in every generated file is the
+(`'slim_embed',0`), and one index table. The longest runs of connected prose a person wrote are the licensing header
+itself and the banners: **the largest tool-authored text in every generated file is the
 GPL notice.** *(The first committed draft of this table missed the three
 `Call to function` lines and misattributed the preamble to blocks 1–3 —
 caught by the §2 pre-push review; the validation section failing at its one
@@ -259,8 +258,8 @@ misplacing it.
   plain `interp2`.** Options, all with costs: (i) inline the evaluator's
   body into generated output — *worse*, it copies upstream GPL code verbatim
   into the artifact; (ii) refuse the construct under embed modes with a named
-  id, making the dependency loud (cheap, honest, narrows the tool); (iii) the
-  real fix, which is upstream's blessing over this one function — and this
+  id, making the dependency loud (cheap, honest, narrows the tool); (iii)
+  upstream's blessing over this one function — and this
   census reduces #239's "ask upstream" step from an abstract licensing
   question to a concrete, two-item list: *the `adigatorEvalInterp2pp` runtime function
   (reached from ordinary `interp2` calls, so not a niche path) and
