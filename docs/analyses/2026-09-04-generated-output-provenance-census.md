@@ -32,7 +32,7 @@ in `embedding/` and `adigator.m:975`) re-emit already-generated text and were
 read for literals, adding block 4 and scaffolding only — and validates the classification against the committed
 generated artifact `tests/fixtures/gen_dialect/slim1/gapfun_Grd.m` (140 lines,
 generated 2026-08-04, in-tree since #240), mapped line-by-line to its emitting
-sites. No MATLAB was used; §6 lists what a MATLAB pass would add
+sites. No MATLAB was used; §7 lists what a MATLAB pass would add
 (*confirmation breadth, not coverage*). The `tests/fixtures/collapse/` pair
 was deliberately **excluded** as ground truth: those files are hand-written
 synthetic mirrors of the classic dialect (their own headers say so), not tool
@@ -109,7 +109,7 @@ differs only in the stamp lines, the reconstruct-options line
 itself and the banners: **the largest tool-authored text in every generated file is the
 GPL notice.** *(The first committed draft of this table missed the three
 `Call to function` lines and misattributed the preamble to blocks 1–3 —
-caught by the §2 pre-push review; the validation section failing at its one
+caught by the CLAUDE.md §2 pre-push review; the validation section failing at its one
 job is recorded rather than smoothed over.)*
 
 **Second artifact, reverse mode:** `tests/fixtures/guide/lse_cost_RGrd.m`
@@ -149,7 +149,7 @@ strings (`lib/@cada/horzcat.m:24–25` and kin, `adigatorForInitialize.m:238`),
 `Tfid` writes and the header's reconstruct recipe. *(The first committed draft claimed the scope was "only
 user functions that call `adigatorEvalInterp2pp`" and recorded the very grep
 that disproves it without having run it as recorded — the analyses-README
-failure verbatim, caught by the §2 pre-push review. The corrected scope is
+failure verbatim, caught by the CLAUDE.md §2 pre-push review. The corrected scope is
 strictly worse for the licensing question, which is why it matters.)*
 
 **4b. Classic mode ships ~5 lines of upstream-authored executable loader
@@ -217,7 +217,7 @@ in place of prose — with one recorded caveat carried down from §2: block 2's
 notice echoes the *ideas* of upstream's disclaimer in fork wording, and
 whether that echo matters is a judgement for the legal step, not this one.
 This would leave the *fork's* contribution to the output explicitly
-unencumbered. **§4 note:** the emitted header is user-visible and
+unencumbered. **CLAUDE.md §4 note:** the emitted header is user-visible and
 licensing-adjacent — changing it is a maintainer decision and, if taken,
 belongs in an ADR beside ADR-0038; nothing is recommended into existence
 here.
