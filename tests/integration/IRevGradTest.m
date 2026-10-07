@@ -64,6 +64,11 @@ classdef IRevGradTest < matlab.unittest.TestCase
             %
             % z = x([1 1 3]); y = sum(z.^2) => dy/dx = [4*x(1); 0; 2*x(3)].
             % The 4 is the whole point: an assigning adjoint gives 2.
+            %
+            % structuralOpsAndDuplicates already drives x([1;1]) through the
+            % reverse generator, but only against FD inside a composite
+            % fixture; this method isolates the case with the analytic oracle
+            % an assigning adjoint fails.
             writeFcn('rg_dup', { ...
                 'function y = rg_dup(x)', ...
                 'z = x([1 1 3]);', ...
@@ -92,7 +97,9 @@ classdef IRevGradTest < matlab.unittest.TestCase
             % halves are places a wrong-but-plausible gradient hides: a
             % scatter adjoint that gathers the wrong slots is silently wrong
             % on a permutation, and one that drops the double-read is wrong
-            % by exactly a factor of two.
+            % by exactly a factor of two. (structuralOpsAndDuplicates covers a
+            % scatter only through its composite FD check; this isolates it
+            % with the factor-of-two oracle.)
             writeFcn('rg_scat', { ...
                 'function y = rg_scat(x)', ...
                 'z = zeros(4,1);', ...
