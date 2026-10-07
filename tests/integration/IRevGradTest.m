@@ -6,6 +6,15 @@ classdef IRevGradTest < matlab.unittest.TestCase
     % differences; structural ops (gather with duplicates, scatter,
     % concatenation), mtimes, unrolled loops with variable reuse (the
     % snapshot machinery), and the scope guards are exercised.
+    %
+    % The *IsRefused methods are the per-cell pins for the #206 support
+    % matrix. Each asserts the FAMILY id a caller can catch
+    % (adigator:revgrad:unsupported or adigator:revgrad:outputs), not which
+    % guard site fired: deleting one guard that another catches under the
+    % same id would keep them green. scopeGuards is the older composite smoke
+    % over the same ids; rg_vec and rg_abs appear in both on purpose (as does
+    % the B24 mrdivide cell, as rg_mdiv / rg_mrd), so the matrix can cite one
+    % named method per cell.
 
     methods (TestClassSetup)
         function addPaths(tc)
