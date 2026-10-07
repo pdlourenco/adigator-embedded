@@ -63,6 +63,7 @@ Everything else in this folder is a snapshot.
 | [`2026-07-04-code-quality-review.md`](2026-07-04-code-quality-review.md) | snapshot |
 | [`2026-07-09-objective-reassessment.md`](2026-07-09-objective-reassessment.md) | snapshot — self-declares that it will not be maintained |
 | [`2026-08-02-engine-v2-r6-r21-implementation-analysis.md`](2026-08-02-engine-v2-r6-r21-implementation-analysis.md) | snapshot |
+| [`2026-09-04-generated-output-provenance-census.md`](2026-09-04-generated-output-provenance-census.md) | snapshot — #239 sub-question 2 |
 
 `SEED_ADOPTION_ANALYSIS.md` predates rule 1's naming convention. It is not
 renamed: rule 3 makes merged analyses immutable, and the live adoption state now
