@@ -100,8 +100,8 @@ deleted; they never ship. The deprecated `adigatorGenFiles4*` wrappers
 | `%User Line:` comments | 9 | prefix cat. 3 (block 6); content user's |
 | everything else (`cada*` statements, `Gator1Data` values, `%#codegen`, `coder.const` lines) | ~88 | 1–2 |
 
-**Result: 37 of 140 lines (~26%) are tool-authored text, and every one of
-them is a comment.** The only tool-authored *executable* content in this
+**Result: 37 of 140 lines (~26%) sit in tool-authored comment blocks (7 of
+them blank comment lines, `%` or `% `), and every one of them is a comment.** The only tool-authored *executable* content in this
 artifact is the ~6 trivial wrapper lines (block 10). No loader (embed mode),
 no library calls (no `interp2` in the user function). `slim0` (141 lines)
 differs only in the stamp lines, the reconstruct-options line
