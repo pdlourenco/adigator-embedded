@@ -199,6 +199,24 @@ classdef IRevGradTest < matlab.unittest.TestCase
                 'an op with no pullback rule must be refused, not skipped');
         end
 
+        function maxWithNoPullbackRuleIsRefused(tc)
+            % Same guard as abs, pinned separately: the #206 table lists max
+            % as refused on the strength of a probe, and an `unsupported` cell
+            % is earned only by a test naming the id. Forward mode prints the
+            % value as a plain call, cada1tf1 = max(x.f,[],1)
+            % (lib/@cada/max.m:102), which the reverse classifier leaves passive
+            % and refuses once it meets an active operand.
+            writeFcn('rg_max', { ...
+                'function y = rg_max(x)', ...
+                'y = max(x);', ...
+                'end'});
+            gx = adigatorCreateDerivInput([3 1],'x');
+            tc.verifyError(@() adigatorGenRevGradFile('rg_max',{gx}, ...
+                adigatorOptions('overwrite',1,'echo',0)), ...
+                'adigator:revgrad:unsupported', ...
+                'max has no pullback rule and must be refused, not skipped');
+        end
+
         function numericLiteralInActiveConcatIsRefused(tc)
             % The concat pullback resolves each operand's linear map by
             % shadowing the operand VARIABLES with reference codes and
