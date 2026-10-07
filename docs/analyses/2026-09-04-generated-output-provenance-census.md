@@ -238,12 +238,15 @@ protectable expression at all — is exactly the judgement this document
 declines. The engineering fact is only this: the upstream-authored *text* in
 output can be driven to zero-or-arguable for ~7 lines of prose churn per
 generated file (10 counting the functional preamble lines). **The churn is not
-free**: the `Start Derivative Computations` marker is matched by at least
-seven engine files (`git grep` at `a4e24bc`: `adigator.m` — whose
+free**: the `Start Derivative Computations` marker is consumed in code by
+five engine files (`git grep` at `a4e24bc`: `adigator.m` — whose
 re-differentiation path *matches* it at `:360`/`:449` (a consumer; the emitters
-are `adigatorFunctionInitialize.m:1040` and `adigatorGenRevGradFile.m:662`) — `adigatorParseTape`,
-`adigatorForwardTapeSlice`, `adigatorFieldSlice`, `adigatorGenRevGradFile`,
-`adigatorPeepholeUnionCopy`, `adigatorSlimDerivBody`/`File`), so rewording it
+are `adigatorFunctionInitialize.m:1040` and `adigatorGenRevGradFile.m:662`) —
+`adigatorGenRevGradFile.m:179`, `adigatorPeepholeUnionCopy.m:55`,
+`adigatorSlimDerivBody.m:51`, `adigatorSlimDerivFile.m:277`), named in three
+more docstrings only (`util/adigatorParseTape.m:9`, `util/adigatorForwardTapeSlice.m:15`,
+`util/adigatorFieldSlice.m:13`), and matched by five test classes and four
+fixtures, so rewording it
 is a generated-dialect change with fixture recapture and test consequences;
 `%User Line:` is emitted from three sites, and the `Call to function` and
 preamble phrases from two more — none of whose consumers have been enumerated
