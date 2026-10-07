@@ -94,11 +94,15 @@ the section cited.
    and ADR-0032 as per-merge, have not executed on any merged commit for about
    four months. Fix is one line of YAML plus six doc corrections. `[cloud]`
 
-2. **Eleven silently-wrong-derivative candidates, none covered by a test**
-   (§4.1 and §4.5; seven verified directly in the source or re-run in Octave:
-   BG-01, 02, 04, 05, 06, 11, 39). Eight are in upstream-inherited rule and
-   engine code (BG-01..06, BG-10, BG-12), two in the fork's `loopbound` layer
-   (BG-11, BG-13), one in a shipped fork utility (BG-39). `mod(x, y)` with an active scalar divisor applies the
+2. **Twelve candidates graded critical for a silently wrong derivative, none
+   covered by a test** (§4.1 and §4.5: BG-01..06, BG-10..13, BG-39, BG-41;
+   seven verified directly in the source or re-run in Octave: BG-01, 02, 04,
+   05, 06, 11, 39; ten reproduced in MATLAB R2024a by the review of this PR,
+   §4 preamble). Eight are in upstream-inherited rule and engine code
+   (BG-01..06, BG-10, BG-12), two in the fork's `loopbound` layer (BG-11,
+   BG-13), one in a shipped fork utility (BG-39), one in the reverse-mode
+   transformer (BG-41, medium confidence). A thirteenth, BG-25, returns a
+   silently wrong *value* for non-square `x/y` through `adigator()`. `mod(x, y)` with an active scalar divisor applies the
    `d/dy` rule only when `y == 0` (BG-01); `sum(X, 2)` emits the derivative in
    the wrong order when a variable touches a non-monotone set of entries
    (BG-02, also reached by `X*ones(n,1)` and `dot(·,·,2)`); `cross` on `3×N`
@@ -108,11 +112,15 @@ the section cited.
    operand (BG-05, which also folds `if` conditions at generation time); an
    inline numeric block in a concatenation records its *nonzero* positions as
    zeros, pruning real derivatives in the homogeneous-rotation idiom (BG-06);
-   solve sparsity is pruned by numeric cancellation (BG-10); and `loopbound`
-   pads wrongly for a loop whose values depend on the bound (BG-11) or for a
-   counter-dependent inner loop at second order (BG-12, BG-13). All are
-   static/Octave findings that need a MATLAB reproduction before entering the
-   `Bnn` register; each entry carries that reproduction. The shipped utility
+   solve sparsity is pruned by numeric cancellation (BG-10); `loopbound` pads
+   wrongly for a loop whose values depend on the bound (BG-11) or for a
+   counter-dependent inner loop at second order (BG-13); and, with no
+   `loopbound` involved, the Hessian of a `for j = 1:i` inner loop prints a
+   vector colon bound (BG-12). All were static/Octave findings when written;
+   the review of this PR ran them in MATLAB R2024a (§4 preamble): ten of the
+   eleven it ran (BG-01..06, BG-10..13, BG-39) reproduce as silently wrong,
+   BG-04 is silent through `adigator()`, and BG-25 is confirmed. None has entered the
+   `Bnn` register yet; each entry carries its reproduction. The shipped utility
    `adigatorUncompressJac` applies the colouring permutation in the wrong
    direction (BG-39, confirmed in Octave on the repository copy) and is the
    untested utility `CI_PLAN.md` describes as round-trip tested. `[matlab]`
@@ -275,8 +283,9 @@ self-healing scaffolds that pinned B7–B10 *before* they were fixed
   reads `if max(abs(H(:) - Hexp(:))) > 1e-4, tc.assumeFail(...)`, then calls
   `verifyVectorHessian`, whose assertion is `verifyEqual(H, …, 'AbsTol', 1e-4,
   'RelTol', 1e-4)` (:333-337). Any element that would fail the assertion
-  trips the filter first. **The value assertion is unreachable**; only
-  `verifySize` can fail.
+  trips the filter first. **The value assertion is unreachable**, and a size
+change errors at `:204` (`H(:) - Hexp(:)`) before `verifySize` is reached, so
+no outcome of this method can report as a failure.
 - `grdSparseBranchOfVectorOutput` (:245-248) filters on `~isequal(size(G),
   [25 10])`, so the B9 shape regression it exists for reports *Filtered*.
 - The two B10 methods discard the generator's output struct (`:143`, `:162`),
@@ -296,7 +305,9 @@ in the *same* PR") was not followed by the fix commits `31fcad7`/`f33aea6`
 themselves (their bodies say the cases "auto-flip"), and the red flag "a
 `KnownIssue` tag left on a test that now passes" has been live for four
 months. No other gated test compares a vector-output Hessian's values to an
-analytic or FD reference: `ICscOutputTest` FD-checks Hessians only when square
+analytic or FD reference in a way that would catch a row collision
+(`IZeroHessianTest.vectorOutputLinearHessianIsZero` compares to the analytic
+zero, which a collision of zero rows also satisfies): `ICscOutputTest` FD-checks Hessians only when square
 with `numel(x)` rows (:232), `IOutputModesTest.hessianCscVectorFunction` compares
 csc to matrix mode of the same generator, `ILevelSelectTest` compares variants to
 `Href` from the same generator, the Monte-Carlo expression-tree Hessians are
@@ -403,7 +414,7 @@ else was either feature-driven (a contract changed with its ADR), a tightening
 | TF-22 | `3d44384`, `7cc36cc`, `56bc8f6` 2026-06-22 | three "update fixtures" golden regenerations with empty commit bodies (`56bc8f6` deletes 2 `.m` + 2 `.mat`) | none recorded | **low** — bounded by the `AbsTol 0` equivalence guard, but no rationale | — |
 | TF-23 | `be65654 → 93e2d92` 2026-07-03/06 | embed gate `verifyError → verifyWarning` | ADR-0023 rev (C-4 flipped in the same PR, `AbsTol 0` cross-mode added) | policy, tracked | — |
 | TF-24 | `5d7e1f7` 2026-07-11 | `hessians/logsumexp` example added to `discoverExamples`' Coder-required skip list | — | **low** — skipped on Coder-less sweeps | — |
-| TF-25 | `7bf37ff`, `1c63b48`, `f81ec79` | `KnownIssue` tripwires added for live bugs (B27 silent-wrong, #173, #217 63.4× stack) | per policy | conformant — each green while live, each healed within a day | — |
+| TF-25 | `7bf37ff`, `1c63b48`, `f81ec79` | `KnownIssue` tripwires added for live bugs (B27 silent-wrong, #173, #217 63.4× stack) | per policy | conformant (one hollow pin, healed) — each *filtered* (`assumeFail`) while live, each healed on its fix within a day; `f81ec79`'s pin used the filter-threshold-equals-assertion shape TF-02 calls hollow, noted here for consistency (healed since) | — |
 
 Two census facts worth keeping: no assertion is commented out anywhere at HEAD
 (`^\s*%\s*(tc\.)?(verify|assert)\w*\(` over `tests/` → 0 hits), and no test was
@@ -489,10 +500,11 @@ closed forms for the two Hessians), or reword the header and the row.
 **TF-10 (medium, `[matlab]`) — two of the five "numeric-assertion" examples
 assert nothing.** `SExamplesTest.m:71-76` (brusselator): "completing without
 error is the assertion (the script compares solver behavior internally)";
-`examples/stiffodes/brusselator/main.m:20-70` generates `mybrussode_Jac`, solves
-the ODE three times and prints timings — no comparison of the Jacobian to
-anything, nor of the three solutions to each other (`assert`/`norm`/`max(abs`
-hits in that file are the `odeset` tolerances only). `pipg/main.m` is fourteen
+`examples/stiffodes/brusselator/main.m` (57 lines) generates `mybrussode_Jac`,
+solves the ODE three times and prints timings — no comparison of the Jacobian
+to anything, nor of the three solutions to each other (the file has no
+`assert`/`norm`/`max(abs` call at all; its only tolerances are `odeset`
+options). `pipg/main.m` is fourteen
 lines with no assert; `SExamplesTest.m:78-92` only runs it. `CI_PLAN.md:242`
 lists brusselator as "(FD comparison) | TS-S-01 assertion case" and `:188` TS-S-01
 as asserting "spot values (arrowhead/polydatafit vs FD, pipg/structinput/
@@ -594,7 +606,7 @@ has drifted.
 **CG-01 (high, `[matlab]`) — six of the eleven binary rules have no value
 oracle.** `lib/@cada/cada.m:432-466` defines `atan2`, `ldivide`, `mod`,
 `plus`, `power`, `rdivide`, `rem`, `times`, `minus` (plus external `max`/
-`min`). `tests/unit/URulesBinaryTest.m:47-99` has exactly `plus_col`,
+`min`). `tests/unit/URulesBinaryTest.m:38-86` has exactly `plus_col`,
 `plus_scalar`, `minus_cf`, `times_col`, `times_scalar`, `times_xx`,
 `rdiv_num`, `rdiv_den`, `rdiv_both`, `pow_int` (`x .^ 3`), `pow_col` (`x .^
 [2;3;2]`), `mtimes_A`, `scalar_vod`; its header says "power/.^ with an inactive
@@ -869,12 +881,42 @@ derivative file with the unmodified rule/engine code and compare the file's
 output to central finite differences or a closed form in a fresh process per
 generation. That is strong evidence, and seven candidates were re-run or re-read
 directly by the orchestrating session (BG-02, BG-06, BG-11 and BG-39 re-run
-in Octave; BG-01, BG-04 and BG-05 re-read in the source; Appendix B); it is
-still **not a MATLAB reproduction**. Each
-entry therefore ends with the MATLAB reproduction to run (`[matlab]`). None has
-been entered into `ANALYSIS.md`; the maintainer assigns `Bnn` numbers after
-reproduction (WP-M1, WP-M10). Grading follows `REVIEW_CONTEXT.md` principle 1:
-a silently wrong derivative outranks a crash.
+in Octave; BG-01, BG-04 and BG-05 re-read in the source; Appendix B); it was
+**not a MATLAB reproduction** when written. Each entry therefore ends with the
+MATLAB reproduction to run (`[matlab]`). None has been entered into
+`ANALYSIS.md`; the maintainer assigns `Bnn` numbers after reproduction (WP-M1,
+WP-M10). Grading follows `REVIEW_CONTEXT.md` principle 1: a silently wrong
+derivative outranks a crash.
+
+**MATLAB reproduction (review of PR #250, 2026-10-07).** The reviewing
+session ran the §4.1 candidates in MATLAB R2024a from this PR's head (engine
+code identical to `a4e24bc`; only `docs/analyses/*` differs), in a
+scratch folder with `fdcheck` as the oracle, and posted the results on the
+PR. They are recorded here as the review's data, not the orchestrating
+session's; the snapshot stays anchored at `a4e24bc`.
+
+| Candidate | MATLAB R2024a (review) |
+|---|---|
+| BG-01 `mod(x, x(1)+2.5)` | wrong: `J = I` vs FD `[1 0 0; −1 1 0; −2 0 1]` (the `rem` sibling is correct) |
+| BG-02 `sum(X,2)` and `X*ones(2,1)` | wrong: `[4 1; 6 1]` vs `[3 1; 7 1]`, as the entry states |
+| BG-03 `cross(reshape(x,3,2), C, 1)`, `3×4` | wrong: rows permuted (errors of 7 and 17) |
+| BG-04 overdetermined `A\b` | through `adigator()`: no `y.dx` field at all (silent); through `adigatorGenJacFile`: `MATLAB:badsubscript` at `adigatorGenJacFile.m:382` (loud but uninformative) |
+| BG-05 (a) mask, (b) `if` fold | (a) `dw1/dx5` lost; (b) wrong branch, and the value is wrong too (`3x` vs `2x`) |
+| BG-06 identity block; rotation idiom | both wrong, as the entry states |
+| BG-10 solve sparsity | `J = [0; 1]` vs `[1; 1]` |
+| BG-11 `N:-1:1` | `n = 3`: `g = [0 2 4 6]` vs `[2 4 6 0]`; `n = 2` as the entry states |
+| BG-12 inner-loop Hessian | `F = 6` vs 25; MATLAB warns "Colon operands must be real scalars … will become an error" |
+| BG-13 `loopbound` inner loop | `n = 3`: `F = 42` vs 36; `n = 2`: `F = 10` vs 9 |
+| BG-24 `mod(7.3, x)` | generation succeeds, the generated file does not parse (`Invalid use of operator`) |
+| BG-25 `[x(1) x(2) 1]/A`, `A` 2×3 | through `adigator()`: silently wrong value, `y.f = eye(2)(:)`, 4 elements where 2 are expected; through `adigatorGenJacFile`: `badsubscript`; tall `A` → `'Not coded yet'` |
+| BG-39 `adigatorUncompressJac` | `[0 2; 3 0; 7 0]`, as the entry states |
+
+Ten of the eleven candidates the review ran (BG-01..06, BG-10..13, BG-39)
+reproduce as silently wrong derivatives; BG-04, the eleventh, is silent
+through `adigator()`; BG-25, a §4.2 loud defect
+in the first draft, returns a silently wrong value through `adigator()` and
+is moved to §4.1 below; BG-01's y-only pin is blocked by BG-24 (see the
+entry). The review also found one new loud defect, BG-51 (§4.2).
 
 Provenance: with four exceptions, every candidate in §4.1–4.2 is in code
 **unchanged since the upstream import** (`git blame` → `5855f6a`/`1f6ac95`).
@@ -915,7 +957,11 @@ emitted scalar form `[0;0;0;0]`. No test uses `mod` on an active operand
 (CG-01). *Fix:* swap the arms (or reuse the vector form). *Pin:* `y = mod(x,
 x(1)+2.5)` (both active), `y = mod([7;8;9], x(1))` (y only), `y = mod(x,
 1.7*ones(3,1)+x)` vs `fdcheck` away from the floor steps; `rem` siblings.
-*MATLAB repro:* generate the first two and compare to FD. `[matlab]`
+*MATLAB repro:* generate the first and compare to FD (R2024a, review of this
+PR: `J = I` vs FD `[1 0 0; −1 1 0; −2 0 1]`; the `rem` sibling is correct).
+The y-only pin `mod([7;8;9], x(1))` cannot reach this bug until BG-24 is
+fixed: its generated file does not parse, so M1 orders BG-24 before BG-01.
+`[matlab]`
 
 **BG-02 (critical, high) — `sum(X, 2)` on a matrix emits the derivative in
 the wrong order when a variable touches a non-monotone set of entries.**
@@ -954,7 +1000,9 @@ the wrong `Grd` (`[112 6 −26 72 −12 −16]` vs FD `[26 8 −10 168 0 −56]`
 `Hes` happens to match (`(P·dc)ᵀ(P·dc)` is permutation-invariant). `cross` is
 at 0% coverage. *Fix:* `tranref = reshape(1:FMrow*FNcol, FNcol, FMrow).';
 tranref = tranref(:)` (the inverse) with consumers unchanged. *Pin:* `3×2`,
-`3×4` along dim 1 and `2×3`, `4×3` along dim 2, x-only/y-only/both.
+`3×4` along dim 1 and `2×3`, `4×3` along dim 2, x-only/y-only/both, with
+both operand kinds: an *inline-literal* constant operand does not reach this
+bug today, generation fails first on an undefined `xvec` (BG-51, §4.2).
 `[matlab]`
 
 **BG-04 (critical, high) — overdetermined `A\b` with constant `A` and active
@@ -966,10 +1014,28 @@ yet') end` (`:239-384`); there is no `y`-only arm, unlike the square branch
 `z.f = A.f\b.f;` and no `z.dx`, so the Jacobian is zero. Octave run: `A =
 [1 2;3 4;1 1]`, `b = [x1;x2;3]` → `J = zeros(2,2)` vs FD `[−1.5 0.5; 1.167
 −0.167]`. Non-square `mrdivide` (`mrdivide.m:88`, `v3 = v2\v1`) reaches the
-same hole (and BG-25 first). *Fix:* add the `elseif ~isempty(y.deriv…)` arm
+same hole (and BG-25 first). MATLAB R2024a (review of this PR): through
+`adigator()` the file has no `y.dx` field at all — silent; through
+`adigatorGenJacFile` the wrapper fails with `MATLAB:badsubscript` at
+`adigatorGenJacFile.m:382` — loud but uninformative. The repro must run both
+entry points. *Fix:* add the `elseif ~isempty(y.deriv…)` arm
 using `cadamtimesderiv(x,y,…,'mldivide')` (expected `dz/db = pinv(A)`);
 likewise or keep the loud error for the underdetermined branch. *Pin:* tall
 constant `A`, active `b` (vector and matrix RHS) vs `pinv(A)`. `[matlab]`
+
+**BG-25 (critical, high) — non-square `x/y` prints its three temporaries
+under one name and returns a silently wrong *value* through `adigator()`.**
+`mrdivide.m:81-91` with `cadafuncname.m:31-36`: the branch resets
+`VARINFO.COUNT` before each of `x.'`, `y.'` and `y.'\x.'`, so all three print
+as the same name and the file contains `cada1f1 = cada1f1\cada1f1`. MATLAB
+R2024a (review of this PR): `[x(1) x(2) 1]/A` with constant `2×3` `A` →
+`y.f = eye(2)(:)`, four elements where two are expected, no derivative, no
+error; through `adigatorGenJacFile` a `MATLAB:badsubscript`; tall `A` →
+`'Not coded yet'`. Listed as a loud defect in the first draft of this
+document; moved here on the review's evidence (principle 1). *Fix:* distinct
+temporaries (as `mldivide` does with `TF3`/`TF4`), then BG-04 for the
+derivative. *Pin:* wide and tall constant `A` vs `pinv(A)`, through both entry
+points. `[matlab]`
 
 **BG-05 (critical, high) — `cadabinarylogical` builds the *second* operand's
 known-zero mask from the *first* operand's zero locations.** Verified directly,
@@ -1207,7 +1273,7 @@ with `histc(XI,[−inf,…,inf])`). A documentation-or-mask decision. `[matlab]`
 | ID | Where | What | Octave run | Fix |
 |---|---|---|---|---|
 | **BG-24** (high) | `cadabinaryarraymath.m:531-534` | the y-only arm sets `Xstr = []; Ystr = []` for `mod`/`rem` too, but their `getdzdy` needs both, so the file contains `z.dx = -floor(./).*…` — **adigator reports success and the file does not parse** | `mod(7.3, x)`, `mod([7.3;2.1], x)`, `rem(7.3, x)` all unparsable | `case {'plus','minus'}` only at `:532` |
-| **BG-25** (high) | `mrdivide.m:81-91` + `cadafuncname.m:31-36` | non-square `x/y` resets `VARINFO.COUNT` before each of `x.'`, `y.'`, `y.'\x.'`, so all three print as the same name: `cada1f1 = cada1f1\cada1f1` → wrong value (`eye(2)`), no derivative | `b/A` with constant `2×3` `A` | distinct temporaries (as `mldivide` does with `TF3`/`TF4`), then BG-04 |
+| **BG-51** (medium) | `cross.m:290` | `xvec` is undefined on the path where the constant operand is an inline literal: `cross(X, [1 4;2 5;3 7])` with `X = [x(1:3), x(4:6)]` fails at generation with `Unrecognized function or variable 'xvec'`; the named-constant form works and hits BG-03 instead | not run in Octave; MATLAB R2024a (review of this PR) | define `xvec` on the literal-operand path; the CG-03 `cross` pin should cover both operand kinds |
 | **BG-26** (medium) | `adigatorVarAnalyzer.m:296-297` | multi-output numeric branch uses undefined `NUMvar` (the variable is `NUMvars`) and overmaps the last output into every slot | `[X,Y] = meshgrid(…)` inside the user function → `'NUMvar' undefined` | `for Vcount = 1:NUMvars; varargout{Vcount} = cadaOverMap(varargout{Vcount}); end` |
 | **BG-27** (medium) | `adigatorAssignOvermapScheme.m:320, 327` | `error()` in a branch that also assigns: the compaction tests `BreakLocs` twice instead of `ErrorLocs`, leaving zeros used as `LASTOCC` indices | `if x(1) < 0; z = 0; error('…'); end; y = x.^2` → `LASTOCC(0,_)` | `\|\| ~isempty(ErrorLocs)` |
 | **BG-28** (medium) | `adigatorForIterEnd.m:899` | `ADIGATORVARIABLESTORAGE.OVERAMP{OverLoc}` (field is `OVERMAP`) on the break-inside-loop-inside-`if` path whose exit variable is read after the loop and assigned in the other branch | `structure has no member 'OVERAMP'`; seven other break/continue shapes generate and match FD | rename; then pin the now-reachable path |
@@ -1287,7 +1353,7 @@ B, re-run by the orchestrating session) the shipped code is wrong in 122 and
 function (CG-18). *Fix:* the one-line replacement above; **BG-40 (low)**
 `adigatorColor.m:54-56` additionally shortens the returned colour vector by
 the empty columns when called with two outputs, so `c(j)` is misaligned (an
-index error, fail-loud) for any pattern with an empty column. *Pin:* a
+index error, fail-loud) for any pattern with a non-trailing empty column. *Pin:* a
 round-trip test with random patterns including a 3-cycle permutation and an
 empty column. `[matlab]` (Octave already demonstrates it)
 
@@ -1421,7 +1487,7 @@ side is right it says so.
   "B1–B26" (actual B40); `CLAUDE.md:22,55` and `DISCIPLINE_ADOPTION.md:32`
   "C-1..C-5" (DESIGN defines C-6; `REVIEW_CONTEXT.md:29` says C-6); the label
   `docs/ANALYSIS.md` for `docs/analyses/ANALYSIS.md` in `CLAUDE.md` (2),
-  `CI_PLAN.md` (5), `ROADMAP.md` (4) — link targets are right, labels are not.
+  `CI_PLAN.md` (5), `ROADMAP.md` (5) — link targets are right, labels are not.
   `DESIGN.md:41` lists `tests/{unit,integration,system}` driven by `ci_local`;
   the tree also has `tests/montecarlo`, `tests/offline`, `tests/legacy` and
   `ci_gate`/`ci_prepush`/`ci_ert`/`ci_coverage_folders`.
@@ -1897,14 +1963,14 @@ this review; §9.6 lists the rows the maintainer may want to promote.
 
 | WP | What | Closes | Effort | §4 |
 |---|---|---|---|---|
-| **C1** | `extended.yml`: `push: branches: [master]`, drop `embedded` from both workflows, re-add `schedule:` (weekly is enough for drift detection), then dispatch once on `master`; delete the `embedded` branch; correct `CI_PLAN.md:176,190,345,465`, ADR-0032's per-merge wording, `MCSmokeTest.m:4-6`, `SExamplesTest.m:11`, `SCscMetadataTest.m:11` | TF-01, DD-02, DD-16, HY-07 | S | — |
-| **C2** | Doc-drift batch: DD-01, DD-03..DD-15, DD-17..DD-19, DD-21, DD-22, DD-23 (the "47 artifacts" sentence; the ERT/stack sentences flagged "to re-measure"), DD-24..DD-31, DD-33..DD-37, DD-39, DD-40; the `norm` wording in TS-U-17 (CG-05); register the eight unregistered classes; DD-32 and DD-38 are decisions (C8) | §5 | M | — |
-| **C3** | Licence-free gates, in python under `.github/scripts/` and wired into `ci.yml` after the MATLAB steps (they read the JUnit XML the run already uploads) and into a `docs-lint` job for the text checks: (a) **stale-`KnownIssue` detector** — fail when a `KnownIssue`-tagged method appears as *passed* or *failed-not-filtered* in the XML (the Phase-2 "planned, not yet implemented" item); (b) **per-method suite ratchet** (#236) — committed `tests/suite_baseline.txt` of `class: method-count`, fail on a drop; (c) **error-without-identifier ratchet** (HY-01); (d) **principle-8 token lint** over `docs/README.md`, `docs/userguide/*.tex`, `bench/SHOWCASE.md` (DD-24); (e) **ADR revisit sweep** printing every clause for the deferral sweep; (f) a markdown link/anchor checker. Each is a few dozen lines; (a) and (b) close the two gate holes this review found that `ci_suiteGuard` cannot | TF-02 (detector half), #236, HY-01 | M | — |
-| **C4** | Author the MATLAB-neutral, one-to-five-line fixes as a PR for a local session to verify: BG-07 (escape the regexp, keep a plain copy for `strfind`), BG-08 (`numel(x, varargin)`), BG-09 (`clear` temp functions after `rehash`), OC-06 (UTF-8 header bytes; note the fixture header bytes change on recapture), HY-08 (`do` → `doi`), **BG-39** (`sparse(i(order), j(order), JSnz, m, n)`) with its round-trip test, BG-40, BG-43 (`mat2str` for vector options + the drift assertion), BG-44 (`adigator.m:129`), BG-46 (move the `nargout` check inside the `try`), BG-26 (`NUMvars`), BG-27 (`ErrorLocs`), BG-28 (`OVERMAP`), BG-31 (`ppknown`), BG-32 (`keyboard` → error), BG-38 | §4.2–4.5, §7.3 | M author / S verify `[matlab]` | — |
+| **C1** | `extended.yml`: `push: branches: [master]`, drop `embedded` from both workflows, re-add `schedule:` (weekly is enough for drift detection), then dispatch once on `master`; delete the `embedded` branch; correct `CI_PLAN.md:176,190,345,465`, ADR-0032's per-merge wording, `MCSmokeTest.m:4-6`, `SExamplesTest.m:11`, `SCscMetadataTest.m:11` | TF-01, DD-02, DD-16, HY-07 | S | **§4** — the trigger, the schedule cadence and the `embedded` deletion are C8(x); the doc corrections are mechanical |
+| **C2** | Doc-drift batch: DD-01, DD-03, DD-04, DD-06..DD-15, DD-19, DD-21, DD-22, DD-23 (the "47 artifacts" sentence; the ERT/stack sentences flagged "to re-measure"), DD-24..DD-31, DD-33..DD-37, DD-39, DD-40; the `norm` wording in TS-U-17 (CG-05); register the eight unregistered classes. Out of the batch as decisions: DD-05 (REQ-C-02/03 vs the tests, C8(xiii)), DD-17 (the C-1 contract text, C8(xi)), DD-18 (`REVIEW_CONTEXT.md` principle 4, C8(xii)), DD-32, DD-38 | §5 | M | — for the batch; its contract and principle items are C8(xi)–(xiii) |
+| **C3** | Licence-free gates, in python under `.github/scripts/` and wired into `ci.yml` after the MATLAB steps (they read the JUnit XML the run already uploads) and into a `docs-lint` job for the text checks: (a) **stale-`KnownIssue` detector** — fail when a `KnownIssue`-tagged method appears as *passed* or *failed-not-filtered* (the Phase-2 "planned, not yet implemented" item). MATLAB's documented JUnit format carries no test tags (per the documentation, not checked against a produced file), so membership comes from scanning the test sources for `TestTags = {'KnownIssue'}`; the step needs `if: always()`; Coder-gated `KnownIssue` methods are filtered on the licence on CI and invisible to it, which its output must say. **Lands after M2** has removed the six B7–B10 tags — the only `KnownIssue` block in the tree (`IShapeMatrixTest.m:136`) passes today, so the rule would fail `ci.yml` the day it arrived — or earlier with an explicit, expiring allowlist naming those six methods; (b) **per-method suite ratchet** (#236) — committed `tests/suite_baseline.txt` of `class: method-count`, fail on a drop; (c) **error-without-identifier ratchet** (HY-01); (d) **principle-8 token lint** over `docs/README.md`, `docs/userguide/*.tex`, `bench/SHOWCASE.md` (DD-24); (e) **ADR revisit sweep** printing every clause for the deferral sweep; (f) a markdown link/anchor checker. Each is a few dozen lines; (a) and (b) close the two gate holes this review found that `ci_suiteGuard` cannot | TF-02 (detector half), #236, HY-01 | M | **§4** — new CI gates and a new committed artifact (`tests/suite_baseline.txt`): C8(xiv) |
+| **C4** | Engine and utility fixes, **one PR per fix, each with its pin in the same PR** (principle 6; M10 verifies locally): (a) **BG-39** first, in its own PR with the random round-trip test (Appendix B generator) — critical; (b) the crashes and loud defects BG-26 (`NUMvars`), BG-27 (`ErrorLocs`), BG-28 (`OVERMAP`), BG-31 (`ppknown`), BG-32 (`keyboard` → error), BG-38, BG-40, BG-43 (`mat2str` for vector options + the drift assertion), BG-44 (`adigator.m:129`), BG-46 (move the `nargout` check inside the `try`); (c) BG-07 (escape the regexp, keep a plain copy for `strfind`), MATLAB-latent and on its own merit; (d) the Octave-only edits — BG-08 (`numel(x, varargin)`), BG-09 (`clear` temp functions after `rehash`), OC-06 (UTF-8 header bytes; it changes the header bytes of every generated file, so a fixture recapture), HY-08 (`do` → `doi`) — **wait for C8(iv)** | §4.2–4.5, §7.3 | M author / S verify `[matlab]` per PR | (d) waits on C8(iv); (a)–(c) need none |
 | **C5** | Octave **Tier 0** job: `tests/offline/octave_tier0.m` (two cores + fixture numeric checks + plain-assert ports of the five util classes), `apt-get install octave` step in `ci.yml` | OC-00, §7.4 | S–M | **§4** (adds an external dependency and a CI leg; amend ADR-0008) |
 | **C6** | Author (for `[matlab]` verification) the test-strengthening PRs of §2: TF-02 scaffold removal + B10 pattern asserts, TF-06 `coder.*` assume-in-setup, TF-09 csc FD oracle, TF-10 example asserts, TF-11 `GenFiles4` values, TF-26..TF-34, CG-18 contradictions | §2.3 | M author | — |
-| **C7** | Hygiene: `CITATION.cff`; `CONTRIBUTING.md` error-id namespace rule; `git update-index --chmod=-x` sweep + `.gitattributes` guard; SHA-pin actions | HY-01/02/05/09 | S | — |
-| **C8** | **Surface the decisions** this review cannot take, each with the recommendation marked: (i) `'l'` mode — emit the planned deprecation warning now *(recommended)* or document "no warning yet" (DD-20); (ii) ADR-0021's removal gate — re-defer with a measurement task (WP-K2) *(recommended)* or decide on the ERT-fails argument; (iii) tolerance policy — reword `REQ-T-01` to the enforced central-FD `1e-5`/`1e-4` and make analytic the primary oracle where available *(recommended)* or tighten the tests to `1e-6`; (iv) Octave tiers 1–2 (ADR-0003/0008 amendment) *(recommend Tier 0 now, Tier 1 next, Tier 2 after the engine fixes land)*; (v) generated-output licence statement + #249 scope (one overload); (vi) whether BG-01's fix lands as "fix + pin" or "refuse active scalar `mod` divisor until pinned" *(recommend fix + pin; the rule is right, only the guard is inverted)*; (vii) REQ-T-10's `'l'` clause (DD-32) *(recommend: amend to `'i'`)*; (viii) the R6 gate (DD-38) *(recommend: re-defer with the R21-step-2 re-measurement as the dated condition)*; (ix) the paper go/no-go (PB-01, §8.3 sequencing) | DD-20, DD-32, DD-38, §5.4, TF-05, §7, HY-05, BG-01, PB-01 | S | **§4** all |
+| **C7** | Hygiene: `CONTRIBUTING.md` error-id namespace rule; `git update-index --chmod=-x` sweep + `.gitattributes` guard; then, once decided, `CITATION.cff` and the SHA-pinned actions | HY-01/02/05/09 | S | **§4** — `CITATION.cff` authorship/attribution and the SHA-pinning policy are C8(xv) |
+| **C8** | **Surface the decisions** this review cannot take, each with the recommendation marked: (i) `'l'` mode — emit the planned deprecation warning now *(recommended)* or document "no warning yet" (DD-20); (ii) ADR-0021's removal gate — re-defer with a measurement task (WP-K2) *(recommended)* or decide on the ERT-fails argument; (iii) tolerance policy — reword `REQ-T-01` to the enforced central-FD `1e-5`/`1e-4` and make analytic the primary oracle where available *(recommended)* or tighten the tests to `1e-6`; (iv) Octave tiers 1–2 (ADR-0003/0008 amendment) *(recommend Tier 0 now, Tier 1 next, Tier 2 after the engine fixes land)*; (v) generated-output licence statement + #249 scope (one overload); (vi) whether BG-01's fix lands as "fix + pin" or "refuse active scalar `mod` divisor until pinned" *(recommend fix + pin; the rule is right, only the guard is inverted)*; (vii) REQ-T-10's `'l'` clause (DD-32) *(recommend: amend to `'i'`)*; (viii) the R6 gate (DD-38) *(recommend: re-defer with the R21-step-2 re-measurement as the dated condition)*; (ix) the paper go/no-go (PB-01, §8.3 sequencing); (x) the Extended trigger — `push: [master]` plus a weekly `schedule:`, and delete the `embedded` branch after the first green `master` run *(recommended; the alternative keeps `embedded` as an archive tag)*; (xi) DD-17, the C-1 contract text in `DESIGN.md:103` *(recommend: a pointer note to ADR-0030, no behaviour change, as the R31 census promised)*; (xii) DD-18, `REVIEW_CONTEXT.md:59` principle 4 *(recommend: restate the bar as strict Embedded Coder per ADR-0033/REQ-T-10)*; (xiii) DD-05, REQ-C-02/03 vs the tests *(recommend: widen the tests, CG-01/CG-03, not narrow the rows)*; (xiv) C3's new licence-free gates and the committed `tests/suite_baseline.txt` *(recommend: land (b)–(f) now and (a) after M2)*; (xv) `CITATION.cff` authorship/attribution and SHA-pinning of actions *(recommend both; the authors line is the maintainer's to write)*; (xvi) the ratchet re-baselining policy for M3 *(recommend: a ratchet moves only upward, in its own commit, citing the run it was read from)*; (xvii) BG-11/13 — refuse the two loop shapes with new error ids, or pad them correctly *(recommend: refuse now with ids and fix later; a wrong gradient outranks a refusal, principle 1)*; (xviii) the M10 policy forks — BG-18 tie semantics *(recommend one-hot, first-argument-wins, matching MATLAB's `max` index)*, BG-20's emitted input guard *(recommend the B36-style assert with `auxdata = 1` opt-out)*, BG-23 NaN-vs-extrapolate *(recommend: document now, mask to `NaN` in a later release)*, BG-47's stamp semantics *(recommend: document the gap now, sign inputs with R21)* | DD-20, DD-32, DD-38, §5.4, TF-05, §7, HY-05, BG-01, PB-01, TF-01, DD-17, DD-18, DD-05, C3, PB-11, HY-09, TF-03/04, BG-11/13/18/20/23/47 | S | **§4** all |
 
 ### 9.2 Cloud session with Octave
 
@@ -1920,16 +1986,16 @@ In priority order; the first three are one session.
 
 | WP | What | Closes | Effort |
 |---|---|---|---|
-| **M1** | Reproduce the §4.1 critical batch in this order, each with its listed fixture vs `fdcheck`/closed form: **BG-01** `mod` guard, **BG-02** `sum(X,2)` order, **BG-06** inline-block zero locations, **BG-05** logical zero masks, **BG-04** overdetermined solve, **BG-10** solve-sparsity cancellation, **BG-03** `cross`, **BG-11/12/13** the loop shapes; fix each (the fixes are one to ten lines; BG-11/13 are refusals), enter the confirmed ones in `ANALYSIS.md` with their pins; then land the **binary-rule matrix** of CG-01 in `URulesBinaryTest` | §4.1, CG-01, DD-05 | M + M |
+| **M1** | Reproduce the §4.1 critical batch in this order, each with its listed fixture vs `fdcheck`/closed form: **BG-24** (the unparsable `mod`/`rem` y-only file; it blocks BG-01's y-only pin), **BG-01** `mod` guard, **BG-02** `sum(X,2)` order, **BG-06** inline-block zero locations, **BG-05** logical zero masks, **BG-04** overdetermined solve (both entry points), **BG-25** non-square `x/y`, **BG-10** solve-sparsity cancellation, **BG-03** `cross` (both operand kinds; BG-51 first), **BG-11/12/13** the loop shapes — **one PR per bug, each flipping its `KnownIssue` pin to a hard assertion**; the review's R2024a results (§4 preamble) already cover the reproduce half for BG-01/02/03/05/06/10/11/12/13/24/39. The fixes are one to ten lines; whether BG-11/13 are refused or fixed, with their new error ids, is C8(xvii). Enter the confirmed ones in `ANALYSIS.md` with their pins; then land the **binary-rule matrix** of CG-01 in `URulesBinaryTest` | §4.1, CG-01, DD-05 | M + M |
 | **M2** | Verify C4 (engine fixes) and C6 (test strengthening) — confirm the six B7–B10 methods pass as hard assertions, drop the `KnownIssue` tag, update ANALYSIS §1.5 / CI_PLAN TS-I-01; confirm the `coder.*` setup assume; run the csc/example/`GenFiles4` value checks | TF-02, TF-06, TF-09..11, TF-26..34 | M |
-| **M3** | Ratchets: read the current PR-gate coverage rate and commit it; extend `ci_lint`'s folders and switch it to a finding-set baseline; raise the per-folder floor from the first `master` Extended run | TF-03, TF-04, ADR-0032 | S |
+| **M3** | Ratchets: read the current PR-gate coverage rate and commit it; extend `ci_lint`'s folders and switch it to a finding-set baseline; raise the per-folder floor from the first `master` Extended run — **§4**: the re-baselining policy (what moves a ratchet, when, and who records it) is C8(xvi) | TF-03, TF-04, ADR-0032 | S |
 | **M4** | Tolerance policy per C8(iii): polydatafit analytic oracle; `UNormTest` analytic at `1e-12`; `URulesUnaryTest` central FD | TF-05 | S |
 | **M5** | Unary shapes + derivative-free family (CG-02); high-level ops + `mldivide`/`mrdivide`/`inv` + `repmat` (CG-03); struct-array ops (CG-04); masks/logicals (CG-06); `norm` cells + `badp` (CG-07); reverse adjoints (CG-08) | §3.1 | L (can be split per class, each S–M) |
 | **M6** | `while` loops (CG-09); `complex=1` consistency, `auxdata=1`, row-vector VOD, reverse × csc (CG-10); vectorized Jacobian/Hessian (CG-11); higher-order rules (CG-12); path hygiene (CG-13); publish the option × DerType support matrix | §3.2 | L (split) |
 | **M7** | Error ids: the 25 untested ids (`subsOutOfRange` first), identifier for the `sign` warning, the `while` exhaustion error (#246) | CG-16 | M |
 | **M8** | Monte-Carlo vocabulary: full `getdydx` table with domain-safe sampling, `./`, `.^`, `atan2`, `mod`/`rem`, `max`/`min`, an `xshape` draw; a committed synthetic reproducer so `MCRegressionTest`'s body executes | CG-17, TF-30, TF-31 | M |
 | **M9** | Examples: parameterised smoke over `discoverExamples()` in the Extended job; curate the vectorized mains; `GenFiles4` numeric pins or the ADR-0037 note | CG-14, CG-15 | M |
-| **M10** | Reproduce the remaining §4 candidates (BG-14..BG-23, the fork-layer BG-41/42/45/48/49, then §4.2's loud defects BG-24..BG-35, then the latent BG-36/37) with the listed repros; verify the C4 one-liners; enter confirmed ones in `ANALYSIS.md` with pins; add `IBreakContinueTest` from the eight passing probe shapes and `INestedLoopTest` for the `1:i` inner-bound shapes at first and second order | §4 | per item (most S) |
+| **M10** | Reproduce the remaining §4 candidates (BG-14..BG-23, the fork-layer BG-41/42/45/48/49, then §4.2's loud defects BG-26..BG-35 and BG-51, then the latent BG-36/37) with the listed repros; verify the C4 PRs; the policy forks inside this batch are C8(xviii) (BG-18 tie semantics, BG-20's emitted guard, BG-23 NaN-vs-extrapolate, BG-47's stamp semantics); enter confirmed ones in `ANALYSIS.md` with pins; add `IBreakContinueTest` from the eight passing probe shapes and `INestedLoopTest` for the `1:i` inner-bound shapes at first and second order | §4 | per item (most S) |
 
 ### 9.4 Local session, MATLAB + Coder / Embedded Coder / gcc
 
@@ -1943,10 +2009,15 @@ In priority order; the first three are one session.
 
 ### 9.5 Sequencing
 
-1. **Week 1, cloud:** C1 (the gate), C2 (docs), C3 (licence-free gates),
-   C7, C8 (decisions surfaced). Author C4, C5, C6 as PRs. Nothing here needs
-   MATLAB and everything later benefits from it.
-2. **First MATLAB session:** M1 (the critical candidate) → M2 → M3 → M4,
+1. **Week 1, cloud:** C8 first (C1, C3, C7, M1 and M3 each wait on one of
+   its items; C2's batch does not, its three decision items do), then C1, C2,
+   C3 except its (a), C7. Author C4 (a)–(c), C5,
+   C6 as PRs. Nothing here needs MATLAB and everything later benefits from it.
+   A MATLAB session need not wait for week 1: M1 can run in parallel with
+   C1/C2, one PR per bug, and the review's R2024a results already supply the
+   reproduce half.
+2. **MATLAB session:** M1 (the critical candidates, per-bug PRs) → M2 → C3(a)
+   → M3 → M4,
    verifying C4/C6 on the way; run `ci_ert` once (K4) and attach it.
 3. **Then in parallel:** cloud O1→O2→O3 (as decided in C8(iv)); MATLAB M5–M9
    split into per-class PRs, each pre-verified in Octave where the fixture
@@ -1972,7 +2043,7 @@ In priority order; the first three are one session.
 ---
 ## Appendix A — Finding register
 
-One row per finding, in section order; the body carries the evidence. Severity and environment as stated there ("-" where the body gives them in prose); a finding whose first sentence is long is clipped at a word boundary ("…"). OC- numbers follow the Octave finder's list and have gaps: the three engine defects became BG-07..09, the header-bytes, `do`-keyword, `\b`-regexp and construct-census items were folded into HY-08 and §7.2, and the staged plan and example census into §7.4 and §7.1.
+One row per finding, in section order; the body carries the evidence. Severity and environment as stated there ("-" where the body gives them in prose; for TF-12..TF-25 the Severity column carries the §2.2 verdict); a finding whose first sentence is long is clipped at a word boundary ("…"). OC- numbers follow the Octave finder's list and have gaps: the three engine defects became BG-07..09, the header-bytes, `do`-keyword, `\b`-regexp and construct-census items were folded into HY-08 and §7.2, and the staged plan and example census into §7.4 and §7.1.
 
 | ID | Severity | Finding | Env |
 |---|---|---|---|
@@ -1980,27 +2051,27 @@ One row per finding, in section order; the body carries the evidence. Severity a
 | TF-02 | high | the B7–B10 "regression guards" filter on their own failure modes | matlab |
 | TF-03 | medium | the PR-gate coverage ratchet is a one-time floor | cloud,matlab |
 | TF-04 | low | the lint ratchet tolerates 423 findings and scans a subset of the tree | cloud,matlab |
-| TF-05 | medium | the tolerance policy in `REQ-T-01` is enforced nowhere, and one tolerance is set by the oracle rather than the derivative | - |
-| TF-06 | medium | the `coder.*` catch idiom filters a class of embed-pipeline regression on every runner | - |
+| TF-05 | medium | the tolerance policy in `REQ-T-01` is enforced nowhere, and one tolerance is set by the oracle rather than the derivative | matlab |
+| TF-06 | medium | the `coder.*` catch idiom filters a class of embed-pipeline regression on every runner | matlab |
 | TF-07 | medium | the footprint gates convert a failed build into "toolchain absent". `bench/loopboundPaddingPenalty.m:86` initialises `fp = struct('rom',-1,'ram',-1,'stack',-1)` and `:118-120` catches the … | coder |
 | TF-08 | medium | `ci_ert` prints `PARTIAL` but exits 0 | coder |
 | TF-09 | medium | csc-mode tests compare against the matrix mode of the same generator and call it an FD check | matlab |
 | TF-10 | medium | two of the five "numeric-assertion" examples assert nothing | matlab |
 | TF-11 | medium | `IGenFiles4Test` pins text shape only | matlab |
-| TF-12 | - | extended trigger → `push: [embedded]`, cron dropped | - |
-| TF-13 | - | B7 fixed and B8–B10 fixed with the pins left as `KnownIssue` self-healers | - |
-| TF-14 | - | polydatafit `RelTol 1e-3 → 5e-3` + oracle swapped to test-side FD | - |
-| TF-15 | - | `ILoopboundTest` exact padded-tail assertion wrapped in `if numel(vm.f) == Nmax … else verifySize(vm.f,[n 1])`; the padding-unsafe pin fixture changed `zeros(N,1) → zeros(6,1)` | - |
-| TF-16 | - | `IEmbedModesTest` expected `'Grd(['` changed to `'Jac(['` to match the generator | - |
-| TF-17 | - | `UNormTest.matrixNormErrors` accepts `MATLAB:norm:unknownNorm` alongside the C-5 id for `p = -Inf` | - |
-| TF-18 | - | `SLoopboundPaddingTest` ROM-ratio floor at `n = Nmax` `≥ 0.95 → > 0.75` | - |
-| TF-19 | - | `SCodegenShowcaseTest` dropped `rev < fwd` and `ana ≤ fwd` source-byte asserts | - |
-| TF-20 | - | `SCodegenTest` ERT lib build wrapped in a silent `if license('test','RTW_Embedded_Coder')` | - |
-| TF-21 | - | B16 hygiene invariant weakened strict → populated-only | - |
-| TF-22 | - | three "update fixtures" golden regenerations with empty commit bodies (`56bc8f6` deletes 2 `.m` + 2 `.mat`) | - |
-| TF-23 | - | embed gate `verifyError → verifyWarning` | - |
-| TF-24 | - | `hessians/logsumexp` example added to `discoverExamples`' Coder-required skip list | - |
-| TF-25 | - | `KnownIssue` tripwires added for live bugs (B27 silent-wrong, #173, #217 63.4× stack) | - |
+| TF-12 | lapsed | extended trigger → `push: [embedded]`, cron dropped | - |
+| TF-13 | wrongful | B7 fixed and B8–B10 fixed with the pins left as `KnownIssue` self-healers | - |
+| TF-14 | questionable | polydatafit `RelTol 1e-3 → 5e-3` + oracle swapped to test-side FD | - |
+| TF-15 | questionable | `ILoopboundTest` exact padded-tail assertion wrapped in `if numel(vm.f) == Nmax … else verifySize(vm.f,[n 1])`; the padding-unsafe pin fixture changed `zeros(N,1) → zeros(6,1)` | - |
+| TF-16 | wrongful (test bent to the implementation, against C-6) | `IEmbedModesTest` expected `'Grd(['` changed to `'Jac(['` to match the generator | - |
+| TF-17 | low | `UNormTest.matrixNormErrors` accepts `MATLAB:norm:unknownNorm` alongside the C-5 id for `p = -Inf` | - |
+| TF-18 | low | `SLoopboundPaddingTest` ROM-ratio floor at `n = Nmax` `≥ 0.95 → > 0.75` | - |
+| TF-19 | low | `SCodegenShowcaseTest` dropped `rev < fwd` and `ana ≤ fwd` source-byte asserts | - |
+| TF-20 | wrongful at the time (silent no-op on Coder-only runners) | `SCodegenTest` ERT lib build wrapped in a silent `if license('test','RTW_Embedded_Coder')` | - |
+| TF-21 | maintainer-decided | B16 hygiene invariant weakened strict → populated-only | - |
+| TF-22 | low | three "update fixtures" golden regenerations with empty commit bodies (`56bc8f6` deletes 2 `.m` + 2 `.mat`) | - |
+| TF-23 | policy, tracked | embed gate `verifyError → verifyWarning` | - |
+| TF-24 | low | `hessians/logsumexp` example added to `discoverExamples`' Coder-required skip list | - |
+| TF-25 | conformant (one hollow pin, healed) | `KnownIssue` tripwires added for live bugs (B27 silent-wrong, #173, #217 63.4× stack) | - |
 | TF-26 | - | `IEmbedSlimTest.m:160` asserts `pinfo.count >= 0` (a tautology) and `:71` `verifyLessThanOrEqual(nB, nA)` accepts a no-op slim; the slim-vs-noslim text assertions no longer discriminate … | - |
 | TF-27 | - | `ILoopboundTest.m:121` `verifyError(@() lb_guard_dx(x,Nmax+1), ?MException)` accepts any exception while its input has only `Nmax` entries, so an index-out-of-bounds error satisfies it even … | - |
 | TF-28 | - | `IRolledOvermapWidthTest.pruneGateStaysInStepWithTheRemapGate` is a token-presence regexp: it passes if the two gate tokens appear anywhere in each file, not that they gate the same … | cloud |
@@ -2029,12 +2100,12 @@ One row per finding, in section order; the body carries the evidence. Severity a
 | CG-16 | medium | 25 of 68 `adigator:*` error identifiers have no test that triggers them, and ~400 `error(` sites carry no identifier at all | cloud,matlab |
 | CG-17 | medium | the Monte-Carlo vocabulary is far narrower than its description | matlab |
 | CG-18 | low | two contradictions inside `CI_PLAN.md` itself: `REQ-C-02` requires every rule incl | cloud |
-| BG-01 | critical | `mod(x, y)` with an active *scalar* divisor applies the `d/dy` rule only when `y == 0` | - |
+| BG-01 | critical | `mod(x, y)` with an active *scalar* divisor applies the `d/dy` rule only when `y == 0` | matlab |
 | BG-02 | critical | `sum(X, 2)` on a matrix emits the derivative in the wrong order when a variable touches a non-monotone set of entries | matlab |
 | BG-03 | critical | `cross(X, Y, 1)` on a `3×N` matrix with `N ∉ {1, 3}` applies the row permutation in the wrong direction | matlab |
 | BG-04 | critical | overdetermined `A\b` with constant `A` and active `b` emits no derivative at all | matlab |
-| BG-05 | critical | `cadabinarylogical` builds the *second* operand's known-zero mask from the *first* operand's zero locations | - |
-| BG-06 | critical | an inline numeric block in a concatenation records its *nonzero* `(row, col)` pairs as `func.zerolocs` | - |
+| BG-05 | critical | `cadabinarylogical` builds the *second* operand's known-zero mask from the *first* operand's zero locations | matlab |
+| BG-06 | critical | an inline numeric block in a concatenation records its *nonzero* `(row, col)` pairs as `func.zerolocs` | matlab |
 | BG-07 | - | unescaped `(` in the only engine regexp: `FunStrChecks{Fcount} = ['\W',CheckName,'(']` (`adigator.m:509`, used at `adigatorPrintTempFiles.m:636` (`regexp`) and reused *raw* as a `strfind` … | octave |
 | BG-08 | - | `@cada/numel.m` declared `numel(x)`; Octave calls it with index arguments during nested property assignment (dies at `adigatorFunctionInitialize.m:710`; §7.3) | octave |
 | BG-09 | - | reliance on `rehash` to pick up the rewritten `adigatortempfunc<k>.m` (`adigator.m:664-666`; §7.3) | octave |
@@ -2053,7 +2124,7 @@ One row per finding, in section order; the body carries the evidence. Severity a
 | BG-22 | low | `x.^y` with an active exponent at `x == 0` emits `NaN` (`log(0).*0.^y.*dy` unguarded, `:673-674`; the `dx` term is guarded at `:328`) | matlab |
 | BG-23 | low | generated `interp1`/`interp2` code extrapolates with the end polynomial where MATLAB returns `NaN` outside the breakpoints (`interp1.m:243-245` prints `ppval` … | matlab |
 | BG-24 | high | the y-only arm sets `Xstr = []; Ystr = []` for `mod`/`rem` too, but their `getdzdy` needs both, so the file contains `z.dx = -floor(./).*…` — adigator reports success and the file does not … | - |
-| BG-25 | high | non-square `x/y` resets `VARINFO.COUNT` before each of `x.'`, `y.'`, `y.'\x.'`, so all three print as the same name: `cada1f1 = cada1f1\cada1f1` → wrong value (`eye(2)`), no derivative | - |
+| BG-25 | critical | non-square `x/y` prints its three temporaries under one name and returns a silently wrong *value* through `adigator()` | matlab |
 | BG-26 | medium | multi-output numeric branch uses undefined `NUMvar` (the variable is `NUMvars`) and overmaps the last output into every slot | - |
 | BG-27 | medium | `error()` in a branch that also assigns: the compaction tests `BreakLocs` twice instead of `ErrorLocs`, leaving zeros used as `LASTOCC` indices | - |
 | BG-28 | medium | `ADIGATORVARIABLESTORAGE.OVERAMP{OverLoc}` (field is `OVERMAP`) on the break-inside-loop-inside-`if` path whose exit variable is read after the loop and assigned in the other branch | - |
@@ -2067,7 +2138,7 @@ One row per finding, in section order; the body carries the evidence. Severity a
 | BG-36 | low | `adigatorAssignOvermapScheme.m:290-322` zeroes break/continue/error branch counts *positionally* with absolute counts into a vector that starts at `Start`, so the removal is a no-op … | - |
 | BG-37 | low | `:859` `for forLoci = 1:ForLoops` uses only `ForLoops(1)` as the colon bound (superset scanned; can only over-union) | - |
 | BG-38 | low | `cross.m:174` allocates `fyLtemp = false(FMrow*FNcol)` (an `n×n` logical) where its siblings are `n×1`; benign, O(n²) memory | - |
-| BG-39 | critical | `adigatorUncompressJac` applies the colour permutation in the wrong direction | - |
+| BG-39 | critical | `adigatorUncompressJac` applies the colour permutation in the wrong direction | matlab |
 | BG-40 | low | `adigatorColor.m:54-56` additionally shortens the returned colour vector by the empty columns when called with two outputs, so `c(j)` is misaligned (an index error, fail-loud) for any … | matlab |
 | BG-41 | critical | the reverse-mode value-tape slicer drops a one-line plain copy | matlab |
 | BG-42 | medium | reverse-mode activity shortcut is unanchored | cloud,matlab |
@@ -2079,6 +2150,7 @@ One row per finding, in section order; the body carries the evidence. Severity a
 | BG-48 | low | the ADR-0023 scan's deny-list is narrower than its claim | matlab |
 | BG-49 | low | reverse mode rejects any active statement with a negative scalar constant because `cadamatprint` parenthesises it (`(-2)`) and the reverse atom regexp has no parenthesised form … | matlab |
 | BG-50 | info | The deprecated `GenFiles4*` wrappers still print `% Contact: mweinstein@ufl.edu` (`adigatorGenFiles4Ipopt.m:274-276` and siblings), the upstream routing #200 removed everywhere else (DD-34) | cloud |
+| BG-51 | medium | `xvec` is undefined on the path where the constant operand is an inline literal: `cross(X, [1 4;2 5;3 7])` with `X = [x(1:3), x(4:6)]` fails at generation with … | matlab |
 | DD-01 | - | `ULintTest` — `checkcode` … | - |
 | DD-02 | - | `SReleaseMatrixTest` — full suite on {R2022a, latest}, "nightly only" | - |
 | DD-03 | - | golden-file tests with checked-in fixture inputs and expected outputs | - |
@@ -2140,7 +2212,7 @@ One row per finding, in section order; the body carries the evidence. Severity a
 | PB-05 | - | Not standalone: CSC is CasADi's long-standing convention (ADR-0030 does not cite it); the "~2× metadata" win is measured against the fork's own removed v1 surface | - |
 | PB-06 | - | Builds on nablaFuzz (ICSE 2023: differential testing of forward/reverse/numeric AD, 173 bugs) and metamorphic-testing prior art; the fork's distinct additions are the *embeddability* … | matlab |
 | PB-07 | - | A credible experience report with a dense public dataset: 417 commits, 179 pull-request merges recorded in that history (`git log --format=%s a4e24bc`: 136 squash subjects ending in `(#n)` … | cloud |
-| PB-08 | - | The v2.0 cut is procedurally fragile: `[Unreleased]` still carries the framing blockquote and HTML comment that `extract` publishes verbatim (#233 open); `Contents.m`'s "(unreleased)" … | - |
+| PB-08 | - | The v2.0 cut is procedurally fragile: `[Unreleased]` still carries the framing blockquote and HTML comment that `extract` publishes verbatim (#233, open at `a4e24bc`); `Contents.m`'s … | - |
 | PB-09 | - | No release checklist exists: the recipe in `CONTRIBUTING.md` never runs `tests/ci_ert.m` or the Monte-Carlo campaign that ADR-0007 and the same document call "release-checklist runs", and … | - |
 | PB-10 | - | Product-level blockers: the output licence is undefined (#239); embed-mode output depends on the GPL library at runtime through `interp2` (#249, one overload — HY-05); the ADR-0013 upstream … | - |
 | PB-11 | - | Citation infrastructure is absent: no `CITATION.cff`, `codemeta` or `.zenodo.json`; the README cites only upstream's 2017 TOMS paper; a Zenodo DOI needs a GitHub release; the repository has … | - |
@@ -2247,6 +2319,17 @@ printf('%d trials; shipped wrong in %d; fix wrong in %d\n', ntr, nbad, nfix);
 Octave emulation of the literal emitted text for `x = [2.3;5.7;−1.2;9.9]`,
 `y = 1.7`: rule `−floor(x./y).*dy` = `[−1;−3;1;−5]` matches central FD to
 `5e-9`; the emitted scalar-`y` form yields `[0;0;0;0]`.
+
+**Overdetermined solve (BG-04).** Read `lib/@cada/mldivide.m:215-228` (square
+branch) and `:230-384` (tall branch) at HEAD: the tall branch's only derivative
+arm is the `x`-active `if`, with no `y`-only arm. The Octave run quoted in the
+entry (`A = [1 2;3 4;1 1]`, `b = [x1;x2;3]` → `J = zeros(2,2)`) was the
+structural finder's; the orchestrating session re-read the source only.
+
+**Logical zero masks (BG-05).** Read `lib/@cada/cadabinarylogical.m:100-120`
+at HEAD; `git blame -L 108,112` → `5855f6a` (upstream import); the `elseif`
+builds `ytemp` from `x.func.zerolocs`. Source read only; the Octave runs quoted
+in the entry were the rules finder's.
 
 **Literature positioning (§8).** Web searches run by the publishability pass
 (summaries read, not full papers): "CppADCodeGen static memory allocation hard
