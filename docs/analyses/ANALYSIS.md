@@ -1255,6 +1255,46 @@ refused to pin. Either fix landing makes it fire and say what to retire. #56 is 
 the vectorization/matrix-algebra **efficiency** question, settled by measurement
 (§2.3).
 
+### 1.3o `mod`/`rem` with an active divisor: an unparsable file and an inverted guard (B41, B42)
+
+Found by the 2026-10-05 deep review
+([`2026-10-05-deep-review-tests-coverage-bugs-plan.md`](2026-10-05-deep-review-tests-coverage-bugs-plan.md)
+§4, BG-24 and BG-01) and reproduced in MATLAB R2024a by its review. Both are
+upstream code (`git blame` → `5855f6a`), in the same rule
+(`lib/@cada/cadabinaryarraymath.m`), and **coupled**: fixing B41 alone would
+have turned a loud failure into B42's silent one, so they were fixed together
+([#251](https://github.com/pdlourenco/adigator-embedded/issues/251),
+[#252](https://github.com/pdlourenco/adigator-embedded/issues/252)).
+
+**B41 — the divisor-only arm printed `dZ/dY` without its operands (high;
+loud).** The `y`-has-derivatives-only arm cleared `Xstr`/`Ystr` for
+`{'plus','minus','mod','rem'}`, but `mod`'s and `rem`'s `dZ/dY`
+(`-floor(x./y).*dy`, `-fix(x./y).*dy`) need both, so `mod(7.3, x)` produced
+`-floor(./).*…`: generation reported success and the file did not parse
+(`Invalid use of operator`). The both-active arm already cleared them only for
+`plus`/`minus`.
+
+**B42 — a scalar `mod` divisor's derivative was applied only where the
+divisor is zero (critical; principle 1).** Both the both-active and the
+divisor-only arm guard a *scalar* divisor with
+`cadaconditional1 = y == 0; if cadaconditional1, <dZ/dY> …`. The intent
+("protect against y = 0") is the vector arm's `TD2(y == 0) = 0`; the scalar
+form had the comparison inverted, so for every `y ≠ 0` the divisor's
+contribution was dropped — `mod(x, x(1)+2.5)` at `[2.3; 5.7; 9.9]` returned
+`J = I` against FD `[1 0 0; −1 1 0; −2 0 1]` — and at `y == 0` it printed
+`-floor(x/0)`. The rule itself and the vector-divisor arms were right; `rem`
+has no such guard and was right. The divisor-only half was unreachable while
+B41 stood: its file did not parse.
+
+**Fix:** the divisor-only arm clears the operand strings only for
+`plus`/`minus`, and both scalar guards test `y ~= 0`. **Pinned** by
+`URulesBinaryTest` (TS-U-02): `mod` and `rem` under every activity pattern ×
+{scalar, vector} divisor at a fixed point whose quotients sit ≥ 0.04 from an
+integer, plus the guard's other direction in both scalar-divisor arms — at a
+zero divisor no divisor term is added (`mod(a, 0) = a`, so only `da/dx` remains). All three new divisor pins fail on the unfixed engine; and
+with B41 fixed but the divisor-only guard re-inverted, both the divisor-only
+pin and the zero-divisor pin still fail, so each half is held on its own.
+
 ### 1.4 Genuine fixes in this fork (verified, for the record)
 
 - `cadaunarymath.m` derivative-rule corrections (`asec`, `acsc`, `asecd`,
@@ -1319,6 +1359,8 @@ the vectorization/matrix-algebra **efficiency** question, settled by measurement
 | B40 (one reduction escapes the vectorized refusal fence; no refusal in it is catchable) | **Open** — diagnostic quality only; **principle 1 is not engaged**, everything involved errors before anything is printed. 29 single-op probes on a free (`Inf`) dimension, one MATLAB process per op: 12 accepted, 17 refused, of which 11 carry designed messages — the fence is wider than the user guide documents (`prod`/`max`/`norm`, catenation, and the colon form are undocumented; `sum`, the loop and subsref already were). Two real defects. (1) `x'*x`: `mtimes` HAS a vectorized refusal (`mtimes.m:130-131`) but keys it on the RESULT dims (`:129`), so a contraction OVER the free dimension with a finite result bypasses it and reaches `true(...,Inf)` → `MATLAB:nonaninf`; semantically this is `sum`'s case and wants `sum`'s refusal. (2) None of the vectorized refusals carries an error identifier — all bare `error('...')`, so none is programmatically catchable, unlike `adigator:loopbound:rangemismatch`; that is what #6 Tier 2 inherits along with the fence. Explicitly NOT defects, to stop them being re-reported: `reshape(x,[],1)` fails on the unsupported `[]` placeholder and does so identically on a non-vectorized input (verified), and `mean`/`cumsum`/`diff`/`sort` have no `@cada` overload at all so they sit outside the fence. An earlier draft of this entry claimed four overloaded ops fell through to generic errors; that was wrong on all four and is corrected here. Held by a self-healing tripwire, `IVectorizedFenceTest` (TS-I-31), which pins only that the failure is not ours — not `MATLAB:nonaninf`, an unstable MATLAB-internal id (§1.3n; issue #6 Tier 2). |
 | B37 (a rolled second-derivative pattern is the cross product of two loop overmaps) | **Fixed** — in the printing run of a rolled loop every operand carries its loop overmap, so `cadabinaryarraymath`'s scalar expansion (`cadaRepDers`) composed two n-wide unions as if independent and emitted the full n×n gather for a Hessian whose exported pattern is the n-nonzero diagonal; `cadaPrintReMap` then discarded 56 of the 64 one statement later, but only after the generated code had put n² doubles on the stack — 37,552 B at n=64, **63.4×** hand-written, while ERT-codegenning cleanly (the hollow milestone). Fixed by handing the emitting operation the overmap its result is about to be remapped into (`lib/@cada/private/cadaOverMapTargetNz.m`) so the doomed locations are dropped *before* they are printed — the same truncation, moved earlier, and guarded to fire only when that remap would actually have happened. Stack 768/9616/37552 → **160/352/608** B at n=8/32/64, i.e. exactly `96+8n`: affine, and the same series as the *vectorized* Hessian of the same maths, which also answers ADR-0035's caveat that part of the gap might be intrinsic to the rolled path (none of it was). Scope set by instrumenting every `cadaPrintReMap` over-approximation across the corpus — 18 events, of which the 17 with a growth law are all scalar expansion (the 18th is a bounded first-order `horzcat` case, §1.3k). Pinned by `tests/integration/IRolledOvermapWidthTest.m` (license-free) and `SStackScalingTest::subscriptedHessianMatchesVectorizedTwin` (Coder-gated, local-only), the latter having been the self-healing KnownIssue pin (§1.3k; issue #217, ADR-0036). |
 | B36 (a loop range over a runtime-named scalar is unbounded even without `loopbound`) | **Fixed** — a file generated *without* the option still prints `cadaforvar1.f = 1:N` when the trip count names a function input (passing a plain numeric to `adigator` fixes the analysis count, not the input), so nothing bounds it and, unlike a `loopbound` file, nothing declares the envelope either. The emitted range and the emitted loop header disagree (literal header, runtime range): measured at `n=5`, calling with `N=3` is loud (index out of bounds) but `N=8` **runs silently** and returns the 5-term answer (70 vs a true 240) — a quietly wrong derivative, principle 1. Fixed by emitting `assert(N == n);` in the body prologue (an equality - the file is specialized, not padded), plus extending the shared guard shape and BOTH recognizers so re-differentiation still works: without the recognizer half every Hessian of a named-trip-count function would have stopped generating. Verified to 3rd order. Unblocked `bench/loopboundPaddingPenalty` under static memory allocation, which raised the measured padding penalty ~2x at small n (every earlier figure was heap-enabled). Fixed for the **direct** form (a main-function input named in a main-function loop range); of the four routes to a specialized trip count recorded as residual scope in §1.3j, two remain unguarded (routes 1 and 4 were since handled by #213). Pinned by `tests/integration/ISpecializedTripCountTest.m` (§1.3j; issue #210). |
+| B41 (`mod`/`rem` divisor-only arm printed `dZ/dY` without its operands) | **Fixed** — `lib/@cada/cadabinaryarraymath.m`'s divisor-only arm cleared `Xstr`/`Ystr` for `mod`/`rem` too, so `mod(7.3, x)` reported success and wrote an unparsable file; it now clears them only for `plus`/`minus`, as the both-active arm does. Fixed together with B42, which it would otherwise have exposed. Pinned by `URulesBinaryTest/modRemActiveDivisorOnly` (§1.3o; #251). |
+| B42 (a scalar `mod` divisor's derivative applied only where it is zero) | **Fixed** — both scalar-divisor guards printed `if y == 0` around `dZ/dY`, the inverse of the vector arm's `(y == 0) = 0`, so every nonzero active scalar divisor silently lost its contribution. Both now test `y ~= 0`. Pinned by `URulesBinaryTest/modRemActiveBoth`, `/modRemActiveDivisorOnly` and `/modScalarDivisorAtZeroHasZeroDerivative` (the guard's zero direction); mutation-checked (§1.3o; #252). |
 
 ---
 
