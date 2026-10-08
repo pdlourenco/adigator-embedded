@@ -409,9 +409,10 @@ for Vcount = 1:NUMvod;
       end
 
       if strcmp(callerstr,'mod')
-        % if mod, protect against y = 0 (divide by zero)
+        % if mod, protect against y = 0 (divide by zero): the dZ/dY term is
+        % added only where y ~= 0, matching the vector arm's (y == 0) = 0
         if yscalarflag
-          fprintf(fid,[indent,'cadaconditional1 = ',y.func.name,' == 0;\n']);
+          fprintf(fid,[indent,'cadaconditional1 = ',y.func.name,' ~= 0;\n']);
           fprintf(fid,[indent,'if cadaconditional1\n']);
           fprintf(fid,[indent,'    ',DZYstr,' = ',DZYstr,' + ',getdzdy(Xstr,Ystr,DYstr,callerstr),';\n']);
           fprintf(fid,[indent,'end\n']);
@@ -527,9 +528,10 @@ for Vcount = 1:NUMvod;
       else
         DYstr = y.deriv(Vcount).name;
       end
-      % Get y and x that [dZ/dY] is function of
+      % Get y and x that [dZ/dY] is function of (mod/rem's dZ/dY needs both,
+      % as in the both-active arm above)
       switch callerstr
-        case {'plus','minus','mod','rem'}
+        case {'plus','minus'}
           Xstr = [];  Ystr = [];
         otherwise
           % Get x
@@ -583,9 +585,10 @@ for Vcount = 1:NUMvod;
           end
       end
       if strcmp(callerstr,'mod')
-        % if mod, protect against y = 0 (divide by zero)
+        % if mod, protect against y = 0 (divide by zero): dZ/dY where
+        % y ~= 0, zero where y == 0, matching the vector arm below
         if yscalarflag
-          fprintf(fid,[indent,'cadaconditional1 = ',y.func.name,' == 0;\n']);
+          fprintf(fid,[indent,'cadaconditional1 = ',y.func.name,' ~= 0;\n']);
           fprintf(fid,[indent,'if cadaconditional1\n']);
           fprintf(fid,[indent,'    ',derivstr,' = ',getdzdy(Xstr,Ystr,DYstr,callerstr),';\n']);
           fprintf(fid,[indent,'else\n']);
