@@ -177,8 +177,8 @@ matter only if you have been tracking `master`.
 - **`mod` and `rem` now differentiate correctly when the divisor depends on
   the input.** With a scalar divisor that depends on the variables of
   differentiation — `mod(x, x(1) + c)` — the generated derivative dropped the
-  divisor's contribution whenever the divisor was nonzero, so the Jacobian was
-  silently wrong. When *only* the divisor depended on the input —
+  divisor's contribution whenever the divisor was nonzero, so Jacobians — and
+  the gradient and Hessian from `adigatorGenHesFile` — were silently wrong. When *only* the divisor depended on the input —
   `mod(7.3, x)`, `rem(c, x)` — generation reported success but wrote a
   derivative file that does not parse. Both now match finite differences; at a
   zero divisor, `mod`'s divisor contribution is zero, as it already was for a

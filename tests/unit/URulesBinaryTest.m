@@ -22,6 +22,7 @@ classdef URulesBinaryTest < matlab.unittest.TestCase
             tc.applyFixture(PathFixture(fullfile(root,'lib')));
             tc.applyFixture(PathFixture(fullfile(root,'lib','cadaUtils')));
             tc.applyFixture(PathFixture(fullfile(root,'util')));
+            tc.applyFixture(PathFixture(fullfile(root,'embedding')));  % adigatorGenHesFile -> updatestruct
             tc.applyFixture(PathFixture(fullfile(root,'tests','helpers')));
         end
     end
@@ -115,6 +116,22 @@ classdef URulesBinaryTest < matlab.unittest.TestCase
                 checkBinaryRule(tc, op + "_x_v", ...
                     "y = " + op + "([-5;5;-5].*x, [1.7;2.3;1.9]);", [3 1], tc.ModX);
             end
+        end
+        function modActiveDivisorHessian(tc)
+            % B42 at the order users ship: the Hessian pass re-differentiates
+            % the gradient file's guarded `if`. Both scalar-divisor arms.
+            name = 'urb_mod_hes';
+            writeFixture(name, ['y = sum(mod([-5;5;-5].*x, x(1)+0.25).^2) + ' ...
+                'sum(mod([7.3;-8.2;9.7], x(1)).^2);']);
+            adigatorGenHesFile(name, {adigatorCreateDerivInput([3 1],'x')}, ...
+                adigatorOptions('overwrite',1,'echo',0));
+            rehash;
+            [H,G,F] = feval([name,'_Hes'], tc.ModX);
+            f = str2func(name);
+            tc.verifyEqual(F, f(tc.ModX), 'AbsTol', 1e-12);
+            tc.verifyEqual(G(:).', fdcheck('jac', f, tc.ModX), 'AbsTol', 1e-5, 'RelTol', 1e-5);
+            tc.verifyEqual(full(H), squeeze(fdcheck('hess', f, tc.ModX)), ...
+                'AbsTol', 1e-4, 'RelTol', 1e-4, 'Hessian of mod with an active scalar divisor');
         end
         function modScalarDivisorAtZeroHasZeroDerivative(tc)
             % The y == 0 guard's other direction, in both scalar-divisor arms:
