@@ -181,7 +181,7 @@ matter only if you have been tracking `master`.
   silently wrong. When *only* the divisor depended on the input —
   `mod(7.3, x)`, `rem(c, x)` — generation reported success but wrote a
   derivative file that does not parse. Both now match finite differences; at a
-  zero divisor the divisor's contribution is zero, as it already was for a
+  zero divisor, `mod`'s divisor contribution is zero, as it already was for a
   vector divisor.
 
 - **Generated files and error messages no longer send you to the wrong

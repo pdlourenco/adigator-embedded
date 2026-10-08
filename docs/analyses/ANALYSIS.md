@@ -1290,8 +1290,8 @@ B41 stood: its file did not parse.
 `plus`/`minus`, and both scalar guards test `y ~= 0`. **Pinned** by
 `URulesBinaryTest` (TS-U-02): `mod` and `rem` under every activity pattern ×
 {scalar, vector} divisor at a fixed point whose quotients sit ≥ 0.04 from an
-integer, plus the guard's other direction — a zero scalar divisor carries a
-zero derivative. All three new divisor pins fail on the unfixed engine; and
+integer, plus the guard's other direction in both scalar-divisor arms — at a
+zero divisor no divisor term is added (`mod(a, 0) = a`, so only `da/dx` remains). All three new divisor pins fail on the unfixed engine; and
 with B41 fixed but the divisor-only guard re-inverted, both the divisor-only
 pin and the zero-divisor pin still fail, so each half is held on its own.
 

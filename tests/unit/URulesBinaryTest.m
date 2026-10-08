@@ -112,20 +112,23 @@ classdef URulesBinaryTest < matlab.unittest.TestCase
             for op = ["mod" "rem"]
                 checkBinaryRule(tc, op + "_x_s", ...
                     "y = " + op + "([-5;5;-5].*x, 1.7);", [3 1], tc.ModX);
+                checkBinaryRule(tc, op + "_x_v", ...
+                    "y = " + op + "([-5;5;-5].*x, [1.7;2.3;1.9]);", [3 1], tc.ModX);
             end
         end
         function modScalarDivisorAtZeroHasZeroDerivative(tc)
-            % The y == 0 guard's other direction: at a zero scalar divisor the
-            % dZ/dY term is zero (as in the vector arm), never -floor(x/0).
-            name = 'urb_mod_y0';
-            writeFixture(name, 'y = mod([7.3;-8.2;9.7], x(1));');
-            adigator(name, {adigatorCreateDerivInput([3 1],'x')}, [name,'_dx'], ...
-                adigatorOptions('overwrite',1,'echo',0));
-            rehash;
-            yy = feval([name,'_dx'], struct('f',[0;1.3;0.7],'dx',ones(3,1)));
-            tc.verifyEqual(yy.f, [7.3;-8.2;9.7]);
-            tc.verifyEqual(reconstructUnrolled(yy,3,3), zeros(3), ...
-                'mod at a zero scalar divisor must carry a zero derivative');
+            % The y == 0 guard's other direction, in both scalar-divisor arms:
+            % at a zero divisor the dZ/dY term is zero (as in the vector arm),
+            % never -floor(x/0). mod(a, 0) = a, so what remains is da/dx.
+            x0 = [0; 1.3; 0.7];
+            % divisor-only arm: nothing else depends on x
+            D = modAtZero(tc, 'urb_mod_y0', 'y = mod([7.3;-8.2;9.7], x(1));', x0);
+            tc.verifyEqual(D, zeros(3), ...
+                'mod at a zero scalar divisor must carry a zero derivative (divisor-only arm)');
+            % both-active arm: only the dividend's own derivative survives
+            D = modAtZero(tc, 'urb_mod_b0', 'y = mod([-5;5;-5].*x + 1, x(1));', x0);
+            tc.verifyEqual(D, diag([-5 5 -5]), 'AbsTol', 1e-12, ...
+                'mod at a zero scalar divisor must carry no divisor term (both-active arm)');
         end
     end
 
@@ -163,6 +166,19 @@ D = reconstructUnrolled(yy, m, n);
 Jfd = fdcheck('jac', @(z) feval(fname, z), xv);
 tc.verifyEqual(D, Jfd, 'AbsTol', 1e-5, 'RelTol', 1e-5, ...
     sprintf('%s: reconstructed derivative disagrees with finite differences', name));
+end
+
+function D = modAtZero(tc, name, body, x0)
+% Generate `body`, evaluate it at x0 (whose first entry, the divisor, is 0) with
+% the identity seed, check the value against the source, and return the
+% reconstructed unrolled derivative.
+writeFixture(name, body);
+adigator(name, {adigatorCreateDerivInput([3 1],'x')}, [name,'_dx'], ...
+    adigatorOptions('overwrite',1,'echo',0));
+rehash;
+yy = feval([name,'_dx'], struct('f',x0,'dx',ones(3,1)));
+tc.verifyEqual(yy.f, feval(name, x0), sprintf('%s: value', name));
+D = reconstructUnrolled(yy, 3, 3);
 end
 
 function writeFixture(name, body)
